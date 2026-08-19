@@ -123,7 +123,16 @@ python src/retriv.py -k "laptop" -n 5 --all-star-types --star-limit-per-type 3
 Use the scraper responsibly, keep request volumes low, and follow Shopee's applicable terms and local law. Shopee may require a login or manual verification; the script pauses so you can complete it in the opened Chrome window.
 
 ## License
-This project is licensed under the MIT License. See the LICENSE file for details.
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) and
+[project notice](NOTICE.md) for copyright and contributor details.
+
+## Capstone team
+
+- **Capstone Adviser:** Kathleen De Guzman
+- **Project Leader:** Mark Rhean Caballero
+- **Programmer:** Brian Macalino
+- **Sub-Programmer and Designer:** Ryan Rovic Retuya
+- **Designer:** Princethom Guyo
 
 ## Attribution
 
