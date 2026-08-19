@@ -2,6 +2,7 @@
 # Severity: 1=minor concern, 2=material failure, 3=critical/fraud/safety concern.
 ayaw gumana	performance	3	tl
 basag	defect	3	tl
+bilis masira	durability	3	taglish
 bloated battery	safety	3	en
 broke after	durability	2	en
 burning smell	safety	3	en
@@ -25,6 +26,8 @@ exploded	safety	3	en
 fake	counterfeit	3	en
 flimsy	quality	2	en
 gasgas	defect	1	tl
+glitch	performance	2	en
+glitching	performance	2	en
 grounded	safety	3	taglish
 hindi gumagana	performance	3	tl
 hindi original	counterfeit	3	taglish

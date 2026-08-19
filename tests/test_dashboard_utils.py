@@ -3,9 +3,11 @@ import unittest
 
 from dashboard_utils import (
     csv_bytes,
+    detect_marketplace,
     load_products,
     normalized_risk_score,
     price_value,
+    platform_name,
     product_reliability,
     rank_alternatives,
     reliability_score,
@@ -20,6 +22,15 @@ class TestDashboardUtils(unittest.TestCase):
     def test_search_slug(self):
         self.assertEqual(search_slug("Laptop Stand & Bag"), "laptop_stand_bag")
         self.assertEqual(search_slug("!!!"), "search")
+
+    def test_marketplace_detection_and_display(self):
+        self.assertEqual(detect_marketplace("https://shopee.ph/item-i.1.2"), "shopee")
+        self.assertEqual(detect_marketplace("https://www.lazada.com.ph/products/item.html"), "lazada")
+        self.assertEqual(detect_marketplace("https://www.temu.com/ph-en/goods.html"), "temu")
+        self.assertEqual(detect_marketplace("wireless earbuds", "lazada"), "lazada")
+        self.assertEqual(platform_name({"platform": "temu"}), "Temu PH")
+        with self.assertRaises(ValueError):
+            detect_marketplace("https://example.com/item")
 
     def test_price_value_uses_range_midpoint(self):
         self.assertEqual(price_value("₱1,000 - ₱1,500"), 1250.0)

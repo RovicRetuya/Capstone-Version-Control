@@ -1,7 +1,9 @@
 import unittest
+from pathlib import Path
+from tempfile import TemporaryDirectory
 from urllib.parse import parse_qs, urlsplit
 
-from src.retriv import ShopeeScraper
+from src.retriv import ShopeeScraper, build_parser
 
 
 class TestShopeeScraper(unittest.TestCase):
@@ -50,6 +52,33 @@ class TestShopeeScraper(unittest.TestCase):
         self.assertEqual(self.scraper._parse_rating_filter('With Comments (25)'), ('commented', 25))
         self.assertEqual(self.scraper._parse_rating_filter('With Media (10)'), ('media', 10))
 
+    def test_orders_star_filters_and_reviews_lowest_first(self):
+        product = {
+            "detailed_rating": {
+                "all": 50,
+                "5_star": 20,
+                "2_star": 8,
+                "1_star": 4,
+                "4_star": 10,
+                "3_star": 8,
+            }
+        }
+        limits = self.scraper._star_limits_low_to_high(product)
+        self.assertEqual(
+            [key for key, _count in limits],
+            ["1_star", "2_star", "3_star", "4_star", "5_star"],
+        )
+        reviews = [
+            {"comment_id": "high", "rating": 5},
+            {"comment_id": "low", "rating": 1},
+            {"comment_id": "middle", "rating": 3},
+        ]
+        ordered = self.scraper._order_reviews_low_to_high(reviews)
+        self.assertEqual(
+            [review["comment_id"] for review in ordered],
+            ["low", "middle", "high"],
+        )
+
     def test_parses_ph_card_text_fallbacks(self):
         self.assertEqual(self.scraper._price_from_text('Deal\n₱ 1,299 - ₱ 1,599\nSold'), '₱1,299-₱1,599')
         self.assertEqual(self.scraper._rating_from_text('15 sold\nManila'), '')
@@ -72,6 +101,32 @@ class TestShopeeScraper(unittest.TestCase):
             'https://shopee.ph/Sample-Product-i.12345.98765',
         )
         self.assertEqual(self.scraper._normalize_product_url('https://shopee.vn/a-i.1.2'), '')
+
+    def test_direct_product_url_mode(self):
+        url = "https://shopee.ph/sample-i.1325174344.27161131426?tracking=1"
+        scraper = ShopeeScraper(
+            "",
+            1,
+            False,
+            10,
+            product_urls=[url],
+            output="direct_test.json",
+        )
+        product = scraper._product_from_url(url)
+        self.assertEqual(
+            product["link"],
+            "https://shopee.ph/sample-i.1325174344.27161131426",
+        )
+        self.assertEqual(product["market"], "PH")
+        self.assertEqual(scraper.out_file, "direct_test.json")
+
+    def test_parser_supports_direct_product_url(self):
+        args = build_parser().parse_args(
+            ["--product-url", "https://shopee.ph/sample-i.1.2", "--output", "result.json", "--no-prompt"]
+        )
+        self.assertEqual(args.product_url, ["https://shopee.ph/sample-i.1.2"])
+        self.assertEqual(args.output, "result.json")
+        self.assertTrue(args.no_prompt)
 
     def test_normalizes_atomic_review_snapshot(self):
         class FakeDriver:
@@ -107,6 +162,38 @@ class TestShopeeScraper(unittest.TestCase):
         # This test would require a live environment to run properly
         # Here we can only check if the method exists
         self.assertTrue(hasattr(self.scraper, '_retrieve_products'))
+
+    def test_resumes_past_duplicate_review_pages(self):
+        old_review = {"comment_id": "old", "author": "a", "time": "1", "content": "old", "rating": 5}
+        new_review = {"comment_id": "new", "author": "b", "time": "2", "content": "new", "rating": 4}
+        pages = [[old_review], [new_review]]
+        state = {"page": 0}
+        self.scraper._review_container = lambda timeout=5: object()
+        self.scraper._reviews_from_current_page = lambda: pages[state["page"]]
+        self.scraper._current_review_signature = lambda: str(state["page"])
+
+        def advance(_signature):
+            if state["page"] + 1 >= len(pages):
+                return False
+            state["page"] += 1
+            return True
+
+        self.scraper._next_review_page = advance
+        with TemporaryDirectory() as directory:
+            self.scraper.out_file = str(Path(directory) / "reviews.json")
+            product = {"link": "https://shopee.ph/item-i.1.2", "comments": [old_review]}
+            reviews = self.scraper._collect_reviews(2, product=product)
+        self.assertEqual([review["comment_id"] for review in reviews], ["old", "new"])
+        self.assertEqual(product["review_checkpoint"]["stop_reason"], "target_reached")
+
+    def test_records_no_reviews_as_a_terminal_product_result(self):
+        product = {"link": "https://shopee.ph/empty-i.1.2", "comments": []}
+        with TemporaryDirectory() as directory:
+            self.scraper.out_file = str(Path(directory) / "empty.json")
+            self.scraper._record_no_reviews(product)
+        self.assertEqual(product["review_status"], "no_reviews")
+        self.assertEqual(product["comments"], [])
+        self.assertEqual(product["review_checkpoint"]["stop_reason"], "no_reviews")
 
 if __name__ == '__main__':
     unittest.main()

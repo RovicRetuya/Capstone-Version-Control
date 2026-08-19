@@ -21,7 +21,7 @@ except ImportError:  # pragma: no cover - exercised only in an incomplete instal
     SentimentIntensityAnalyzer = None
 
 
-MODEL_VERSION = "defaketive-vader-seed-0.1.0"
+MODEL_VERSION = "defaketive-vader-seed-0.1.1"
 LEXICON_DIR = Path(__file__).with_name("lexicons")
 
 FILIPINO_NEGATORS = {
@@ -48,6 +48,7 @@ FILIPINO_BOOSTERS = {
 }
 
 SPELLING_NORMALIZATION = {
+    "dizapoytedd": "disappointed",
     "hnd": "hindi",
     "hndi": "hindi",
     "ndi": "hindi",
@@ -133,10 +134,12 @@ class DefaketiveSentimentModel:
         for index, entry in enumerate(self.sentiment_entries):
             term = entry["term"]
             # VADER strips ASCII punctuation while creating its token map, so
-            # phrase placeholders must contain only letters and digits.
-            token = f"defaketivephrase{index}" if " " in term else term
+            # phrase and symbol-only placeholders must contain only letters
+            # and digits. VADER otherwise drops standalone emoji tokens.
+            needs_placeholder = " " in term or not re.search(r"\w", term, re.UNICODE)
+            token = f"defaketivephrase{index}" if needs_placeholder else term
             self.analyzer.lexicon[token] = float(entry["valence"])
-            if " " in term:
+            if needs_placeholder:
                 self.phrase_tokens[term] = token
 
         self._sentiment_patterns = [
@@ -160,12 +163,24 @@ class DefaketiveSentimentModel:
 
     def fingerprint(self, text: Any) -> str:
         normalized = self.normalize(text)
-        return re.sub(r"[^\w]+", " ", normalized, flags=re.UNICODE).strip()
+        # Retain Unicode symbols so emoji-only reviews have stable, non-empty
+        # fingerprints and participate in duplicate detection and summaries.
+        characters = (
+            character
+            if character.isalnum()
+            or character == "_"
+            or unicodedata.category(character).startswith(("S", "M"))
+            else " "
+            for character in normalized
+        )
+        return re.sub(r"\s+", " ", "".join(characters)).strip()
 
     def _prepare_for_vader(self, normalized: str) -> str:
         prepared = normalized
         for phrase, token in sorted(self.phrase_tokens.items(), key=lambda item: len(item[0]), reverse=True):
-            prepared = _term_pattern(phrase).sub(token, prepared)
+            # Surround replacements so adjacent emojis become separate VADER
+            # tokens instead of one concatenated unknown token.
+            prepared = _term_pattern(phrase).sub(f" {token} ", prepared)
         # VADER's contrast rule recognizes "but". "Kaso" is excluded because
         # it can also be a noun meaning "case".
         return re.sub(r"(?<!\w)(pero|subalit|ngunit)(?!\w)", "but", prepared)

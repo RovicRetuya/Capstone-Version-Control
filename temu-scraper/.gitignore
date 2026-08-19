@@ -1,0 +1,7 @@
+.venv/
+__pycache__/
+*.py[cod]
+cookies_temu*.dat
+temu_ph_*.json
+debug/
+logs/

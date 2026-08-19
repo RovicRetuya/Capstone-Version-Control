@@ -19,7 +19,10 @@ battery stopped working after one week” still receives a performance/durabilit
 warning even if its general emotional language is weak.
 
 The JSON workflow also fingerprints normalized comments, marks duplicates, and
-excludes duplicate copies from product-level aggregation.
+excludes duplicate copies from product-level aggregation. Unicode symbols are
+retained in fingerprints, so emoji-only reviews are included in summaries and
+can be deduplicated. Common positive and negative review emojis are explicit,
+reviewable entries in the sentiment TSV rather than hidden scoring rules.
 
 ## Install the model resource
 

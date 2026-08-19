@@ -33,7 +33,13 @@ python -m defaketive_sentiment ..\shopee_ph_laptop_stand.json
 ## Analyze Lazada results
 
 ```powershell
-python -m defaketive_sentiment ..\..\lazada-scraper\lazada_ph_smoke_test.json
+python -m defaketive_sentiment ..\lazada-scraper\lazada_ph_smoke_test.json
+```
+
+## Analyze Temu results
+
+```powershell
+python -m defaketive_sentiment ..\temu-scraper\temu_ph_laptop_stand.json
 ```
 
 Unless `--output` is supplied, the analyzer writes a sibling file ending in

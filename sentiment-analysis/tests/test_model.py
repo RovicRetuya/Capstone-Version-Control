@@ -42,6 +42,33 @@ class TestDefaketiveSentimentModel(unittest.TestCase):
         self.assertTrue(result["risk"]["detected"])
         self.assertIn("durability", result["risk"]["categories"])
 
+    def test_observed_taglish_failure_phrase(self):
+        result = self.model.analyze("bilis masira 1 week palang")
+        self.assertEqual(result["label"], "negative")
+        self.assertTrue(result["risk"]["detected"])
+        self.assertIn("durability", result["risk"]["categories"])
+
+    def test_dont_buy_warning_is_negative(self):
+        self.assertEqual(self.model.analyze("DONT BUY")["label"], "negative")
+        self.assertEqual(self.model.analyze("Don't buy this item")["label"], "negative")
+
+    def test_glitch_outweighs_packaging_praise_and_records_risk(self):
+        result = self.model.analyze(
+            "The packaging is good but there is a glitch while using the phone."
+        )
+        self.assertEqual(result["label"], "negative")
+        self.assertTrue(result["risk"]["detected"])
+        self.assertIn("performance", result["risk"]["categories"])
+
+    def test_observed_misspelling_and_thumbs_down_are_negative(self):
+        result = self.model.analyze("sosovery dizapoytedd!!!!! 👎")
+        self.assertEqual(result["label"], "negative")
+        self.assertTrue(any(item["term"] == "👎" for item in result["sentiment_evidence"]))
+
+    def test_common_positive_and_negative_emojis(self):
+        self.assertEqual(self.model.analyze("😊❤️")["label"], "positive")
+        self.assertEqual(self.model.analyze("👎")["label"], "negative")
+
     def test_negated_counterfeit_claim(self):
         result = self.model.analyze("Not fake. Authentic and works well.")
         self.assertFalse(result["risk"]["detected"])
@@ -69,6 +96,25 @@ class TestDefaketiveSentimentModel(unittest.TestCase):
         self.assertTrue(comments[1]["is_duplicate"])
         self.assertEqual(analyzed[0]["sentiment_summary"]["review_count"], 2)
         self.assertEqual(analyzed[0]["sentiment_summary"]["duplicate_review_count"], 1)
+
+    def test_emoji_only_reviews_are_fingerprinted_and_summarized(self):
+        data = [
+            {
+                "name": "Emoji reviews",
+                "comments": [
+                    {"content": "😊❤️"},
+                    {"content": " 😊❤️ "},
+                    {"content": "👎"},
+                ],
+            }
+        ]
+
+        analyzed = analyze_product_json(data, self.model)
+        summary = analyzed[0]["sentiment_summary"]
+        self.assertEqual(summary["review_count"], 2)
+        self.assertEqual(summary["duplicate_review_count"], 1)
+        self.assertEqual(summary["sentiment_counts"]["positive"], 1)
+        self.assertEqual(summary["sentiment_counts"]["negative"], 1)
 
     def test_summary_formula(self):
         analyses = [

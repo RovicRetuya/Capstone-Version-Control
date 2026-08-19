@@ -3,6 +3,12 @@ __pycache__/
 *.py[cod]
 cookies_shopee*.dat
 shopee_ph_*.json
+cookies_lazada*.dat
+cookies_temu*.dat
+lazada_ph_*.json
+temu_ph_*.json
+*_discovery.json
+*.tmp
 debug/
 logs/
 *.db

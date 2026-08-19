@@ -56,7 +56,7 @@ def _connect(path: str | Path = DEFAULT_DB):
 
 
 def save_products(products: list[dict[str, Any]], source: str = "", path: str | Path = DEFAULT_DB) -> None:
-    from dashboard_utils import product_reliability
+    from dashboard_utils import platform_name, product_reliability
 
     now = datetime.now(timezone.utc).isoformat()
     with _connect(path) as connection:
@@ -73,7 +73,7 @@ def save_products(products: list[dict[str, Any]], source: str = "", path: str | 
                 review_count=excluded.review_count, risk_score=excluded.risk_score,
                 reliability_score=excluded.reliability_score, source=excluded.source,
                 raw_json=excluded.raw_json, updated_at=excluded.updated_at""",
-                (link, str(product.get("name") or "Unnamed product"), "Shopee PH",
+                (link, str(product.get("name") or "Unnamed product"), platform_name(product),
                  str(product.get("category") or ""), str(product.get("price") or ""),
                  product.get("rating"), len(comments), summary.get("risk_score"),
                  product_reliability(product), source, json.dumps(product, ensure_ascii=False), now),

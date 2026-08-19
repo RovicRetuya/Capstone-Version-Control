@@ -5,6 +5,7 @@ ayos	2.0	tl	general
 astig	2.3	tl	general
 authentic	2.2	en	authenticity
 basag	-3.1	tl	quality
+bilis masira	-3.3	taglish	durability
 budol	-1.0	tl	authenticity
 cheaply made	-2.7	en	quality
 class a	-2.2	taglish	authenticity
@@ -12,10 +13,14 @@ complete	1.5	en	completeness
 dead on arrival	-3.5	en	performance
 delikado	-3.2	tl	safety
 defective	-3.2	en	quality
+don't buy	-3.2	en	warning
+dont buy	-3.2	en	warning
 fake	-3.4	en	authenticity
 flimsy	-2.5	en	quality
 ganda	2.5	tl	general
 gasgas	-1.8	tl	quality
+glitch	-2.4	en	performance
+glitching	-2.6	en	performance
 gumagana	1.9	tl	performance
 hassle	-1.8	taglish	general
 hindi gumagana	-3.4	tl	performance
@@ -76,3 +81,32 @@ ayaw gumana	-3.4	tl	performance
 di gumagana	-3.4	tl	performance
 di maganda	-2.8	tl	general
 di sulit	-2.7	tl	value
+👎	-3.0	und	emoji
+👍	2.5	und	emoji
+😊	2.3	und	emoji
+😍	2.6	und	emoji
+😘	2.4	und	emoji
+🥳	2.4	und	emoji
+🤣	2.0	und	emoji
+❤	2.5	und	emoji
+❤️	2.5	und	emoji
+💙	2.5	und	emoji
+💓	2.5	und	emoji
+💖	2.6	und	emoji
+💝	2.6	und	emoji
+❣️	2.4	und	emoji
+🩵	2.5	und	emoji
+🩶	1.8	und	emoji
+🖤	2.0	und	emoji
+🤍	2.2	und	emoji
+🤎	2.2	und	emoji
+🧡	2.5	und	emoji
+💜	2.5	und	emoji
+😡	-3.1	und	emoji
+😠	-3.0	und	emoji
+😞	-2.4	und	emoji
+😔	-2.3	und	emoji
+😭	-2.5	und	emoji
+💔	-3.0	und	emoji
+⭐	1.8	und	emoji
+⭐️	1.8	und	emoji

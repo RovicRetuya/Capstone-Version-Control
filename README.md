@@ -1,7 +1,7 @@
 
-# Shopee Philippines Scraper
+# DeFaketive Philippine Marketplace Review Analyzer
 
-This Python application scrapes public product data from [Shopee Philippines](https://shopee.ph). It retrieves product names, canonical links, PHP prices, ratings, images, shipping labels, seller locations, descriptions, and public reviews.
+This research prototype collects public product and review data from Shopee Philippines, with beta Lazada Philippines and Temu connectors, then produces explainable Taglish sentiment and review-risk reports in a Streamlit dashboard.
 
 The scraper is configured specifically for `shopee.ph`. It supports current and legacy Shopee product-card layouts and English Philippines review filters such as `5 Star`, `With Comments`, and `With Media`.
 
@@ -9,8 +9,8 @@ The scraper is configured specifically for `shopee.ph`. It supports current and 
 
 1. **Clone the Repository:**
    ```bash
-   git clone https://github.com/dtungpka/shopee-scraper.git
-   cd shopee-scraper
+   git clone https://github.com/FisherFemboy/Capstone-Version-Control.git
+   cd Capstone-Version-Control
    ```
 
 2. **Create a Virtual Environment (Optional But Recommended):**
@@ -51,11 +51,11 @@ When you see the search page loaded in the browser:
 ### Scraping Modes
 
 1. **Review Limit Mode:**
-   - Use `-r` or `--review-limit` to collect reviews from 5-stars downwards until the limit is met:
+   - Use `-r` or `--review-limit` to collect reviews in the marketplace's rendered order:
      ```bash
      python src/retriv.py -k "laptop" -n 5 -r 10
      ```
-   This collects up to 10 reviews per product, starting from the top ratings and moving downward.
+   This preserves the platform's normal order instead of intentionally oversampling low ratings, which would bias the research risk score.
 
 2. **All-Star Types Mode:**
    - Combine `--all-star-types` with `--star-limit-per-type` to specify how many reviews to retrieve for each star rating:
@@ -74,8 +74,20 @@ When you see the search page loaded in the browser:
 - `--star-limit-per-type`: Reviews per star type (default: 10)
 - `--chrome-user-data-dir`: Path to your Chrome profile directory
 - `--site`: Shopee market; `shopee.ph` (or shorthand `ph`) is supported
+- `--product-url`: Direct Shopee PH product URL; repeatable
+- `--output`: Custom result JSON path
+- `--pagination-retries`, `--pagination-timeout`: Review-page recovery controls
+- `--checkpoint-every`: Save resumable progress every N pages
+- `--no-prompt`: Dashboard-safe verification polling mode
 
-Results are saved incrementally to `shopee_ph_<search_term>.json`, so completed products are retained if the browser is interrupted. Authentication cookies are stored separately in `cookies_shopee_ph.dat`.
+Results are saved atomically and incrementally to `shopee_ph_<search_term>.json`. Review checkpoints allow interrupted collection to resume without duplicating saved feedback. Authentication cookies are stored separately and excluded from Git.
+
+## Beta marketplace connectors
+
+- [`lazada-scraper`](lazada-scraper) provides Lazada Philippines keyword, category, and direct-product collection.
+- [`temu-scraper`](temu-scraper) provides Temu Philippines keyword and direct-product collection.
+
+The dashboard automatically selects a connector for supported product URLs. Shopee remains the primary integration. TikTok Shop and automatic cross-platform product matching are not implemented.
 
 ## Sentiment analysis
 
@@ -89,7 +101,7 @@ analysis independent.
 The responsive Streamlit dashboard adds shopper search/results/product-risk
 views plus administrator overview, scraper, lexicon, database, and model
 evaluation screens. It can analyze the most recent scraper JSON automatically,
-accept an uploaded scraper JSON, or launch a live Shopee PH scrape.
+accept an uploaded scraper JSON, or launch a live scrape through the supported connectors.
 
 ```powershell
 pip install -r requirements.txt
@@ -112,3 +124,10 @@ Use the scraper responsibly, keep request volumes low, and follow Shopee's appli
 
 ## License
 This project is licensed under the MIT License. See the LICENSE file for details.
+
+## Attribution
+
+The scraper foundation is derived from the MIT-licensed
+[`bmacalino/shopee_scraper`](https://github.com/bmacalino/shopee_scraper), which
+itself builds on work by `dtungpka`. DeFaketive dashboard, research scoring,
+SQLite persistence, and integration changes are maintained in this repository.

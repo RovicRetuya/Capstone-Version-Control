@@ -56,6 +56,12 @@ class ShopeeScraper:
         star_limit_per_type=10,
         chrome_user_data_dir=None,
         site="shopee.ph",
+        pagination_retries=3,
+        pagination_timeout=15.0,
+        checkpoint_every=5,
+        max_review_pages=5000,
+        product_urls=None,
+        output=None,
         interactive=True,
         verification_timeout=600,
     ):
@@ -68,9 +74,21 @@ class ShopeeScraper:
         self.star_limit_per_type = max(0, star_limit_per_type)
         self.chrome_user_data_dir = chrome_user_data_dir
         self.site = self._normalize_site(site)
-        self.interactive = interactive
+        self.pagination_retries = max(1, pagination_retries)
+        self.pagination_timeout = max(1.0, pagination_timeout)
+        self.checkpoint_every = max(1, checkpoint_every)
+        self.max_review_pages = max(1, max_review_pages)
+        self.interactive = bool(interactive)
         self.verification_timeout = max(30, int(verification_timeout))
+        self._last_pagination_stop_reason = ""
         self.base_url = f"https://{self.site}"
+        self.product_urls = [
+            normalized
+            for normalized in (
+                self._normalize_product_url(url) for url in (product_urls or [])
+            )
+            if normalized
+        ]
         self.cookies_file = f"cookies_{self.site.replace('.', '_')}.dat"
         self._cookies_loaded = False
 
@@ -78,8 +96,9 @@ class ShopeeScraper:
         self.options = uc.ChromeOptions()
         self._configure_options()
         self.output_data = {}
-        slug = re.sub(r"[^a-z0-9_]+", "_", self.search_term.lower()).strip("_")
-        self.out_file = f"shopee_ph_{slug or 'search'}.json"
+        slug_source = "products" if self.product_urls else self.search_term
+        slug = re.sub(r"[^a-z0-9_]+", "_", slug_source.lower()).strip("_")
+        self.out_file = output or f"shopee_ph_{slug or 'search'}.json"
         self._load_existing_data()
 
     @staticmethod
@@ -187,11 +206,12 @@ class ShopeeScraper:
         except Exception as exc:
             logging.warning("Could not save search diagnostics: %s", exc)
 
-    def _save_review_debug_artifacts(self):
+    def _save_review_debug_artifacts(self, kind="reviews"):
         try:
             os.makedirs("debug", exist_ok=True)
-            html_path = os.path.join("debug", "shopee_ph_reviews.html")
-            screenshot_path = os.path.join("debug", "shopee_ph_reviews.png")
+            safe_kind = re.sub(r"[^a-z0-9_]+", "_", kind.casefold()).strip("_")
+            html_path = os.path.join("debug", f"shopee_ph_{safe_kind or 'reviews'}.html")
+            screenshot_path = os.path.join("debug", f"shopee_ph_{safe_kind or 'reviews'}.png")
             with open(html_path, "w", encoding="utf-8") as file:
                 file.write(self.driver.page_source)
             self.driver.save_screenshot(screenshot_path)
@@ -266,17 +286,106 @@ class ShopeeScraper:
 
     def _periodic_save(self):
         try:
-            with open(self.out_file, "w", encoding="utf-8") as file:
+            temporary_path = f"{self.out_file}.tmp"
+            with open(temporary_path, "w", encoding="utf-8") as file:
                 json.dump(list(self.output_data.values()), file, ensure_ascii=False, indent=2)
+            os.replace(temporary_path, self.out_file)
             logging.info("Saved %s product(s) to %s.", len(self.output_data), self.out_file)
         except OSError as exc:
             logging.warning("Periodic save failed: %s", exc)
 
+    @staticmethod
+    def _deduplicate_reviews(reviews):
+        unique, seen = [], set()
+        for review in reviews:
+            identity = review.get("comment_id") or (
+                review.get("author", ""),
+                review.get("time", ""),
+                review.get("content", ""),
+                review.get("rating", 0),
+            )
+            if identity in seen:
+                continue
+            seen.add(identity)
+            unique.append(review)
+        return unique
+
+    @staticmethod
+    def _star_number(star_key):
+        match = re.match(r"^([1-5])_star$", star_key or "")
+        return int(match.group(1)) if match else 6
+
+    def _review_matches_source_filter(self, review, source_filter):
+        recorded_filter = review.get("source_rating_filter")
+        if recorded_filter:
+            return recorded_filter == source_filter
+        return int(review.get("rating", 0) or 0) == self._star_number(source_filter)
+
+    def _star_limits_low_to_high(self, product):
+        return sorted(
+            (
+                (key, count)
+                for key, count in product.get("detailed_rating", {}).items()
+                if key.endswith("_star") and count > 0
+            ),
+            key=lambda item: self._star_number(item[0]),
+        )
+
+    def _order_reviews_low_to_high(self, reviews):
+        return sorted(
+            self._deduplicate_reviews(reviews),
+            key=lambda review: self._star_number(
+                review.get("source_rating_filter")
+                or (f"{int(review.get('rating', 0))}_star" if review.get("rating") else "")
+            ),
+        )
+
+    def _checkpoint_reviews(self, product, reviews, page_number, stop_reason="", context="all"):
+        product["comments"] = self._deduplicate_reviews(reviews)
+        previous = product.get("review_checkpoint", {})
+        product["review_checkpoint"] = {
+            "context": context,
+            "completed_pages": max(int(previous.get("completed_pages", 0)), page_number),
+            "collected_reviews": len(product["comments"]),
+            "stop_reason": stop_reason,
+            "updated_at": datetime.datetime.now().isoformat(timespec="seconds"),
+        }
+        if product.get("link"):
+            self.output_data[product["link"]] = product
+        self._periodic_save()
+
+    def _record_no_reviews(self, product):
+        product["comments"] = []
+        product["review_status"] = "no_reviews"
+        product["review_collection_warning"] = "This product has no written reviews"
+        logging.info("No written Shopee reviews found for %s", product.get("link"))
+        self._checkpoint_reviews(
+            product,
+            [],
+            page_number=0,
+            stop_reason="no_reviews",
+            context="all",
+        )
+
     def _scrape_missing_comments(self):
-        logging.info("Scraping missing comments from existing data...")
+        logging.info("Resuming missing or incomplete comments from existing data...")
         for link, product in list(self.output_data.items()):
-            if product.get("comments") == []:
+            expected = self.star_limit_per_type * 5 if self.all_star_types else self.review_limit
+            checkpoint = product.get("review_checkpoint", {})
+            stop_reason = checkpoint.get("stop_reason")
+            reached_end = checkpoint.get("context") == "all" and stop_reason in {
+                "target_reached",
+                "next_button_disabled",
+                "no_reviews",
+            }
+            if expected > 0 and len(product.get("comments", [])) < expected and not reached_end:
                 try:
+                    logging.info(
+                        "Retrying incomplete Shopee result for %s (%s/%s reviews)",
+                        link,
+                        len(product.get("comments", [])),
+                        expected,
+                    )
                     self._scrape_details(product)
                     self.output_data[link] = product
                     self._periodic_save()
@@ -463,6 +572,21 @@ class ShopeeScraper:
             "img": image,
             "shipping": shipping,
             "location": location,
+            "platform": "shopee",
+            "market": "PH",
+            "currency": "PHP",
+        }
+
+    def _product_from_url(self, url):
+        return {
+            "link": self._normalize_product_url(url),
+            "name": "",
+            "price": "",
+            "rating": "",
+            "img": "",
+            "shipping": "",
+            "location": "",
+            "platform": "shopee",
             "market": "PH",
             "currency": "PHP",
         }
@@ -645,6 +769,19 @@ class ShopeeScraper:
     def _scrape_details(self, product):
         try:
             self._safe_get(product["link"])
+            product["name"] = self._first_text(
+                self.driver,
+                ('h1', '[data-testid="product-title"]', '[class*="product-title"]'),
+            ) or product.get("name", "")
+            product["price"] = self._first_text(
+                self.driver,
+                ('[data-testid="product-price"]', '[class*="product-price"]'),
+            ) or product.get("price", "")
+            product["img"] = product.get("img") or self._first_attribute(
+                self.driver,
+                ('[data-testid="product-image"] img', '.product-briefing img', 'main img'),
+                "src",
+            )
             product["category"] = self._first_text(
                 self.driver,
                 (
@@ -680,23 +817,38 @@ class ShopeeScraper:
             self._scroll_to_reviews()
             self._scrape_rating_overview(product)
 
+            if product["total_rating"] == 0 and not self._reviews_from_current_page():
+                self._record_no_reviews(product)
+                return
+            product["review_status"] = "collecting"
+
             if self.all_star_types:
                 reviews = []
-                star_limits = [
-                    (key, count)
-                    for key, count in product["detailed_rating"].items()
-                    if key.endswith("_star") and count > 0
-                ]
-                for key, count in star_limits:
+                for key, count in self._star_limits_low_to_high(product):
                     if self._click_star_filter(key):
                         reviews.extend(
-                            self._collect_reviews(min(count, self.star_limit_per_type))
+                            self._collect_reviews(
+                                min(count, self.star_limit_per_type),
+                                product=product,
+                                source_filter=key,
+                            )
                         )
-                product["comments"] = reviews
+                product["comments"] = self._order_reviews_low_to_high(reviews)
+                if product["comments"]:
+                    product["review_status"] = "complete"
+                else:
+                    self._record_no_reviews(product)
             else:
                 available = product["total_rating"]
                 target = min(available, self.review_limit) if available else self.review_limit
-                product["comments"] = self._collect_reviews(target)
+                # The research score needs the marketplace's natural review
+                # order. Prioritizing low-star filters would bias the negative
+                # ratio and keyword-failure rate upward.
+                product["comments"] = self._collect_reviews(target, product=product)
+                if product["comments"]:
+                    product["review_status"] = "complete"
+                else:
+                    self._record_no_reviews(product)
         except Exception as exc:
             logging.warning("Detail scrape failed for %s: %s", product.get("link"), exc)
             product.setdefault("comments", [])
@@ -838,35 +990,57 @@ class ShopeeScraper:
             'button.shopee-icon-button--right',
             'button[class*="icon-button--right"]',
         )
-        next_button = None
-        for selector in selectors:
-            candidates = self.driver.find_elements(By.CSS_SELECTOR, selector)
-            if candidates:
-                next_button = candidates[-1]
-                break
-        if next_button is None:
-            candidates = self.driver.find_elements(
-                By.XPATH, '//button[.//*[contains(@class,"icon-arrow-right")]]'
-            )
-            next_button = candidates[-1] if candidates else None
-        if next_button is None:
-            return False
-
-        classes = next_button.get_attribute("class") or ""
-        if next_button.get_attribute("disabled") is not None or "disabled" in classes:
-            return False
-        try:
-            next_button.click()
-        except Exception:
-            self.driver.execute_script("arguments[0].click();", next_button)
-
-        try:
-            WebDriverWait(self.driver, 8).until(
-                lambda _: self._current_review_signature() != previous_signature
-            )
-        except TimeoutException:
-            return False
-        return True
+        self._last_pagination_stop_reason = ""
+        for attempt in range(1, self.pagination_retries + 1):
+            if self._current_review_signature() != previous_signature:
+                return True
+            next_button = None
+            for selector in selectors:
+                candidates = self.driver.find_elements(By.CSS_SELECTOR, selector)
+                if candidates:
+                    next_button = candidates[-1]
+                    break
+            if next_button is None:
+                candidates = self.driver.find_elements(
+                    By.XPATH, '//button[.//*[contains(@class,"icon-arrow-right")]]'
+                )
+                next_button = candidates[-1] if candidates else None
+            if next_button is None:
+                self._last_pagination_stop_reason = "next_button_not_found"
+            else:
+                classes = (next_button.get_attribute("class") or "").casefold()
+                aria_disabled = (next_button.get_attribute("aria-disabled") or "").casefold()
+                if (
+                    next_button.get_attribute("disabled") is not None
+                    or "disabled" in classes
+                    or aria_disabled == "true"
+                ):
+                    self._last_pagination_stop_reason = "next_button_disabled"
+                else:
+                    try:
+                        next_button.click()
+                    except Exception:
+                        self.driver.execute_script("arguments[0].click();", next_button)
+                    try:
+                        WebDriverWait(self.driver, self.pagination_timeout).until(
+                            lambda _: self._current_review_signature() != previous_signature
+                        )
+                        return True
+                    except TimeoutException:
+                        self._last_pagination_stop_reason = (
+                            f"page_signature_timeout_attempt_{attempt}"
+                        )
+            if attempt < self.pagination_retries:
+                logging.warning(
+                    "Shopee review pagination attempt %s/%s failed: %s",
+                    attempt,
+                    self.pagination_retries,
+                    self._last_pagination_stop_reason,
+                )
+                time.sleep(min(1.5 * attempt, 5))
+        if self._last_pagination_stop_reason != "next_button_disabled":
+            self._save_review_debug_artifacts("review_pagination_failure")
+        return False
 
     def _current_review_signature(self):
         return self.driver.execute_script(
@@ -877,7 +1051,7 @@ class ShopeeScraper:
             """
         )
 
-    def _collect_reviews(self, max_reviews):
+    def _collect_reviews(self, max_reviews, product=None, source_filter=None):
         if max_reviews <= 0:
             return []
         container = self._review_container()
@@ -885,21 +1059,51 @@ class ShopeeScraper:
             self._save_review_debug_artifacts()
             return []
 
-        collected = []
-        seen = set()
-        with tqdm(total=max_reviews, desc="Collecting reviews") as progress:
-            while len(collected) < max_reviews:
+        existing_reviews = list(product.get("comments", [])) if product else []
+        if source_filter is None:
+            collected = self._deduplicate_reviews(existing_reviews)
+        else:
+            collected = self._deduplicate_reviews(
+                review
+                for review in existing_reviews
+                if self._review_matches_source_filter(review, source_filter)
+            )
+            for review in collected:
+                review.setdefault("source_rating_filter", source_filter)
+        seen = {
+            review.get("comment_id")
+            or (
+                review.get("author", ""),
+                review.get("time", ""),
+                review.get("content", ""),
+                review.get("rating", 0),
+            )
+            for review in collected
+        }
+        stop_reason = "target_reached" if len(collected) >= max_reviews else ""
+        page_number = 0
+        with tqdm(
+            total=max_reviews,
+            initial=min(len(collected), max_reviews),
+            desc="Collecting reviews",
+        ) as progress:
+            while len(collected) < max_reviews and page_number < self.max_review_pages:
+                page_number += 1
                 container = self._review_container(timeout=2)
                 if container is None:
+                    stop_reason = "review_container_missing"
+                    self._save_review_debug_artifacts("review_pagination_failure")
                     break
-                page_added = 0
                 page_reviews = self._reviews_from_current_page()
                 if not page_reviews:
-                    self._save_review_debug_artifacts()
+                    stop_reason = "empty_review_page"
+                    self._save_review_debug_artifacts("reviews")
                     break
                 for review in page_reviews:
                     if len(collected) >= max_reviews:
                         break
+                    if source_filter is not None:
+                        review["source_rating_filter"] = source_filter
                     identity = review.get("comment_id") or (
                         review["author"], review["time"], review["content"], review["rating"]
                     )
@@ -907,12 +1111,56 @@ class ShopeeScraper:
                         continue
                     seen.add(identity)
                     collected.append(review)
-                    page_added += 1
                     progress.update(1)
-
-                signature = self._current_review_signature()
-                if page_added == 0 or not self._next_review_page(signature):
+                if product and page_number % self.checkpoint_every == 0:
+                    if source_filter is None:
+                        checkpoint_reviews = collected
+                    else:
+                        checkpoint_reviews = [
+                            review
+                            for review in existing_reviews
+                            if not self._review_matches_source_filter(review, source_filter)
+                        ] + collected
+                    self._checkpoint_reviews(
+                        product, checkpoint_reviews, page_number, context=str(source_filter or "all")
+                    )
+                if len(collected) >= max_reviews:
+                    stop_reason = "target_reached"
                     break
+                signature = self._current_review_signature()
+                if not signature:
+                    stop_reason = "missing_page_signature"
+                    self._save_review_debug_artifacts("review_pagination_failure")
+                    break
+                if not self._next_review_page(signature):
+                    stop_reason = self._last_pagination_stop_reason or "page_transition_failed"
+                    break
+            else:
+                if page_number >= self.max_review_pages and len(collected) < max_reviews:
+                    stop_reason = "max_review_pages_reached"
+        if stop_reason and stop_reason != "target_reached":
+            logging.info(
+                "Shopee review pagination stopped after page %s with %s review(s): %s",
+                page_number,
+                len(collected),
+                stop_reason,
+            )
+        if product:
+            if source_filter is None:
+                checkpoint_reviews = collected
+            else:
+                checkpoint_reviews = [
+                    review
+                    for review in existing_reviews
+                    if not self._review_matches_source_filter(review, source_filter)
+                ] + collected
+            self._checkpoint_reviews(
+                product,
+                checkpoint_reviews,
+                page_number,
+                stop_reason=stop_reason,
+                context=str(source_filter or "all"),
+            )
         return collected
 
     def execute(self):
@@ -943,7 +1191,13 @@ class ShopeeScraper:
                 self._load_cookies()
                 self._scrape_missing_comments()
 
-            products = self._scrape_page()
+            if self.product_urls:
+                if not self.output_data:
+                    self._safe_get(self.base_url)
+                    self._load_cookies()
+                products = [self._product_from_url(url) for url in self.product_urls]
+            else:
+                products = self._scrape_page()
             for product in tqdm(products, desc="Processing products"):
                 link = product["link"]
                 if link in self.output_data:
@@ -974,6 +1228,12 @@ def build_parser():
     parser.add_argument("--star-limit-per-type", type=int, default=10, help="Reviews to retrieve per star filter")
     parser.add_argument("--chrome-user-data-dir", default=None, help="Optional Chrome user-data directory")
     parser.add_argument("--site", default="shopee.ph", choices=("shopee.ph", "ph"), help="Shopee site (PH only)")
+    parser.add_argument("--product-url", action="append", default=[], help="Direct Shopee PH product URL; repeatable")
+    parser.add_argument("-o", "--output", help="Output JSON file")
+    parser.add_argument("--pagination-retries", type=int, default=3, help="Retries for a failed review-page transition")
+    parser.add_argument("--pagination-timeout", type=float, default=15, help="Seconds to wait for each review-page transition")
+    parser.add_argument("--checkpoint-every", type=int, default=5, help="Save review progress every N pages")
+    parser.add_argument("--max-review-pages", type=int, default=5000, help="Safety cap for review pages per filter")
     parser.add_argument(
         "--no-prompt",
         action="store_true",
@@ -999,6 +1259,12 @@ if __name__ == "__main__":
         star_limit_per_type=args.star_limit_per_type,
         chrome_user_data_dir=args.chrome_user_data_dir,
         site=args.site,
+        pagination_retries=args.pagination_retries,
+        pagination_timeout=args.pagination_timeout,
+        checkpoint_every=args.checkpoint_every,
+        max_review_pages=args.max_review_pages,
+        product_urls=args.product_url,
+        output=args.output,
         interactive=not args.no_prompt,
         verification_timeout=args.verification_timeout,
     )

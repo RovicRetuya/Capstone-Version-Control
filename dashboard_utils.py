@@ -11,6 +11,7 @@ import re
 import sys
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
 
 ROOT = Path(__file__).resolve().parent
@@ -21,15 +22,51 @@ def search_slug(keyword: str) -> str:
     return slug or "search"
 
 
-def output_path(keyword: str) -> Path:
-    return ROOT / f"shopee_ph_{search_slug(keyword)}.json"
+PLATFORM_NAMES = {"shopee": "Shopee PH", "lazada": "Lazada PH", "temu": "Temu PH"}
+
+
+def detect_marketplace(value: str, default: str = "shopee") -> str:
+    """Detect a supported marketplace from a URL, otherwise use the chosen default."""
+    parsed = urlsplit(str(value).strip())
+    host = parsed.netloc.casefold().split(":", 1)[0]
+    if host == "shopee.ph" or host.endswith(".shopee.ph"):
+        return "shopee"
+    if host == "lazada.com.ph" or host.endswith(".lazada.com.ph"):
+        return "lazada"
+    if host == "temu.com" or host.endswith(".temu.com"):
+        return "temu"
+    if parsed.scheme in {"http", "https"} and host:
+        raise ValueError("Only Shopee PH, Lazada PH, and Temu product links are supported.")
+    return default if default in PLATFORM_NAMES else "shopee"
+
+
+def product_platform(product: dict[str, Any]) -> str:
+    platform = str(product.get("platform") or "").strip().casefold()
+    if platform not in PLATFORM_NAMES:
+        try:
+            platform = detect_marketplace(str(product.get("link") or ""))
+        except ValueError:
+            # Backward-compatible fallback for imported research fixtures whose
+            # source predates platform metadata.
+            platform = "shopee"
+    return platform
+
+
+def platform_name(product: dict[str, Any]) -> str:
+    return PLATFORM_NAMES[product_platform(product)]
+
+
+def output_path(keyword: str, platform: str = "shopee") -> Path:
+    platform = platform if platform in PLATFORM_NAMES else "shopee"
+    return ROOT / f"{platform}_ph_{search_slug(keyword)}.json"
 
 
 def result_files() -> list[Path]:
     return sorted(
         (
             path
-            for path in ROOT.glob("shopee_ph_*.json")
+            for pattern in ("shopee_ph_*.json", "lazada_ph_*.json", "temu_ph_*.json")
+            for path in ROOT.glob(pattern)
             if not path.stem.endswith("_analyzed")
         ),
         key=lambda path: path.stat().st_mtime,
@@ -82,6 +119,7 @@ def product_rows(products: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 "Reviews": len(comments) if isinstance(comments, list) else 0,
                 "Total ratings": int(product.get("total_rating") or 0),
                 "Location": product.get("location", ""),
+                "Platform": platform_name(product),
                 "Risk score": summary.get("risk_score"),
                 "Risk level": risk_level(summary.get("risk_score")),
                 "Reliability score": product_reliability(product),

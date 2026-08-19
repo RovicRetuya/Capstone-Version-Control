@@ -6,6 +6,7 @@ Run with: streamlit run app.py
 from __future__ import annotations
 
 import html
+import hashlib
 import json
 import subprocess
 import sys
@@ -13,6 +14,7 @@ from collections import Counter
 from datetime import datetime
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
 import pandas as pd
 import plotly.express as px
@@ -23,9 +25,11 @@ from dashboard_utils import (
     ROOT,
     analyze_products,
     csv_bytes,
+    detect_marketplace,
     json_bytes,
     load_products,
     output_path,
+    platform_name,
     price_value,
     product_rows,
     product_reliability,
@@ -319,18 +323,27 @@ def selected_product(products: list[dict[str, Any]]) -> dict[str, Any] | None:
     return next((item for item in products if item.get("link") == link), products[0] if products else None)
 
 
-def run_live_scrape(keyword: str, product_count: int, review_count: int) -> list[dict[str, Any]]:
-    target = output_path(keyword)
-    command = [
-        sys.executable,
-        str(ROOT / "src" / "retriv.py"),
-        "-k", keyword,
-        "-n", str(product_count),
-        "-r", str(review_count),
-        "--no-prompt",
-    ]
+def run_live_scrape(keyword: str, product_count: int, review_count: int, platform: str | None = None) -> list[dict[str, Any]]:
+    parsed = urlsplit(keyword)
+    direct_url = parsed.scheme in {"http", "https"} and bool(parsed.netloc)
+    try:
+        marketplace = detect_marketplace(keyword, platform or "shopee")
+    except ValueError as exc:
+        st.error(str(exc))
+        return []
+    direct_id = hashlib.sha256(keyword.strip().encode("utf-8")).hexdigest()[:12]
+    target = output_path(f"direct_{direct_id}" if direct_url else keyword, marketplace)
+    if marketplace == "shopee":
+        command = [sys.executable, str(ROOT / "src" / "retriv.py"), "-n", str(product_count), "-r", str(review_count), "--output", str(target), "--no-prompt"]
+        command.extend(["--product-url", keyword] if direct_url else ["-k", keyword])
+    elif marketplace == "lazada":
+        command = [sys.executable, str(ROOT / "lazada-scraper" / "src" / "lazada_scraper.py"), "-n", str(product_count), "-r", str(review_count), "--output", str(target), "--no-verification-pause", "--verification-timeout", "600"]
+        command.extend(["--product-url", keyword] if direct_url else [keyword])
+    else:
+        command = [sys.executable, str(ROOT / "temu-scraper" / "src" / "temu_scraper.py"), "-n", str(product_count), "-r", str(review_count), "--output", str(target), "--no-verification-pause", "--verification-timeout", "600"]
+        command.extend(["--product-url", keyword] if direct_url else [keyword])
     with st.status("Starting live analysis…", expanded=True) as status:
-        st.write("1 of 3 · Scraping public product reviews…")
+        st.write(f"1 of 3 · Scraping public {marketplace.title()} product reviews…")
         result = subprocess.run(command, cwd=ROOT, capture_output=True, text=True, timeout=900)
         if result.returncode:
             status.update(label="The scrape could not be completed", state="error")
@@ -382,7 +395,7 @@ def landing_page(products: list[dict[str, Any]]) -> None:
             )
             st.markdown('<h1 class="landing-title">Bago mo bilhin,<br>i-check muna.</h1>', unsafe_allow_html=True)
             st.markdown(
-                '<p class="landing-lead">Paste a Shopee Philippines product link or search for a gadget. '
+                '<p class="landing-lead">Paste a Shopee, Lazada, or Temu Philippines product link—or search Shopee for a gadget. '
                 'DeFaketive reads public reviews, detects English, Filipino, and Taglish risk signals, '
                 'and explains what influenced the product score before you buy.</p>',
                 unsafe_allow_html=True,
@@ -399,9 +412,9 @@ def landing_page(products: list[dict[str, Any]]) -> None:
             st.markdown(
                 """<div class="platform-row" aria-label="Supported marketplaces">
                 <span class="market-pill shopee"><b>S</b> Shopee PH</span>
-                <span class="market-pill off">Lazada <span class="beta">SOON</span></span>
+                <span class="market-pill shopee">Lazada <span class="beta">BETA</span></span>
                 <span class="market-pill off">TikTok Shop <span class="beta">SOON</span></span>
-                <span class="market-pill off">Temu PH <span class="beta">SOON</span></span>
+                <span class="market-pill shopee">Temu PH <span class="beta">BETA</span></span>
                 </div>""",
                 unsafe_allow_html=True,
             )
@@ -424,10 +437,9 @@ def landing_page(products: list[dict[str, Any]]) -> None:
 
         if submitted:
             if not keyword.strip():
-                st.error("Enter a product name or Shopee link to begin.")
+                st.error("Enter a product name or supported marketplace link to begin.")
             else:
-                query = keyword.strip().rsplit("/", 1)[-1].split("-i.", 1)[0].replace("-", " ") if keyword.startswith("http") else keyword.strip()
-                found = run_live_scrape(query, 5, 30)
+                found = run_live_scrape(keyword.strip(), 5, 30)
                 if found:
                     st.session_state.uploaded_products = found
                     st.session_state.selected_link = found[0].get("link")
@@ -453,7 +465,7 @@ def landing_page(products: list[dict[str, Any]]) -> None:
 
         step_text, step_visual = st.columns([.52, 1.48], gap="large", vertical_alignment="center")
         with step_text:
-            st.markdown('<div class="process-row"><div class="step-number">Step 01</div><h3 class="step-title">Find <span>&#8599;</span></h3><p class="step-copy">Search for a Shopee gadget or copy the link of a listing you want to investigate.</p></div>', unsafe_allow_html=True)
+            st.markdown('<div class="process-row"><div class="step-number">Step 01</div><h3 class="step-title">Find <span>&#8599;</span></h3><p class="step-copy">Search Shopee or copy a Shopee, Lazada, or Temu listing you want to investigate.</p></div>', unsafe_allow_html=True)
         with step_visual:
             st.markdown(
                 """<div class="process-visual"><div class="visual-browser"><div class="browser-bar"><i></i><i></i><i></i></div><div class="product-result"><div class="product-image">&#128241;</div><div class="result-lines"><b>Wireless gadget listing</b><span style="width:88%"></span><span style="width:58%"></span></div><div style="color:#F79009;font-weight:800">4.7 &#9733;</div></div></div></div>""",
@@ -465,7 +477,7 @@ def landing_page(products: list[dict[str, Any]]) -> None:
             st.markdown('<div class="process-row"><div class="step-number">Step 02</div><h3 class="step-title">Paste <span>&#8599;</span></h3><p class="step-copy">Paste the product link or enter its name. The live scraper collects the public listing and review sample.</p></div>', unsafe_allow_html=True)
         with step_visual:
             st.markdown(
-                """<div class="process-visual"><div class="link-card"><div style="color:#101828;font-weight:700;margin:0 0 .8rem">Check a product</div><div class="link-input"><span>&#128279;</span><span>shopee.ph/product-name-i.123.456</span><span class="link-button">Analyze</span></div><div style="font-size:.68rem;color:#98A2B3;margin-top:.7rem">Shopee Philippines links and product searches are supported.</div></div></div>""",
+                """<div class="process-visual"><div class="link-card"><div style="color:#101828;font-weight:700;margin:0 0 .8rem">Check a product</div><div class="link-input"><span>&#128279;</span><span>shopee.ph/product-name-i.123.456</span><span class="link-button">Analyze</span></div><div style="font-size:.68rem;color:#98A2B3;margin-top:.7rem">Shopee search plus Shopee, Lazada, and Temu product links are supported.</div></div></div>""",
                 unsafe_allow_html=True,
             )
 
@@ -519,7 +531,7 @@ def landing_page(products: list[dict[str, Any]]) -> None:
     with st.container(key="landing_footer"):
         footer_left, footer_right = st.columns([1.2, 1])
         footer_left.markdown(
-            """<div class="footer-brand">&#9671; DeFaketive</div><p class="footer-note">An explainable review-risk research prototype for Philippine e-commerce. Currently connected to Shopee Philippines. Not sponsored, endorsed, or operated by any marketplace.</p><p class="footer-note">&copy; 2026 DeFaketive research project.</p>""",
+            """<div class="footer-brand">&#9671; DeFaketive</div><p class="footer-note">An explainable review-risk research prototype for Philippine e-commerce. Shopee is the primary integration; Lazada and Temu are beta connectors. Not sponsored, endorsed, or operated by any marketplace.</p><p class="footer-note">&copy; 2026 DeFaketive research project.</p>""",
             unsafe_allow_html=True,
         )
         footer_right.markdown(
@@ -555,7 +567,7 @@ def results_page(products: list[dict[str, Any]]) -> None:
                 st.markdown('<div class="card">', unsafe_allow_html=True)
                 if product.get("img"):
                     st.image(product["img"], use_container_width=True)
-                st.markdown(f'<span class="platform-pill">Shopee PH</span> {risk_badge(score)}', unsafe_allow_html=True)
+                st.markdown(f'<span class="platform-pill">{platform_name(product)}</span> {risk_badge(score)}', unsafe_allow_html=True)
                 st.markdown(f"**{product.get('name') or 'Unnamed product'}**")
                 st.markdown(f"### {money(product.get('price'))}")
                 st.caption(f"★ {product.get('rating') or '—'} · {len(product.get('comments') or []):,} sampled reviews")
@@ -618,7 +630,7 @@ def inline_product_analysis(product: dict[str, Any], products: list[dict[str, An
         st.markdown(
             f"""<div class="analysis-product"><div class="analysis-product-grid">
             {image_markup}
-            <div><span class="platform-pill">Shopee PH</span><h3>{name}</h3>
+            <div><span class="platform-pill">{platform_name(product)}</span><h3>{name}</h3>
             <div class="analysis-meta"><b>{rating} star rating</b> &nbsp;·&nbsp; {review_count:,} unique reviews analyzed</div>
             <div class="analysis-description">{description}</div><div class="analysis-price">{html.escape(money(product.get('price')))}</div></div>
             <div><a class="learn-pill" href="{listing_url}" target="_blank" rel="noopener">Original listing &#8599;</a></div>
@@ -750,7 +762,7 @@ def product_page(products: list[dict[str, Any]]) -> None:
     with top_left:
         if product.get("img"): st.image(product["img"], use_container_width=True)
     with details:
-        st.markdown('<span class="platform-pill">Shopee PH</span>', unsafe_allow_html=True)
+        st.markdown(f'<span class="platform-pill">{platform_name(product)}</span>', unsafe_allow_html=True)
         st.header(product.get("name") or "Unnamed product")
         st.markdown(f"## {money(product.get('price'))}")
         st.caption(f"★ {product.get('rating') or '—'} · Ships from {product.get('location') or 'Unknown'} · {summary.get('review_count', 0)} unique reviews analyzed")
@@ -853,16 +865,17 @@ def overview_page(products: list[dict[str, Any]]) -> None:
 def scraper_page() -> None:
     st.markdown('<div class="eyebrow">Administration · Objective 1</div>', unsafe_allow_html=True)
     st.title("Scraper manager")
-    st.caption("Create Shopee Philippines collection jobs and inspect locally saved runs.")
+    st.caption("Create Shopee, Lazada, or Temu Philippines collection jobs and inspect locally saved runs.")
     with st.expander("＋ New scrape job", expanded=True):
         with st.form("admin-scrape"):
-            c1, c2, c3 = st.columns([3, 1, 1])
+            c0, c1, c2, c3 = st.columns([1.2, 3, 1, 1])
+            platform = c0.selectbox("Platform", ["shopee", "lazada", "temu"], format_func=lambda value: {"shopee": "Shopee PH", "lazada": "Lazada PH (beta)", "temu": "Temu PH (beta)"}[value])
             keyword = c1.text_input("Target product or keyword")
             count = c2.number_input("Products", 1, 20, 5)
             reviews = c3.number_input("Reviews each", 5, 100, 30, step=5)
             start = st.form_submit_button("Run scraper", type="primary")
         if start and keyword:
-            products = run_live_scrape(keyword, count, reviews)
+            products = run_live_scrape(keyword, count, reviews, platform=platform)
             if products: st.session_state.uploaded_products = products
     jobs = [{"File": path.name, "Status": "Completed", "Updated": datetime.fromtimestamp(path.stat().st_mtime).strftime("%Y-%m-%d %H:%M"), "Size": f"{path.stat().st_size / 1024:.1f} KB"} for path in result_files()]
     st.subheader("Scraping jobs")
@@ -996,7 +1009,7 @@ def sidebar() -> str:
             st.session_state.pop("uploaded_products", None)
             st.rerun()
         st.divider()
-        st.caption("Shopee PH · Local analysis\n\nExplainable Taglish sentiment model")
+        st.caption("Shopee PH · Lazada beta · Temu beta\n\nExplainable Taglish sentiment model")
     return page
 
 
