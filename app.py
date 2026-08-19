@@ -1,0 +1,1015 @@
+"""DeFaketive shopper and administrator dashboard.
+
+Run with: streamlit run app.py
+"""
+
+from __future__ import annotations
+
+import html
+import json
+import subprocess
+import sys
+from collections import Counter
+from datetime import datetime
+from pathlib import Path
+from typing import Any
+
+import pandas as pd
+import plotly.express as px
+import plotly.graph_objects as go
+import streamlit as st
+
+from dashboard_utils import (
+    ROOT,
+    analyze_products,
+    csv_bytes,
+    json_bytes,
+    load_products,
+    output_path,
+    price_value,
+    product_rows,
+    product_reliability,
+    rank_alternatives,
+    result_files,
+    review_rows,
+    risk_keyword_counts,
+    risk_level,
+)
+from data_store import database_counts, save_evaluation_run, save_products, save_survey_response
+from research_utils import evaluate_labels, score_sus, score_umux
+
+
+INDIGO = "#3E4784"
+NAVY = "#11152F"
+VIOLET = "#4F46E5"
+CYAN = "#18C8FF"
+GREEN = "#12B76A"
+AMBER = "#F79009"
+RED = "#F04438"
+INK = "#101828"
+MUTED = "#667085"
+RISK_COLORS = {"Low": GREEN, "Moderate": AMBER, "High": RED}
+
+st.set_page_config(
+    page_title="DeFaketive · Review Risk Intelligence",
+    page_icon="🛡️",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
+
+
+def inject_theme() -> None:
+    st.markdown(
+        f"""
+        <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+        :root {{ --indigo:{INDIGO}; --green:{GREEN}; --amber:{AMBER}; --red:{RED}; }}
+        html, body, [class*="css"] {{ font-family: Inter, sans-serif; color:{INK}; }}
+        .stApp {{ background:#F8F9FC; }}
+        [data-testid="stSidebar"] {{ background:#242B52; }}
+        [data-testid="stSidebar"] * {{ color:#F2F4F7; }}
+        [data-testid="stSidebar"] hr {{ border-color:#475467; }}
+        [data-testid="stSidebar"] .stSelectbox div[data-baseweb="select"] > div {{
+            background:#353F74; border-color:#6670A8;
+        }}
+        .block-container {{ max-width:1440px; padding-top:1.7rem; padding-bottom:4rem; }}
+        h1,h2,h3 {{ letter-spacing:-.03em; }}
+        .brand {{ font-size:1.25rem; font-weight:800; color:white; padding:.45rem 0 1rem; }}
+        .brand-dot {{ color:#6CE9A6; }}
+        .eyebrow {{ color:{INDIGO}; font-size:.74rem; letter-spacing:.12em; text-transform:uppercase; font-weight:800; }}
+        .hero {{ padding:2.6rem 2.8rem; border-radius:24px; background:linear-gradient(135deg,#30386B,#5B67A6); color:white; box-shadow:0 18px 45px rgba(62,71,132,.18); }}
+        .hero h1 {{ color:white; font-size:2.65rem; max-width:760px; margin:.35rem 0 .75rem; }}
+        .hero p {{ color:#E4E7EC; max-width:700px; font-size:1.05rem; }}
+        .card {{ background:white; border:1px solid #EAECF0; border-radius:16px; padding:1.25rem; box-shadow:0 4px 14px rgba(16,24,40,.045); height:100%; }}
+        .metric-label {{ color:{MUTED}; font-size:.78rem; font-weight:600; }}
+        .metric-value {{ color:{INK}; font-size:1.75rem; font-weight:800; line-height:1.2; margin-top:.35rem; }}
+        .muted {{ color:{MUTED}; }}
+        .risk-pill {{ display:inline-flex; align-items:center; gap:.35rem; padding:.3rem .65rem; border-radius:999px; color:white; font-size:.74rem; font-weight:700; }}
+        .platform-pill {{ display:inline-block; background:#FFF0EB; color:#C4320A; border-radius:999px; padding:.27rem .62rem; font-size:.72rem; font-weight:700; }}
+        .alert-high {{ background:#FEF3F2; border:1px solid #FECDCA; border-left:5px solid {RED}; border-radius:14px; padding:1rem 1.15rem; color:#912018; }}
+        .review {{ background:white; border:1px solid #EAECF0; border-radius:14px; padding:1rem 1.1rem; margin-bottom:.65rem; }}
+        .review-top {{ display:flex; justify-content:space-between; color:{MUTED}; font-size:.76rem; margin-bottom:.55rem; }}
+        mark {{ background:#FEE4E2; color:#B42318; border-radius:4px; padding:1px 3px; font-weight:700; }}
+        .step {{ text-align:center; border-top:3px solid #D0D5DD; padding-top:.85rem; color:{MUTED}; font-size:.85rem; }}
+        .step strong {{ display:block; color:{INK}; margin-bottom:.2rem; }}
+        div[data-testid="stButton"] button, div[data-testid="stFormSubmitButton"] button {{ border-radius:10px; font-weight:700; }}
+        div[data-testid="stFormSubmitButton"] button[kind="primary"], div[data-testid="stButton"] button[kind="primary"] {{ background:{INDIGO}; border-color:{INDIGO}; }}
+        div[data-testid="stMetric"] {{ background:white; border:1px solid #EAECF0; border-radius:16px; padding:1rem; box-shadow:0 4px 14px rgba(16,24,40,.04); }}
+        [data-testid="stDataFrame"] {{ border:1px solid #EAECF0; border-radius:14px; overflow:hidden; }}
+        @media(max-width:700px) {{ .hero {{ padding:1.5rem; }} .hero h1 {{ font-size:2rem; }} .block-container {{ padding:.8rem 1rem 3rem; }} }}
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def inject_landing_theme() -> None:
+    """Public-site styling based on the supplied DeFaketive landing mockup."""
+    st.markdown(
+        f"""
+        <style>
+        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,600&display=swap');
+        section[data-testid="stSidebar"], [data-testid="collapsedControl"] {{ display:none !important; }}
+        [data-testid="stHeader"], [data-testid="stToolbar"], .stAppToolbar,
+        #MainMenu, footer {{ display:none !important; }}
+        [data-testid="stAppViewContainer"] > .main {{ background:#F5F6F8; }}
+        .block-container {{ max-width:1440px; padding:0 .9rem 3rem !important; }}
+        .st-key-landing_hero, .st-key-how_it_works, .st-key-safety_section,
+        .st-key-member_section, .st-key-landing_footer, .st-key-inline_analysis {{
+            font-family:'DM Sans',Inter,sans-serif;
+        }}
+        .st-key-landing_hero {{
+            background:
+              radial-gradient(circle at 72% 45%,rgba(52,65,190,.34),transparent 36%),
+              linear-gradient(135deg,#0C1028 0%,#151936 100%);
+            color:white; border-radius:0 0 30px 30px; padding:1.2rem 3.6rem 4.7rem;
+            overflow:hidden; box-shadow:0 24px 60px rgba(17,21,47,.12);
+        }}
+        .st-key-landing_hero p, .st-key-landing_hero label {{ color:#D7DAE8 !important; }}
+        .st-key-landing_hero [data-testid="stHorizontalBlock"] {{ align-items:center; }}
+        .landing-brand {{ display:flex;align-items:center;gap:.7rem;color:white;font-size:1.45rem;font-weight:600;letter-spacing:-.03em;white-space:nowrap; }}
+        .shield-logo {{ width:43px;height:49px;filter:drop-shadow(0 8px 20px rgba(24,200,255,.2)); }}
+        .landing-nav-link {{ color:#AEB4CC;font-size:.78rem;font-weight:600;text-align:center;padding:.7rem .2rem; }}
+        .st-key-landing_nav [data-testid="stButton"] button {{
+            min-height:2.6rem;border:1px solid rgba(255,255,255,.12);border-radius:999px;
+            background:rgba(40,49,115,.36);color:white;padding:.45rem .9rem;
+        }}
+        .st-key-landing_nav [data-testid="stButton"] button:hover {{ border-color:#5965FF;color:white;background:#242B66; }}
+        .hero-kicker {{ color:#AEB4CC;font-size:.78rem;font-weight:600;margin:3.9rem 0 1.25rem; }}
+        .hero-kicker span {{ display:inline-block;width:9px;height:9px;border-radius:50%;background:#29D99D;margin-right:.55rem;box-shadow:0 0 0 5px rgba(41,217,157,.08); }}
+        .landing-title {{ font-family:'Fraunces',Georgia,serif !important;font-size:clamp(3.4rem,6vw,6.5rem) !important;line-height:.95 !important;letter-spacing:-.055em !important;color:#FFF !important;margin:0 0 1.6rem !important;max-width:700px; }}
+        .landing-lead {{ max-width:650px;color:#CED2E2;font-size:1.04rem;line-height:1.85;margin-bottom:1.65rem; }}
+        .st-key-hero_search {{ background:white;border-radius:22px;padding:.45rem .55rem;max-width:660px;box-shadow:0 12px 0 rgba(0,0,0,.18); }}
+        .st-key-hero_search [data-testid="stForm"] {{ border:0;padding:0; }}
+        .st-key-hero_search [data-testid="stTextInput"] div[data-baseweb="input"] {{ border:0 !important;background:white !important;box-shadow:none !important; }}
+        .st-key-hero_search [data-testid="stTextInput"] input {{ border:0 !important;background:white !important;color:#12152E !important;font-size:1rem;box-shadow:none !important;-webkit-text-fill-color:#12152E !important; }}
+        .st-key-hero_search [data-testid="stTextInput"] input::placeholder {{ color:#7B8297 !important;-webkit-text-fill-color:#7B8297 !important;opacity:1; }}
+        .st-key-hero_search [data-testid="stFormSubmitButton"] button {{ width:100%;border:0;background:linear-gradient(135deg,#6157FF,#4338DB);color:white;border-radius:16px;min-height:3.3rem; }}
+        .platform-row {{ display:flex;gap:.65rem;align-items:center;margin-top:1.45rem;flex-wrap:wrap; }}
+        .market-pill {{ display:inline-flex;align-items:center;gap:.4rem;background:#F8FAFC;color:#344054;padding:.38rem .8rem;border-radius:999px;font-size:.72rem;font-weight:700; }}
+        .market-pill.shopee b {{ color:#EE4D2D; }} .market-pill.off {{ opacity:.56; }}
+        .beta {{ font-size:.55rem;background:#E4E7EC;padding:.08rem .3rem;border-radius:999px;margin-left:.15rem; }}
+        .hero-stats {{ border:1px solid rgba(255,255,255,.18);background:rgba(16,21,56,.54);backdrop-filter:blur(10px);border-radius:22px;padding:1.55rem 1.65rem;margin-top:5rem;box-shadow:inset 0 1px rgba(255,255,255,.04); }}
+        .stats-kicker {{ color:#C8CCDD;font-size:.72rem;font-weight:700;margin-bottom:1.4rem; }}
+        .stats-grid {{ display:grid;grid-template-columns:repeat(3,1fr);gap:1rem; }}
+        .stat-number {{ font-size:2.25rem;font-weight:700;letter-spacing:-.05em;color:white; }}
+        .stat-number.red {{ color:#F04438; }} .stat-number.green {{ color:#32D583; }}
+        .stat-label {{ color:#8F96B2;font-size:.68rem;margin-top:.2rem; }}
+        .stats-bottom {{ display:grid;grid-template-columns:1fr 1fr;gap:1.2rem;border-top:1px solid rgba(255,255,255,.55);margin-top:1.45rem;padding-top:1rem; }}
+        .mini-stat {{ display:flex;align-items:center;gap:.7rem;color:white;font-size:1.1rem;font-weight:700; }}
+        .mini-icon {{ display:grid;place-items:center;width:38px;height:38px;background:#E9ECF2;color:#667085;border-radius:7px; }}
+        .mini-stat small {{ display:block;color:#8F96B2;font-size:.68rem;font-weight:500; }}
+        .st-key-how_it_works {{ background:#FFF;border-radius:30px;padding:5.8rem 4.8rem;margin-top:1rem; }}
+        .section-label {{ color:#4F46E5;font-size:.75rem;font-weight:800;letter-spacing:.14em;text-transform:uppercase;margin-bottom:.8rem; }}
+        .section-title {{ color:#0E1021 !important;font-size:clamp(3.4rem,7vw,6.8rem) !important;letter-spacing:-.075em !important;line-height:.86 !important;margin:0 !important; }}
+        .section-copy {{ color:#525866;font-size:1.05rem;line-height:1.75;max-width:570px;margin:.8rem 0 1.3rem; }}
+        .learn-pill {{ display:inline-block;background:#5965FF;color:white;border-radius:999px;padding:.72rem 1.15rem;font-size:.8rem;font-weight:700; }}
+        .process-row {{ padding:2.7rem 0;border-top:1px solid #EAECF0; }}
+        .step-number {{ font-size:.77rem;color:#667085;margin-bottom:.65rem; }}
+        .step-title {{ font-size:clamp(2.4rem,4vw,4.5rem) !important;line-height:1 !important;letter-spacing:-.065em !important;color:#101323 !important;margin:0 0 1rem !important; }}
+        .step-title span {{ color:#4F46E5; }}
+        .step-copy {{ color:#667085;line-height:1.6;max-width:300px;font-size:.92rem; }}
+        .process-visual {{ min-height:230px;border-radius:999px;background:linear-gradient(135deg,#F0F2F7,#E4E7EE);padding:2rem 3rem;display:flex;align-items:center;justify-content:center;overflow:hidden; }}
+        .visual-browser {{ width:min(520px,90%);background:white;border:1px solid #D0D5DD;border-radius:16px;box-shadow:0 18px 45px rgba(16,24,40,.12);padding:.7rem; }}
+        .browser-bar {{ display:flex;gap:.3rem;margin-bottom:.8rem; }} .browser-bar i {{ width:7px;height:7px;border-radius:50%;background:#D0D5DD; }}
+        .product-result {{ display:flex;align-items:center;gap:.8rem;border:1px solid #EAECF0;border-radius:12px;padding:.75rem; }}
+        .product-image {{ width:55px;height:55px;border-radius:10px;background:linear-gradient(145deg,#1C255E,#6471FF);display:grid;place-items:center;color:white;font-size:1.3rem; }}
+        .result-lines {{ flex:1; }} .result-lines b {{ color:#182230;font-size:.75rem; }} .result-lines span {{ display:block;height:6px;border-radius:10px;background:#EAECF0;margin-top:.4rem; }}
+        .link-card {{ width:min(520px,90%);background:white;border-radius:18px;padding:1rem;box-shadow:0 18px 45px rgba(16,24,40,.1); }}
+        .link-input {{ display:flex;align-items:center;gap:.65rem;background:#F2F4F7;border-radius:12px;padding:.8rem;color:#667085;font-size:.78rem; }}
+        .link-button {{ margin-left:auto;background:#4F46E5;color:white;padding:.5rem .7rem;border-radius:9px;font-weight:700; }}
+        .analysis-card {{ width:min(480px,90%);background:#101633;color:white;border-radius:18px;padding:1.2rem;box-shadow:0 20px 46px rgba(17,21,47,.24);display:grid;grid-template-columns:120px 1fr;gap:1rem;align-items:center; }}
+        .mini-gauge {{ width:105px;height:105px;border-radius:50%;display:grid;place-items:center;background:conic-gradient(#20C7C9 0 28%,#26305F 28% 100%);position:relative; }}
+        .mini-gauge:after {{ content:'';position:absolute;width:76px;height:76px;border-radius:50%;background:#101633; }} .mini-gauge b {{ position:relative;z-index:1;font-size:1.6rem; }}
+        .signal {{ display:flex;justify-content:space-between;border-bottom:1px solid rgba(255,255,255,.1);padding:.4rem 0;font-size:.68rem;color:#C7CCDE; }} .signal i {{ color:#32D583;font-style:normal; }}
+        .st-key-safety_section {{ background:#F0F1F3;border-radius:30px;padding:5.7rem 4.8rem;margin-top:1rem; }}
+        .safety-grid {{ display:grid;grid-template-columns:repeat(2,1fr);gap:1rem;max-width:480px; }}
+        .safety-card {{ min-height:140px;background:white;border-radius:22px;padding:1.25rem;box-shadow:0 12px 30px rgba(16,24,40,.05); }}
+        .safety-icon {{ font-size:1.55rem;margin-bottom:1.5rem; }} .safety-card b {{ color:#101323;display:block; }} .safety-card small {{ color:#667085; }}
+        .safety-title {{ font-size:clamp(3.6rem,7vw,7.2rem) !important;line-height:.88 !important;letter-spacing:-.075em !important;color:#0E1021 !important;margin:0 0 1.5rem !important; }}
+        .safety-title em {{ display:inline-block;font-style:normal;background:#5965FF;color:white;border-radius:999px;padding:.08em .28em;font-size:.36em;vertical-align:middle;letter-spacing:-.03em; }}
+        .st-key-member_section {{ background:linear-gradient(135deg,#11152F,#161A3B);color:white;border-radius:30px;padding:5.7rem 4.8rem;margin-top:1rem; }}
+        .member-title {{ font-size:clamp(3.5rem,7vw,7rem) !important;line-height:.88 !important;letter-spacing:-.07em !important;color:white !important;margin:0 0 1.5rem !important; }}
+        .member-copy {{ color:#C6CADB;font-size:1.1rem;line-height:1.7;max-width:520px; }}
+        .member-benefits {{ color:white;margin:1.5rem 0 2rem;line-height:2; }}
+        .member-benefits span {{ color:#32D583;margin-right:.55rem; }}
+        .st-key-member_cta [data-testid="stButton"] button {{ background:white;color:#11152F;border:0;border-radius:14px;min-height:3.2rem;padding:0 1.3rem;font-weight:800; }}
+        .dashboard-preview {{ background:#07142E;border:1px solid rgba(61,195,255,.24);border-radius:22px;padding:1.2rem;box-shadow:0 28px 60px rgba(0,0,0,.28);transform:rotate(1deg); }}
+        .preview-head {{ color:white;font-weight:700;margin-bottom:1rem; }} .preview-head span {{ color:#18C8FF; }}
+        .preview-grid {{ display:grid;grid-template-columns:1fr 1.5fr;gap:.75rem; }}
+        .preview-panel {{ background:#0B2147;border:1px solid #143466;border-radius:14px;padding:1rem;min-height:170px; }}
+        .preview-risk {{ color:#8EDFFB;font-size:.65rem; }} .preview-score {{ font-size:2.3rem;font-weight:700;color:white;margin:.6rem 0; }}
+        .preview-low {{ display:inline-block;padding:.3rem .6rem;border-radius:999px;background:rgba(18,183,106,.16);color:#6CE9A6;font-size:.65rem; }}
+        .chart-lines {{ height:88px;margin-top:1rem;background:linear-gradient(165deg,transparent 47%,#2ED3B7 48%,#2ED3B7 50%,transparent 51%),linear-gradient(190deg,transparent 58%,#6172F3 59%,#6172F3 61%,transparent 62%); }}
+        .st-key-landing_footer {{ background:#101010;color:#D0D5DD;border-radius:30px;padding:3.4rem 4.8rem;margin-top:1rem; }}
+        .footer-brand {{ color:white;font-size:1.4rem;font-weight:700; }} .footer-note {{ color:#98A2B3;font-size:.8rem;line-height:1.65;max-width:550px; }}
+        .footer-links {{ display:flex;justify-content:flex-end;gap:1.4rem;flex-wrap:wrap;color:#D0D5DD;font-size:.78rem; }}
+        .st-key-inline_analysis {{ background:#F7F6F0;color:#11152F;border-radius:30px;padding:4.6rem 4rem;margin-top:1rem; }}
+        .analysis-overline {{ font-size:.78rem;font-weight:800;color:#475467;letter-spacing:.08em;text-transform:uppercase; }}
+        .analysis-heading {{ color:#101323 !important;font-size:clamp(2rem,4vw,3.7rem) !important;letter-spacing:-.055em !important;line-height:1 !important;margin:.45rem 0 2.4rem !important; }}
+        .analysis-product {{ background:#ECECE8;border:1px solid #D0D1CD;border-radius:22px;padding:1.2rem; }}
+        .analysis-product-grid {{ display:grid;grid-template-columns:220px 1fr auto;gap:1.25rem;align-items:center; }}
+        .analysis-product-image {{ width:220px;height:180px;border-radius:16px;object-fit:cover;background:#D8D9D5; }}
+        .analysis-product h3 {{ color:#11152F !important;font-size:1.55rem !important;margin:.2rem 0 .5rem !important; }}
+        .analysis-meta {{ color:#667085;font-size:.76rem;margin:.25rem 0; }}
+        .analysis-description {{ color:#525866;font-size:.8rem;line-height:1.55;display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden; }}
+        .analysis-price {{ color:#344054;font-size:1.6rem;font-weight:700;margin-top:.75rem; }}
+        .analysis-alert {{ display:flex;align-items:center;gap:1rem;color:white;border-radius:18px;padding:1.15rem 1.4rem;margin:1rem 0;font-size:1.25rem;font-weight:700; }}
+        .analysis-alert.high {{ background:#F01920; }} .analysis-alert.moderate {{ background:#F79009; }} .analysis-alert.low {{ background:#12B76A; }}
+        .analysis-alert-icon {{ display:grid;place-items:center;width:34px;height:34px;border:1px solid rgba(255,255,255,.75);border-radius:9px;flex:0 0 auto; }}
+        .analysis-alert small {{ margin-left:auto;font-size:.68rem;font-weight:600;color:white;opacity:.88; }}
+        .analysis-panel {{ background:white;border:1px solid #D8D9D5;border-radius:22px;padding:1.35rem;height:100%; }}
+        .analysis-panel-title {{ color:#11152F;font-size:1.08rem;font-weight:800;margin-bottom:.6rem; }}
+        .score-number {{ color:#1769C2;font-size:2.4rem;line-height:1;font-weight:500;letter-spacing:-.05em; }}
+        .score-level {{ font-size:.78rem;font-weight:800;text-transform:uppercase;margin:.5rem 0; }}
+        .formula-note {{ display:flex;justify-content:space-between;gap:1rem;color:#667085;font-size:.72rem;padding-top:.7rem;border-top:1px solid #EAECF0; }}
+        .evidence-shell {{ background:white;border:1px solid #D8D9D5;border-radius:22px;padding:1.5rem;margin-top:1rem; }}
+        .review-grid {{ display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:#D0D5DD;border:1px solid #D0D5DD;margin-top:1rem; }}
+        .inline-review {{ background:white;padding:1rem;min-height:190px; }}
+        .inline-review-head {{ display:flex;align-items:center;gap:.65rem;margin-bottom:.8rem; }}
+        .review-avatar {{ display:grid;place-items:center;width:38px;height:38px;border-radius:50%;background:#006B58;color:white;font-weight:800; }}
+        .review-author {{ color:#11152F;font-size:.78rem;font-weight:800; }} .review-stars {{ color:#12B76A;font-size:.72rem; }}
+        .review-text {{ color:#344054;font-size:.78rem;line-height:1.45; }}
+        .review-sentiment {{ display:inline-block;border-radius:999px;padding:.2rem .45rem;font-size:.6rem;font-weight:800;margin-top:.7rem;text-transform:uppercase; }}
+        .review-sentiment.positive {{ background:#D1FADF;color:#067647; }} .review-sentiment.negative {{ background:#FEE4E2;color:#B42318; }} .review-sentiment.neutral {{ background:#F2F4F7;color:#475467; }}
+        .alternatives-shell {{ background:white;border-radius:22px;padding:1.5rem;margin-top:1rem; }}
+        .alternatives-title {{ color:#11152F;font-size:1.25rem;font-weight:800; }} .alternatives-subtitle {{ color:#667085;font-size:.76rem;margin-bottom:1.1rem; }}
+        .alternatives-grid {{ display:grid;grid-template-columns:repeat(3,1fr);gap:1rem; }}
+        .alternative-card {{ border:1px solid #EAECF0;border-radius:18px;overflow:hidden;background:white;box-shadow:0 10px 25px rgba(16,24,40,.06); }}
+        .alternative-cover {{ height:125px;background:linear-gradient(135deg,#0F9F68,#31B5A4);display:grid;place-items:center;color:white;font-size:2rem;overflow:hidden; }}
+        .alternative-cover img {{ width:100%;height:100%;object-fit:cover; }}
+        .alternative-body {{ padding:1rem; }} .alternative-name {{ color:#11152F;font-weight:800;font-size:.88rem;min-height:2.6rem; }}
+        .alternative-score {{ color:#12B76A;font-size:.72rem;font-weight:800; }} .alternative-price {{ color:#11152F;font-size:1.1rem;font-weight:800;margin-top:.5rem; }}
+        @media(max-width:900px) {{
+          .st-key-landing_hero,.st-key-how_it_works,.st-key-safety_section,.st-key-member_section,.st-key-landing_footer,.st-key-inline_analysis {{ padding-left:1.5rem;padding-right:1.5rem; }}
+          .hero-stats {{ margin-top:2rem; }} .stats-grid {{ grid-template-columns:1fr 1fr; }} .stats-grid > div:last-child {{ grid-column:1/-1; }}
+          .process-visual {{ border-radius:36px;padding:1.3rem; }} .analysis-card {{ grid-template-columns:1fr;justify-items:center; }}
+          .landing-nav-link, .st-key-landing_nav [data-testid="stButton"] {{ display:none !important; }} .review-grid,.alternatives-grid {{ grid-template-columns:1fr 1fr; }} .analysis-product-grid {{ grid-template-columns:160px 1fr; }} .analysis-product-image {{ width:160px;height:150px; }}
+        }}
+        @media(max-width:600px) {{
+          .block-container {{ padding:0 .35rem 2rem !important; }} .st-key-landing_hero {{ padding-top:.8rem;padding-bottom:3rem;border-radius:0 0 22px 22px; }}
+          .landing-title {{ font-size:3.25rem; }} .hero-kicker {{ margin-top:2.5rem; }} .hero-stats {{ padding:1.1rem; }} .stat-number {{ font-size:1.65rem; }}
+          .stats-bottom {{ grid-template-columns:1fr; }} .st-key-how_it_works,.st-key-safety_section,.st-key-member_section {{ padding-top:3.5rem;padding-bottom:3.5rem;border-radius:22px; }}
+          .section-title,.safety-title,.member-title {{ font-size:3.35rem; }} .safety-grid {{ grid-template-columns:1fr; }} .preview-grid {{ grid-template-columns:1fr; }} .review-grid,.alternatives-grid {{ grid-template-columns:1fr; }} .analysis-product-grid {{ grid-template-columns:1fr; }} .analysis-product-image {{ width:100%;height:220px; }} .analysis-alert {{ font-size:.95rem; }} .analysis-alert small {{ display:none; }}
+        }}
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def risk_badge(score: Any) -> str:
+    level = risk_level(score)
+    dot = {"Low": "●", "Moderate": "▲", "High": "◆"}[level]
+    return f'<span class="risk-pill" style="background:{RISK_COLORS[level]}">{dot} {level} risk</span>'
+
+
+def money(value: Any) -> str:
+    amount = price_value(value)
+    return f"₱{amount:,.0f}" if amount is not None else str(value or "Price unavailable")
+
+
+def metric_card(label: str, value: str, note: str = "") -> None:
+    st.markdown(
+        f'<div class="card"><div class="metric-label">{html.escape(label)}</div>'
+        f'<div class="metric-value">{html.escape(value)}</div>'
+        f'<div class="muted" style="font-size:.75rem;margin-top:.4rem">{html.escape(note)}</div></div>',
+        unsafe_allow_html=True,
+    )
+
+
+@st.cache_data(show_spinner=False)
+def analyzed_file(path: str, modified: float) -> list[dict[str, Any]]:
+    del modified
+    products = load_products(path)
+    if products and all(product.get("sentiment_summary") for product in products):
+        return products
+    return analyze_products(products)
+
+
+def get_products() -> list[dict[str, Any]]:
+    uploaded = st.session_state.get("uploaded_products")
+    if uploaded is not None:
+        return uploaded
+    files = result_files()
+    if not files:
+        return []
+    failures = []
+    for path in files:
+        try:
+            products = analyzed_file(str(path), path.stat().st_mtime)
+            if not products:
+                continue
+            save_products(products, source=str(path))
+            return products
+        except Exception as exc:
+            failures.append(f"{path.name}: {exc}")
+    if failures:
+        st.warning("No usable saved result could be loaded. " + failures[0])
+    return []
+
+
+def set_selected(product: dict[str, Any]) -> None:
+    st.session_state.selected_link = product.get("link")
+    st.session_state.page = "Product analysis"
+
+
+def selected_product(products: list[dict[str, Any]]) -> dict[str, Any] | None:
+    link = st.session_state.get("selected_link")
+    return next((item for item in products if item.get("link") == link), products[0] if products else None)
+
+
+def run_live_scrape(keyword: str, product_count: int, review_count: int) -> list[dict[str, Any]]:
+    target = output_path(keyword)
+    command = [
+        sys.executable,
+        str(ROOT / "src" / "retriv.py"),
+        "-k", keyword,
+        "-n", str(product_count),
+        "-r", str(review_count),
+        "--no-prompt",
+    ]
+    with st.status("Starting live analysis…", expanded=True) as status:
+        st.write("1 of 3 · Scraping public product reviews…")
+        result = subprocess.run(command, cwd=ROOT, capture_output=True, text=True, timeout=900)
+        if result.returncode:
+            status.update(label="The scrape could not be completed", state="error")
+            st.code((result.stderr or result.stdout)[-3000:], language="text")
+            return []
+        st.write("2 of 3 · Analyzing English, Filipino, and Taglish sentiment…")
+        products = load_products(target)
+        analyzed = analyze_products(products)
+        target.write_bytes(json_bytes(analyzed))
+        save_products(analyzed, source=str(target))
+        st.write("3 of 3 · Computing weighted risk and reliability scores…")
+        status.update(label=f"Analysis complete · {len(analyzed)} products found", state="complete")
+        analyzed_file.clear()
+        return analyzed
+
+
+def landing_page(products: list[dict[str, Any]]) -> None:
+    inject_landing_theme()
+    review_total = sum(len(item.get("comments") or []) for item in products)
+    high_total = sum(risk_level((item.get("sentiment_summary") or {}).get("risk_score")) == "High" for item in products)
+    analyzed_total = sum(bool(item.get("sentiment_summary")) for item in products)
+    reliabilities = [product_reliability(item) for item in products]
+    average_reliability = sum(reliabilities) / len(reliabilities) if reliabilities else 0
+
+    with st.container(key="landing_hero"):
+        with st.container(key="landing_nav"):
+            brand, nav_a, nav_b, nav_c, spacer, report, dashboard = st.columns([2.7, 1.1, 1.1, 1.1, .7, 1.25, 1.4])
+            brand.markdown(
+                """<div class="landing-brand">
+                <svg class="shield-logo" viewBox="0 0 64 72" aria-hidden="true"><defs><linearGradient id="shieldGradient" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#18D7FF"/><stop offset="1" stop-color="#1975FF"/></linearGradient></defs><path d="M32 3C23 9 15 11 7 12v20c0 18 10 29 25 37 15-8 25-19 25-37V12C49 11 41 9 32 3Z" fill="none" stroke="url(#shieldGradient)" stroke-width="5"/><path d="m21 35 7 7 15-17" fill="none" stroke="#18C8FF" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                <span>DeFaketive</span></div>""",
+                unsafe_allow_html=True,
+            )
+            nav_a.markdown('<div class="landing-nav-link">How it works</div>', unsafe_allow_html=True)
+            nav_b.markdown('<div class="landing-nav-link">Risk scoring</div>', unsafe_allow_html=True)
+            nav_c.markdown('<div class="landing-nav-link">Support</div>', unsafe_allow_html=True)
+            if report.button("Reports", use_container_width=True, key="landing-reports"):
+                st.session_state.page = "Search results"
+                st.rerun()
+            if dashboard.button("Dashboard", type="primary", use_container_width=True, key="landing-dashboard"):
+                st.session_state.page = "Admin overview"
+                st.rerun()
+
+        hero_copy, hero_numbers = st.columns([1.05, .95], gap="large")
+        with hero_copy:
+            st.markdown(
+                f'<div class="hero-kicker"><span></span>{review_total:,} real reviews available in the local research dataset</div>',
+                unsafe_allow_html=True,
+            )
+            st.markdown('<h1 class="landing-title">Bago mo bilhin,<br>i-check muna.</h1>', unsafe_allow_html=True)
+            st.markdown(
+                '<p class="landing-lead">Paste a Shopee Philippines product link or search for a gadget. '
+                'DeFaketive reads public reviews, detects English, Filipino, and Taglish risk signals, '
+                'and explains what influenced the product score before you buy.</p>',
+                unsafe_allow_html=True,
+            )
+            with st.container(key="hero_search"):
+                with st.form("search", border=False):
+                    query_col, submit_col = st.columns([4.7, 1.35], vertical_alignment="center")
+                    keyword = query_col.text_input(
+                        "Product link or search",
+                        placeholder="Paste a product link or search for one",
+                        label_visibility="collapsed",
+                    )
+                    submitted = submit_col.form_submit_button("Check now", type="primary", use_container_width=True)
+            st.markdown(
+                """<div class="platform-row" aria-label="Supported marketplaces">
+                <span class="market-pill shopee"><b>S</b> Shopee PH</span>
+                <span class="market-pill off">Lazada <span class="beta">SOON</span></span>
+                <span class="market-pill off">TikTok Shop <span class="beta">SOON</span></span>
+                <span class="market-pill off">Temu PH <span class="beta">SOON</span></span>
+                </div>""",
+                unsafe_allow_html=True,
+            )
+
+        with hero_numbers:
+            st.markdown(
+                f"""<div class="hero-stats">
+                <div class="stats-kicker">Current DeFaketive dataset</div>
+                <div class="stats-grid">
+                  <div><div class="stat-number">{len(products):,}</div><div class="stat-label">Products collected</div></div>
+                  <div><div class="stat-number red">{high_total:,}</div><div class="stat-label">High-risk flags</div></div>
+                  <div><div class="stat-number green">{average_reliability:.0f}%</div><div class="stat-label">Average reliability</div></div>
+                </div>
+                <div class="stats-bottom">
+                  <div class="mini-stat"><span class="mini-icon">&#9733;</span><span>{review_total:,}<small>Sampled reviews</small></span></div>
+                  <div class="mini-stat"><span class="mini-icon">&#10003;</span><span>{analyzed_total:,}<small>Products analyzed</small></span></div>
+                </div></div>""",
+                unsafe_allow_html=True,
+            )
+
+        if submitted:
+            if not keyword.strip():
+                st.error("Enter a product name or Shopee link to begin.")
+            else:
+                query = keyword.strip().rsplit("/", 1)[-1].split("-i.", 1)[0].replace("-", " ") if keyword.startswith("http") else keyword.strip()
+                found = run_live_scrape(query, 5, 30)
+                if found:
+                    st.session_state.uploaded_products = found
+                    st.session_state.selected_link = found[0].get("link")
+                    st.session_state.inline_result_link = found[0].get("link")
+                    st.session_state.page = "Search"
+                    st.rerun()
+
+    inline_link = st.session_state.get("inline_result_link")
+    inline_product = next((item for item in products if item.get("link") == inline_link), None)
+    if inline_product:
+        inline_product_analysis(inline_product, products)
+
+    with st.container(key="how_it_works"):
+        heading, intro = st.columns([1, 1], gap="large")
+        with heading:
+            st.markdown('<div id="how-it-works" class="section-label">Transparent by design</div><h2 class="section-title">How it<br>works</h2>', unsafe_allow_html=True)
+        with intro:
+            st.markdown(
+                '<p class="section-copy">DeFaketive turns an unfamiliar listing into an explainable review-risk report. Every signal remains traceable to the sampled review and matched term, so the result is easier to inspect.</p>'
+                '<span class="learn-pill">Risk score = 30% sentiment + 70% failure terms</span>',
+                unsafe_allow_html=True,
+            )
+
+        step_text, step_visual = st.columns([.52, 1.48], gap="large", vertical_alignment="center")
+        with step_text:
+            st.markdown('<div class="process-row"><div class="step-number">Step 01</div><h3 class="step-title">Find <span>&#8599;</span></h3><p class="step-copy">Search for a Shopee gadget or copy the link of a listing you want to investigate.</p></div>', unsafe_allow_html=True)
+        with step_visual:
+            st.markdown(
+                """<div class="process-visual"><div class="visual-browser"><div class="browser-bar"><i></i><i></i><i></i></div><div class="product-result"><div class="product-image">&#128241;</div><div class="result-lines"><b>Wireless gadget listing</b><span style="width:88%"></span><span style="width:58%"></span></div><div style="color:#F79009;font-weight:800">4.7 &#9733;</div></div></div></div>""",
+                unsafe_allow_html=True,
+            )
+
+        step_text, step_visual = st.columns([.52, 1.48], gap="large", vertical_alignment="center")
+        with step_text:
+            st.markdown('<div class="process-row"><div class="step-number">Step 02</div><h3 class="step-title">Paste <span>&#8599;</span></h3><p class="step-copy">Paste the product link or enter its name. The live scraper collects the public listing and review sample.</p></div>', unsafe_allow_html=True)
+        with step_visual:
+            st.markdown(
+                """<div class="process-visual"><div class="link-card"><div style="color:#101828;font-weight:700;margin:0 0 .8rem">Check a product</div><div class="link-input"><span>&#128279;</span><span>shopee.ph/product-name-i.123.456</span><span class="link-button">Analyze</span></div><div style="font-size:.68rem;color:#98A2B3;margin-top:.7rem">Shopee Philippines links and product searches are supported.</div></div></div>""",
+                unsafe_allow_html=True,
+            )
+
+        step_text, step_visual = st.columns([.52, 1.48], gap="large", vertical_alignment="center")
+        with step_text:
+            st.markdown('<div class="process-row"><div class="step-number">Step 03</div><h3 class="step-title">Analyze <span>&#8599;</span></h3><p class="step-copy">Inspect the risk gauge, sentiment mix, failure keywords, duplicate markers, and highlighted evidence.</p></div>', unsafe_allow_html=True)
+        with step_visual:
+            st.markdown(
+                """<div class="process-visual"><div class="analysis-card"><div class="mini-gauge"><b>28</b></div><div><div style="font-size:.72rem;color:#8EDFFB;font-weight:700">LOW RISK</div><div class="signal"><span>Packaging signals</span><i>&#10003;</i></div><div class="signal"><span>Review consistency</span><i>&#10003;</i></div><div class="signal"><span>Failure keywords</span><i>2 found</i></div><div class="signal"><span>Duplicate reviews</span><i>checked</i></div></div></div></div>""",
+                unsafe_allow_html=True,
+            )
+
+    with st.container(key="safety_section"):
+        features, copy = st.columns([.9, 1.1], gap="large", vertical_alignment="center")
+        with features:
+            st.markdown(
+                """<div class="safety-grid">
+                <div class="safety-card"><div class="safety-icon">&#128269;</div><b>Review evidence</b><small>See the text behind every warning.</small></div>
+                <div class="safety-card"><div class="safety-icon">&#128200;</div><b>Sentiment trends</b><small>Compare positive, neutral, and negative feedback.</small></div>
+                <div class="safety-card"><div class="safety-icon">&#128737;</div><b>Risk signals</b><small>Spot defect and counterfeit language.</small></div>
+                <div class="safety-card"><div class="safety-icon">&#8644;</div><b>Safer options</b><small>Rank stored products by reliability.</small></div>
+                </div>""",
+                unsafe_allow_html=True,
+            )
+        with copy:
+            st.markdown(
+                '<div class="section-label">Decision support for shoppers</div><h2 class="safety-title">Search for<br><em>evidence</em> safety.</h2>'
+                '<p class="section-copy">A high score is a prompt to look closer, not a legal determination that a seller or product is fraudulent. DeFaketive keeps the calculation visible and the review evidence within reach.</p>',
+                unsafe_allow_html=True,
+            )
+
+    with st.container(key="member_section"):
+        member_copy, member_preview = st.columns([.9, 1.1], gap="large", vertical_alignment="center")
+        with member_copy:
+            st.markdown(
+                '<div class="section-label" style="color:#8EDFFB">Continue exploring</div><h2 class="member-title">Your review<br>risk dashboard.</h2>'
+                '<p class="member-copy">Open the working dashboard to browse saved products, inspect the lexicon, manage scraper jobs, and export the local research dataset.</p>'
+                '<div class="member-benefits"><div><span>&#10003;</span>Search and report history</div><div><span>&#10003;</span>Product-level evidence</div><div><span>&#10003;</span>Administrator research tools</div></div>',
+                unsafe_allow_html=True,
+            )
+            with st.container(key="member_cta"):
+                if st.button("Open dashboard  ->", key="member-dashboard"):
+                    st.session_state.page = "Admin overview"
+                    st.rerun()
+        with member_preview:
+            st.markdown(
+                """<div class="dashboard-preview"><div class="preview-head"><span>&#9671;</span> DeFaketive &nbsp; / &nbsp; Product analysis</div><div class="preview-grid"><div class="preview-panel"><div class="preview-risk">RISK SCORE</div><div class="preview-score">28<small style="font-size:.75rem;color:#8AA0C8"> /100</small></div><span class="preview-low">Low risk</span><div style="font-size:.68rem;color:#8AA0C8;margin-top:1rem">This sample shows fewer high-risk indicators.</div></div><div class="preview-panel"><div style="font-size:.7rem;color:#D0D5DD">Sentiment over sampled reviews</div><div class="chart-lines"></div><div class="signal"><span>Positive</span><i>68%</i></div><div class="signal"><span>Neutral</span><i>20%</i></div><div class="signal"><span>Negative</span><i>12%</i></div></div></div></div>""",
+                unsafe_allow_html=True,
+            )
+
+    with st.container(key="landing_footer"):
+        footer_left, footer_right = st.columns([1.2, 1])
+        footer_left.markdown(
+            """<div class="footer-brand">&#9671; DeFaketive</div><p class="footer-note">An explainable review-risk research prototype for Philippine e-commerce. Currently connected to Shopee Philippines. Not sponsored, endorsed, or operated by any marketplace.</p><p class="footer-note">&copy; 2026 DeFaketive research project.</p>""",
+            unsafe_allow_html=True,
+        )
+        footer_right.markdown(
+            '<div class="footer-links"><span>How it works</span><span>Methodology</span><span>Feedback</span><span>Dashboard</span></div>',
+            unsafe_allow_html=True,
+        )
+
+
+def results_page(products: list[dict[str, Any]]) -> None:
+    st.markdown('<div class="eyebrow">Shopper portal</div>', unsafe_allow_html=True)
+    st.title("Search results")
+    st.caption("Products are ranked by reliability score. Open a result to inspect the underlying review evidence.")
+    if not products:
+        st.info("No scrape results yet. Start a live analysis from Search or upload a scraper JSON file in the sidebar.")
+        return
+    f1, f2, f3 = st.columns([2, 2, 2])
+    query = f1.text_input("Filter products", placeholder="Search within results")
+    risk_filter = f2.multiselect("Risk level", ["Low", "Moderate", "High"], default=["Low", "Moderate", "High"])
+    sort = f3.selectbox("Sort by", ["Reliability score", "Price: low to high", "Review count"])
+    visible = [p for p in products if query.casefold() in p.get("name", "").casefold() and risk_level((p.get("sentiment_summary") or {}).get("risk_score")) in risk_filter]
+    if sort == "Reliability score":
+        visible.sort(key=product_reliability, reverse=True)
+    elif sort == "Price: low to high":
+        visible.sort(key=lambda p: price_value(p.get("price")) or float("inf"))
+    else:
+        visible.sort(key=lambda p: len(p.get("comments") or []), reverse=True)
+    for row_start in range(0, len(visible), 3):
+        columns = st.columns(3)
+        for column, product in zip(columns, visible[row_start:row_start + 3]):
+            summary = product.get("sentiment_summary") or {}
+            score = summary.get("risk_score", 0)
+            with column:
+                st.markdown('<div class="card">', unsafe_allow_html=True)
+                if product.get("img"):
+                    st.image(product["img"], use_container_width=True)
+                st.markdown(f'<span class="platform-pill">Shopee PH</span> {risk_badge(score)}', unsafe_allow_html=True)
+                st.markdown(f"**{product.get('name') or 'Unnamed product'}**")
+                st.markdown(f"### {money(product.get('price'))}")
+                st.caption(f"★ {product.get('rating') or '—'} · {len(product.get('comments') or []):,} sampled reviews")
+                reliability = product_reliability(product)
+                st.progress(reliability / 100, text=f"{reliability:.0f}% reliability")
+                if st.button("View analysis →", key=f"view-{row_start}-{product.get('link')}", use_container_width=True):
+                    set_selected(product)
+                    st.rerun()
+                st.markdown('</div>', unsafe_allow_html=True)
+
+
+def gauge(score_100: float) -> go.Figure:
+    level = risk_level(score_100)
+    return go.Figure(go.Indicator(
+        mode="gauge+number", value=score_100 / 100,
+        number={"valueformat": ".2f", "font": {"size": 42, "color": INK}},
+        title={"text": f"{level.upper()} RISK", "font": {"size": 14, "color": RISK_COLORS[level]}},
+        gauge={"axis": {"range": [0, 1], "tickwidth": 0, "tickcolor": "white"}, "bar": {"color": RISK_COLORS[level], "thickness": .28},
+               "bgcolor": "white", "borderwidth": 0,
+               "steps": [{"range": [0, .30], "color": "#D1FADF"}, {"range": [.30, .60], "color": "#FEF0C7"}, {"range": [.60, 1], "color": "#FEE4E2"}],
+               "threshold": {"line": {"color": INK, "width": 3}, "thickness": .7, "value": score_100 / 100}}))
+
+
+def highlight_review(review: dict[str, Any]) -> str:
+    text = html.escape(str(review.get("content") or "No written review"))
+    evidence = ((review.get("sentiment_analysis") or {}).get("risk") or {}).get("evidence") or []
+    terms = sorted({str(item.get("term", "")) for item in evidence if item.get("term") and not item.get("negated")}, key=len, reverse=True)
+    import re
+    for term in terms:
+        text = re.sub(f"(?i)({re.escape(html.escape(term))})", r"<mark>\1</mark>", text)
+    return text
+
+
+def inline_product_analysis(product: dict[str, Any], products: list[dict[str, Any]]) -> None:
+    """Render a completed search report directly within the public homepage."""
+    summary = product.get("sentiment_summary") or {}
+    score = float(summary.get("risk_score") or 0)
+    level = risk_level(score)
+    level_class = level.casefold()
+    review_count = int(summary.get("review_count") or len(product.get("comments") or []))
+    name = html.escape(str(product.get("name") or "Unnamed product"))
+    description = html.escape(str(product.get("description") or "No product description was collected."))
+    image_url = html.escape(str(product.get("img") or ""), quote=True)
+    listing_url = html.escape(str(product.get("link") or "#"), quote=True)
+    rating = html.escape(str(product.get("rating") or "—"))
+    alert_text = {
+        "High": "Not recommended — strong counterfeit or defect indicators detected",
+        "Moderate": "Review carefully — moderate risk indicators detected",
+        "Low": "Lower risk — fewer defect indicators detected in this sample",
+    }[level]
+    risk_color = RISK_COLORS[level]
+
+    with st.container(key="inline_analysis"):
+        st.markdown(
+            f'<div class="analysis-overline">{len(products):,} products in this result set</div>'
+            f'<h2 class="analysis-heading">Analysis for “{name}”</h2>',
+            unsafe_allow_html=True,
+        )
+        image_markup = f'<img class="analysis-product-image" src="{image_url}" alt="Product image">' if image_url else '<div class="analysis-product-image" style="display:grid;place-items:center;color:#667085">Product image unavailable</div>'
+        st.markdown(
+            f"""<div class="analysis-product"><div class="analysis-product-grid">
+            {image_markup}
+            <div><span class="platform-pill">Shopee PH</span><h3>{name}</h3>
+            <div class="analysis-meta"><b>{rating} star rating</b> &nbsp;·&nbsp; {review_count:,} unique reviews analyzed</div>
+            <div class="analysis-description">{description}</div><div class="analysis-price">{html.escape(money(product.get('price')))}</div></div>
+            <div><a class="learn-pill" href="{listing_url}" target="_blank" rel="noopener">Original listing &#8599;</a></div>
+            </div></div>""",
+            unsafe_allow_html=True,
+        )
+        st.markdown(
+            f'<div class="analysis-alert {level_class}"><span class="analysis-alert-icon">!</span><span>{html.escape(alert_text)}</span><small>Risk score {score:.0f}/100</small></div>',
+            unsafe_allow_html=True,
+        )
+
+        score_col, breakdown_col = st.columns([.72, 1.7], gap="large")
+        with score_col:
+            st.markdown(
+                f'<div class="analysis-panel-title">Risk score</div><div class="score-number">{score:.0f}/100</div>'
+                f'<div class="score-level" style="color:{risk_color}">{level} risk</div>',
+                unsafe_allow_html=True,
+            )
+            risk_figure = gauge(score)
+            risk_figure.update_layout(height=235, margin=dict(l=5, r=5, t=20, b=5), paper_bgcolor="rgba(0,0,0,0)")
+            st.plotly_chart(risk_figure, use_container_width=True, config={"displayModeBar": False}, key="inline-risk-gauge")
+            st.markdown(
+                '<div class="formula-note"><span>Low 0–30<br>Moderate 31–60<br>High 61–100</span><span>Decision support only.<br>Inspect the evidence below.</span></div>',
+                unsafe_allow_html=True,
+            )
+        with breakdown_col:
+            st.markdown('<div class="analysis-panel-title">Weighted score breakdown</div>', unsafe_allow_html=True)
+            negative = float((summary.get("sentiment_ratios") or {}).get("negative", 0))
+            failure = float(summary.get("keyword_failure_rate") or 0)
+            components = pd.DataFrame(
+                {"Component": ["Negative review ratio", "Keyword failure rate"], "Percent": [negative * 100, failure * 100]}
+            )
+            bars = px.bar(
+                components,
+                x="Percent",
+                y="Component",
+                orientation="h",
+                color="Component",
+                color_discrete_map={"Negative review ratio": "#FF966B", "Keyword failure rate": "#FF3131"},
+                text=components["Percent"].map(lambda value: f"{value:.1f}%"),
+            )
+            bars.update_traces(textposition="outside", marker_line_width=0)
+            bars.update_layout(
+                height=270,
+                showlegend=False,
+                xaxis=dict(range=[0, 105], title=None, ticksuffix="%", gridcolor="#E4E7EC"),
+                yaxis=dict(title=None, autorange="reversed"),
+                margin=dict(l=20, r=35, t=20, b=35),
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
+            )
+            st.plotly_chart(bars, use_container_width=True, config={"displayModeBar": False}, key="inline-breakdown")
+            st.markdown(
+                f'<div class="formula-note"><span>Formula: (negative ratio × 0.30) + (failure rate × 0.70)</span><b style="color:{risk_color}">{score / 100:.2f} risk result</b></div>',
+                unsafe_allow_html=True,
+            )
+
+        sentiment_col, keyword_col = st.columns(2, gap="large")
+        counts = summary.get("sentiment_counts") or {"positive": 0, "neutral": 0, "negative": 0}
+        with sentiment_col:
+            st.markdown('<div class="analysis-panel-title">Sentiment summary</div>', unsafe_allow_html=True)
+            sentiment_frame = pd.DataFrame(
+                {"Sentiment": ["Positive", "Neutral", "Negative"], "Reviews": [counts.get("positive", 0), counts.get("neutral", 0), counts.get("negative", 0)]}
+            )
+            sentiment_chart = px.pie(
+                sentiment_frame,
+                values="Reviews",
+                names="Sentiment",
+                hole=.18,
+                color="Sentiment",
+                color_discrete_map={"Positive": "#6AD092", "Neutral": "#DED8CE", "Negative": "#FF6B70"},
+            )
+            sentiment_chart.update_layout(height=330, margin=dict(l=5, r=5, t=10, b=10), legend=dict(orientation="h", y=-.05), paper_bgcolor="rgba(0,0,0,0)")
+            st.plotly_chart(sentiment_chart, use_container_width=True, config={"displayModeBar": False}, key="inline-sentiment")
+        with keyword_col:
+            st.markdown('<div class="analysis-panel-title">Detected keyword counter</div>', unsafe_allow_html=True)
+            keywords = risk_keyword_counts(product)
+            if keywords:
+                keyword_frame = pd.DataFrame(list(keywords.items())[:8], columns=["Keyword", "Mentions"])
+                keyword_chart = px.bar(keyword_frame, x="Keyword", y="Mentions", color="Keyword", color_discrete_sequence=["#8FB0E7", "#67DCCF", "#111111", "#70B0FF", "#AE8CE1", "#6DD890"])
+                keyword_chart.update_layout(height=330, showlegend=False, margin=dict(l=5, r=5, t=10, b=35), yaxis_title=None, xaxis_title=None, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
+                st.plotly_chart(keyword_chart, use_container_width=True, config={"displayModeBar": False}, key="inline-keywords")
+            else:
+                st.success("No active defect terms were found in the sampled reviews.")
+
+        reviews = [item for item in product.get("comments") or [] if isinstance(item, dict) and not item.get("is_duplicate")][:6]
+        st.markdown('<div class="analysis-overline" style="margin-top:2.5rem">Product reviews</div>', unsafe_allow_html=True)
+        if reviews:
+            review_cards = []
+            for review in reviews:
+                analysis = review.get("sentiment_analysis") or {}
+                sentiment = str(analysis.get("label") or "neutral").casefold()
+                author = html.escape(str(review.get("author") or "Verified shopper"))
+                initial = html.escape(author[:1].upper() or "S")
+                stars = "★" * max(0, min(5, int(review.get("rating") or 0)))
+                review_cards.append(
+                    f'<article class="inline-review"><div class="inline-review-head"><span class="review-avatar">{initial}</span><div><div class="review-author">{author}</div><div class="review-stars">{stars}</div></div></div><div class="review-text">{highlight_review(review)}</div><span class="review-sentiment {sentiment}">{html.escape(sentiment)}</span></article>'
+                )
+            st.markdown(f'<div class="review-grid">{"".join(review_cards)}</div>', unsafe_allow_html=True)
+        else:
+            st.info("No written reviews were collected for this product.")
+
+        alternatives = rank_alternatives(product, products, limit=3) if score >= 61 else []
+        if alternatives:
+            alternative_cards = []
+            for alternative in alternatives:
+                alt_name = html.escape(str(alternative.get("name") or "Alternative product"))
+                alt_url = html.escape(str(alternative.get("link") or "#"), quote=True)
+                alt_image = html.escape(str(alternative.get("img") or ""), quote=True)
+                alt_cover = f'<img src="{alt_image}" alt="">' if alt_image else '&#9671;'
+                alt_reliability = product_reliability(alternative)
+                alternative_cards.append(
+                    f'<a class="alternative-card" href="{alt_url}" target="_blank" rel="noopener" style="text-decoration:none"><div class="alternative-cover">{alt_cover}</div><div class="alternative-body"><div class="alternative-score">{alt_reliability:.0f}% reliability</div><div class="alternative-name">{alt_name}</div><div class="alternative-price">{html.escape(money(alternative.get("price")))}</div></div></a>'
+                )
+            st.markdown(
+                f'<section class="alternatives-shell"><div class="alternatives-title">Safer alternatives</div><div class="alternatives-subtitle">Ranked from the currently collected dataset by reliability score.</div><div class="alternatives-grid">{"".join(alternative_cards)}</div></section>',
+                unsafe_allow_html=True,
+            )
+
+
+def product_page(products: list[dict[str, Any]]) -> None:
+    product = selected_product(products)
+    if not product:
+        st.info("Choose a product from Search results first.")
+        return
+    summary = product.get("sentiment_summary") or {}
+    score = float(summary.get("risk_score") or 0)
+    top_left, details, gauge_col = st.columns([1.1, 2.3, 1.4])
+    with top_left:
+        if product.get("img"): st.image(product["img"], use_container_width=True)
+    with details:
+        st.markdown('<span class="platform-pill">Shopee PH</span>', unsafe_allow_html=True)
+        st.header(product.get("name") or "Unnamed product")
+        st.markdown(f"## {money(product.get('price'))}")
+        st.caption(f"★ {product.get('rating') or '—'} · Ships from {product.get('location') or 'Unknown'} · {summary.get('review_count', 0)} unique reviews analyzed")
+        if product.get("link"): st.link_button("View original listing ↗", product["link"])
+    with gauge_col:
+        figure = gauge(score)
+        figure.update_layout(height=245, margin=dict(l=15, r=15, t=35, b=5), paper_bgcolor="rgba(0,0,0,0)")
+        st.plotly_chart(figure, use_container_width=True, config={"displayModeBar": False})
+        st.caption(f"Reliability score · {product_reliability(product):.0f}/100")
+    if risk_level(score) == "High":
+        st.markdown('<div class="alert-high"><strong>High-risk review pattern detected</strong><br>This product shows strong counterfeit or defect indicators. Review the evidence and compare safer alternatives below.</div>', unsafe_allow_html=True)
+    st.write("")
+    st.subheader("Why this score?")
+    negative = float((summary.get("sentiment_ratios") or {}).get("negative", 0))
+    failure = float(summary.get("keyword_failure_rate") or 0)
+    c1, c2 = st.columns(2)
+    c1.progress(negative, text=f"Negative review ratio · {negative:.0%} × 30%")
+    c2.progress(failure, text=f"Keyword failure rate · {failure:.0%} × 70%")
+    with st.expander("How is this calculated?"):
+        st.write("Risk score = 0.30 × negative review ratio + 0.70 × keyword failure rate. Duplicate reviews are excluded. Scores of 0–0.30 are Low, 0.31–0.60 Moderate, and 0.61–1.00 High. This is decision support, not proof that a listing is counterfeit.")
+    counts = summary.get("sentiment_counts") or {"positive": 0, "neutral": 0, "negative": 0}
+    chart1, chart2 = st.columns([1, 1.5])
+    with chart1:
+        st.subheader("Sentiment summary")
+        frame = pd.DataFrame({"Sentiment": ["Positive", "Neutral", "Negative"], "Reviews": [counts.get("positive", 0), counts.get("neutral", 0), counts.get("negative", 0)]})
+        fig = px.pie(frame, values="Reviews", names="Sentiment", hole=.68, color="Sentiment", color_discrete_map={"Positive": GREEN, "Neutral": "#98A2B3", "Negative": RED})
+        fig.update_layout(height=290, margin=dict(l=5, r=5, t=5, b=5), legend=dict(orientation="h", y=-.08), paper_bgcolor="rgba(0,0,0,0)")
+        st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+    with chart2:
+        st.subheader("Detected defect terms")
+        keywords = risk_keyword_counts(product)
+        if keywords:
+            term_frame = pd.DataFrame(list(keywords.items())[:8], columns=["Keyword", "Mentions"])
+            fig = px.bar(term_frame.sort_values("Mentions"), x="Mentions", y="Keyword", orientation="h", color_discrete_sequence=[RED])
+            fig.update_layout(height=290, margin=dict(l=5, r=5, t=5, b=5), paper_bgcolor="rgba(0,0,0,0)")
+            st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+        else:
+            st.success("No active high-risk terms were found in the sampled reviews.")
+    st.subheader("Review evidence")
+    sentiment_filter = st.segmented_control("Sentiment", ["All", "Positive", "Neutral", "Negative", "Flagged"], default="All")
+    reviews = [item for item in product.get("comments") or [] if not item.get("is_duplicate")]
+    if sentiment_filter != "All":
+        reviews = [r for r in reviews if (((r.get("sentiment_analysis") or {}).get("risk") or {}).get("detected") if sentiment_filter == "Flagged" else (r.get("sentiment_analysis") or {}).get("label") == sentiment_filter.lower())]
+    for index, review in enumerate(reviews[:30]):
+        analysis = review.get("sentiment_analysis") or {}
+        label = analysis.get("label", "neutral").title()
+        color = {"Positive": GREEN, "Neutral": "#667085", "Negative": RED}.get(label, "#667085")
+        stars = "★" * int(review.get("rating") or 0)
+        st.markdown(f'<div class="review"><div class="review-top"><span><b>{html.escape(review.get("author") or "Verified shopper")}</b> · {stars}</span><span style="color:{color};font-weight:700">{label}</span></div>{highlight_review(review)}</div>', unsafe_allow_html=True)
+    alternatives = rank_alternatives(product, products, limit=4) if score >= 61 else []
+    if alternatives:
+        st.subheader("Safer alternatives")
+        cols = st.columns(len(alternatives))
+        for col, alternative in zip(cols, alternatives):
+            with col:
+                if alternative.get("img"): st.image(alternative["img"], use_container_width=True)
+                st.markdown(f"**{alternative.get('name', '')[:65]}**")
+                st.caption(f"{money(alternative.get('price'))} · {product_reliability(alternative):.0f}% reliable")
+    elif score >= 61:
+        st.info("No sufficiently analyzed alternative is available in the current dataset.")
+
+
+def database_page(products: list[dict[str, Any]]) -> None:
+    st.markdown('<div class="eyebrow">Administration</div>', unsafe_allow_html=True)
+    st.title("Product database")
+    counts = database_counts()
+    st.caption(f"Central SQLite store · {counts['products']:,} products · {counts['reviews']:,} reviews")
+    rows = product_rows(products)
+    if not rows:
+        st.info("No products have been collected.")
+        return
+    frame = pd.DataFrame(rows).drop(columns=["Image"], errors="ignore")
+    st.dataframe(frame, use_container_width=True, hide_index=True, column_config={"Link": st.column_config.LinkColumn("Listing"), "Risk score": st.column_config.NumberColumn(format="%.2f"), "Reliability score": st.column_config.ProgressColumn(min_value=0, max_value=100, format="%.0f%%")})
+    st.download_button("Export product CSV", csv_bytes(rows), "defaketive_products.csv", "text/csv")
+
+
+def overview_page(products: list[dict[str, Any]]) -> None:
+    st.markdown('<div class="eyebrow">Administration</div>', unsafe_allow_html=True)
+    st.title("System overview")
+    reviews = review_rows(products)
+    levels = [risk_level((p.get("sentiment_summary") or {}).get("risk_score")) for p in products]
+    high = levels.count("High")
+    cols = st.columns(5)
+    values = [("Products analyzed", str(len(products))), ("Reviews scraped", f"{len(reviews):,}"), ("High-risk flags", str(high)), ("Model F1-score", "—"), ("Avg. SUS score", "—")]
+    for col, (label, value) in zip(cols, values):
+        with col: metric_card(label, value, "Live local dataset" if value != "—" else "Awaiting evaluation data")
+    left, right = st.columns([1, 1.5])
+    with left:
+        st.subheader("Risk distribution")
+        distribution = pd.DataFrame({"Risk": ["Low", "Moderate", "High"], "Products": [levels.count("Low"), levels.count("Moderate"), high]})
+        fig = px.pie(distribution, values="Products", names="Risk", hole=.62, color="Risk", color_discrete_map=RISK_COLORS)
+        fig.update_layout(height=330, margin=dict(l=5, r=5, t=5, b=5), paper_bgcolor="rgba(0,0,0,0)")
+        st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+    with right:
+        st.subheader("Recent high-risk flags")
+        flagged = [row for row in product_rows(products) if row["Risk level"] == "High"]
+        st.dataframe(pd.DataFrame(flagged)[["Product", "Risk score", "Reviews", "Link"]] if flagged else pd.DataFrame(columns=["Product", "Risk score", "Reviews", "Link"]), use_container_width=True, hide_index=True)
+
+
+def scraper_page() -> None:
+    st.markdown('<div class="eyebrow">Administration · Objective 1</div>', unsafe_allow_html=True)
+    st.title("Scraper manager")
+    st.caption("Create Shopee Philippines collection jobs and inspect locally saved runs.")
+    with st.expander("＋ New scrape job", expanded=True):
+        with st.form("admin-scrape"):
+            c1, c2, c3 = st.columns([3, 1, 1])
+            keyword = c1.text_input("Target product or keyword")
+            count = c2.number_input("Products", 1, 20, 5)
+            reviews = c3.number_input("Reviews each", 5, 100, 30, step=5)
+            start = st.form_submit_button("Run scraper", type="primary")
+        if start and keyword:
+            products = run_live_scrape(keyword, count, reviews)
+            if products: st.session_state.uploaded_products = products
+    jobs = [{"File": path.name, "Status": "Completed", "Updated": datetime.fromtimestamp(path.stat().st_mtime).strftime("%Y-%m-%d %H:%M"), "Size": f"{path.stat().st_size / 1024:.1f} KB"} for path in result_files()]
+    st.subheader("Scraping jobs")
+    st.dataframe(pd.DataFrame(jobs), use_container_width=True, hide_index=True)
+    st.subheader("Live log console")
+    logs = sorted((ROOT / "logs").glob("*.log"), key=lambda p: p.stat().st_mtime, reverse=True) if (ROOT / "logs").exists() else []
+    st.code(logs[0].read_text(encoding="utf-8", errors="replace")[-6000:] if logs else "No scraper logs yet.", language="text")
+
+
+def lexicon_page() -> None:
+    st.markdown('<div class="eyebrow">Administration · Objective 2</div>', unsafe_allow_html=True)
+    st.title("Lexicon dictionary")
+    sentiment = ROOT / "sentiment-analysis" / "defaketive_sentiment" / "lexicons" / "sentiment_lexicon.tsv"
+    risk = sentiment.with_name("risk_lexicon.tsv")
+    tab1, tab2 = st.tabs(["Sentiment terms", "High-risk terms"])
+    with tab1:
+        frame = pd.read_csv(sentiment, sep="\t", comment="#", names=["Term", "Weight", "Language", "Category"])
+        st.dataframe(frame, use_container_width=True, hide_index=True)
+    with tab2:
+        frame = pd.read_csv(risk, sep="\t", comment="#", names=["Term", "Category", "Severity", "Language"])
+        st.dataframe(frame, use_container_width=True, hide_index=True)
+    st.caption("The lexicons are reviewable source files. Editing is intentionally disabled in the dashboard until role-based authentication and an audit trail are added.")
+
+
+def model_page() -> None:
+    st.markdown('<div class="eyebrow">Administration · Objective 5</div>', unsafe_allow_html=True)
+    st.title("Model evaluation")
+    st.info("Upload a human-verified dataset to calculate production evaluation metrics. Placeholder values are never presented as measured results.")
+    uploaded = st.file_uploader(
+        "Upload verified test dataset", type=["csv"], key="evaluation",
+        help="Include actual_label plus either predicted_label or review_text.",
+    )
+    if uploaded:
+        try:
+            evaluation_frame = pd.read_csv(uploaded)
+            actual_column = next((name for name in ("actual_label", "true_label", "label") if name in evaluation_frame), None)
+            predicted_column = next((name for name in ("predicted_label", "prediction") if name in evaluation_frame), None)
+            text_column = next((name for name in ("review_text", "text", "content") if name in evaluation_frame), None)
+            if not actual_column or not (predicted_column or text_column):
+                st.error("CSV needs actual_label and either predicted_label or review_text columns.")
+            elif st.button("Run verified evaluation", type="primary"):
+                if predicted_column:
+                    predictions = evaluation_frame[predicted_column].astype(str).tolist()
+                else:
+                    sentiment_root = ROOT / "sentiment-analysis"
+                    if str(sentiment_root) not in sys.path:
+                        sys.path.insert(0, str(sentiment_root))
+                    from defaketive_sentiment.model import DefaketiveSentimentModel
+                    evaluator = DefaketiveSentimentModel()
+                    predictions = [evaluator.analyze(text)["label"] for text in evaluation_frame[text_column].fillna("")]
+                result = evaluate_labels(evaluation_frame[actual_column].astype(str), predictions)
+                save_evaluation_run(uploaded.name, result)
+                st.session_state.evaluation_result = result
+                st.success(f"Evaluated {result['sample_count']:,} human-labeled reviews and saved the run.")
+        except Exception as exc:
+            st.error(f"Evaluation could not run: {exc}")
+    result = st.session_state.get("evaluation_result")
+    a, b, c, d = st.columns(4)
+    metric_values = [result.get(key) if result else None for key in ("accuracy", "precision", "recall", "f1")]
+    for col, label, value in zip([a, b, c, d], ["Accuracy", "Precision", "Recall", "F1-score"], metric_values):
+        with col: metric_card(label, f"{value:.1%}" if value is not None else "—", f"n = {result['sample_count']}" if result else "No verified run")
+    st.subheader("Confusion matrix")
+    labels = result["labels"] if result else ["negative", "neutral", "positive"]
+    values = result["matrix"] if result else [[0] * len(labels) for _ in labels]
+    matrix = go.Figure(data=go.Heatmap(z=values, x=[f"Predicted {label}" for label in labels], y=[f"Actual {label}" for label in labels], text=values, texttemplate="%{text}", colorscale=[[0, "#F2F4F7"], [1, INDIGO]], showscale=False))
+    matrix.update_layout(height=330, margin=dict(l=20, r=20, t=10, b=20), paper_bgcolor="rgba(0,0,0,0)")
+    st.plotly_chart(matrix, use_container_width=True, config={"displayModeBar": False})
+    if uploaded and not result: st.caption(f"Ready to evaluate: {uploaded.name}")
+
+
+def survey_page() -> None:
+    st.markdown('<div class="eyebrow">Customer acceptance</div>', unsafe_allow_html=True)
+    st.title("SUS / UMUX feedback")
+    st.caption("SUS uses a 1–5 scale; UMUX uses its standard 1–7 scale. Scores are calculated and stored without collecting identity data.")
+    sus = [
+        ("I think that I would like to use this system frequently.", "Sa tingin ko, gusto kong gamitin nang madalas ang sistemang ito."),
+        ("I found the system unnecessarily complex.", "Nakita kong hindi kailangang komplikado ang sistema."),
+        ("I thought the system was easy to use.", "Madaling gamitin ang sistema para sa akin."),
+        ("I think I would need technical support to use this system.", "Kakailanganin ko ng teknikal na tulong upang magamit ito."),
+        ("I found the functions well integrated.", "Maayos na pinagsama-sama ang mga function."),
+        ("I thought there was too much inconsistency.", "Masyadong hindi pare-pareho ang sistema."),
+        ("Most people would learn to use this very quickly.", "Mabilis matututunan ng karamihan ang sistemang ito."),
+        ("I found the system cumbersome to use.", "Mabigat o mahirap gamitin ang sistema."),
+        ("I felt very confident using the system.", "Kampante akong gamitin ang sistema."),
+        ("I needed to learn a lot before using the system.", "Marami muna akong kailangang matutunan bago ito gamitin."),
+    ]
+    umux = [
+        ("This system's capabilities meet my requirements.", "Natutugunan ng kakayahan ng sistema ang aking mga pangangailangan."),
+        ("Using this system is a frustrating experience.", "Nakakainis o nakabibigo ang paggamit ng sistemang ito."),
+        ("This system is easy to use.", "Madaling gamitin ang sistemang ito."),
+        ("I have to spend too much time correcting things with this system.", "Masyado akong gumugugol ng oras sa pagwawasto habang ginagamit ito."),
+    ]
+    with st.form("survey"):
+        frequency = st.selectbox("How often do you shop online?", ["Weekly", "Monthly", "A few times a year", "Rarely"])
+        st.markdown("#### System Usability Scale (1–5)")
+        sus_responses = []
+        for i, (english, tagalog) in enumerate(sus, 1):
+            sus_responses.append(st.radio(f"{i}. {english}\n\n_{tagalog}_", [1, 2, 3, 4, 5], horizontal=True, key=f"sus-{i}", index=2))
+        st.markdown("#### Usability Metric for User Experience (1–7)")
+        umux_responses = []
+        for i, (english, tagalog) in enumerate(umux, 1):
+            umux_responses.append(st.radio(f"{i}. {english}\n\n_{tagalog}_", [1, 2, 3, 4, 5, 6, 7], horizontal=True, key=f"umux-{i}", index=3))
+        sent = st.form_submit_button("Submit feedback", type="primary")
+    if sent:
+        sus_result = score_sus(sus_responses)
+        umux_result = score_umux(umux_responses)
+        save_survey_response(frequency, sus_responses, umux_responses, sus_result, umux_result)
+        st.success(f"Thank you. Your anonymous response was saved · SUS {sus_result:.1f}/100 · UMUX {umux_result:.1f}/100")
+
+
+def sidebar() -> str:
+    with st.sidebar:
+        st.markdown('<div class="brand">DeFaketive<span class="brand-dot">.</span></div>', unsafe_allow_html=True)
+        st.caption("REVIEW RISK INTELLIGENCE")
+        user_pages = ["Search", "Search results", "Product analysis", "Feedback survey"]
+        admin_pages = ["Admin overview", "Scraper manager", "Lexicon manager", "Product database", "Model evaluation"]
+        current = st.session_state.get("page", "Search")
+        options = user_pages + admin_pages
+        page = st.selectbox("Navigate", options, index=options.index(current) if current in options else 0)
+        st.session_state.page = page
+        st.divider()
+        uploaded = st.file_uploader("Load scraper JSON", type=["json"], help="Load an existing Shopee scraper result without running Chrome.")
+        if uploaded:
+            try:
+                st.session_state.uploaded_products = analyze_products(load_products(uploaded.getvalue()))
+                save_products(st.session_state.uploaded_products, source=uploaded.name)
+                st.success("Dataset loaded")
+            except Exception as exc:
+                st.error(f"Could not load file: {exc}")
+        if st.session_state.get("uploaded_products") is not None and st.button("Use latest saved results"):
+            st.session_state.pop("uploaded_products", None)
+            st.rerun()
+        st.divider()
+        st.caption("Shopee PH · Local analysis\n\nExplainable Taglish sentiment model")
+    return page
+
+
+inject_theme()
+page = sidebar()
+products = get_products()
+
+if page == "Search": landing_page(products)
+elif page == "Search results": results_page(products)
+elif page == "Product analysis": product_page(products)
+elif page == "Feedback survey": survey_page()
+elif page == "Admin overview": overview_page(products)
+elif page == "Scraper manager": scraper_page()
+elif page == "Lexicon manager": lexicon_page()
+elif page == "Product database": database_page(products)
+elif page == "Model evaluation": model_page()

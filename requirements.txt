@@ -1,0 +1,9 @@
+undetected-chromedriver
+selenium
+tqdm
+streamlit>=1.44,<2
+pandas>=2.2,<3
+plotly>=5.24,<7
+nltk>=3.9,<4
+setuptools>=70
+scikit-learn>=1.5,<2

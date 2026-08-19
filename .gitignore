@@ -1,0 +1,14 @@
+.venv/
+__pycache__/
+*.py[cod]
+cookies_shopee*.dat
+shopee_ph_*.json
+debug/
+logs/
+*.db
+*.db-journal
+artifacts_*.png
+.env
+.env.*
+!.env.example
+.streamlit/secrets.toml

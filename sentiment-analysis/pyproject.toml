@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "defaketive-sentiment"
+version = "0.1.0"
+description = "Explainable English, Filipino, and Taglish e-commerce review analysis"
+requires-python = ">=3.10"
+dependencies = ["nltk>=3.9,<4"]
+
+[project.scripts]
+defaketive-analyze = "defaketive_sentiment.analyze_reviews:main"
+
+[tool.setuptools.package-data]
+defaketive_sentiment = ["lexicons/*.tsv"]

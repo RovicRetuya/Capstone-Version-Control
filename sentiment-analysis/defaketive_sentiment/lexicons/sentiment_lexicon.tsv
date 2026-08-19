@@ -1,0 +1,78 @@
+# term	valence	language	category
+# Seed lexicon for Philippine e-commerce reviews. Scores follow VADER's -4..+4 scale.
+# These entries must be validated against a human-annotated review set before research claims are made.
+ayos	2.0	tl	general
+astig	2.3	tl	general
+authentic	2.2	en	authenticity
+basag	-3.1	tl	quality
+budol	-1.0	tl	authenticity
+cheaply made	-2.7	en	quality
+class a	-2.2	taglish	authenticity
+complete	1.5	en	completeness
+dead on arrival	-3.5	en	performance
+delikado	-3.2	tl	safety
+defective	-3.2	en	quality
+fake	-3.4	en	authenticity
+flimsy	-2.5	en	quality
+ganda	2.5	tl	general
+gasgas	-1.8	tl	quality
+gumagana	1.9	tl	performance
+hassle	-1.8	taglish	general
+hindi gumagana	-3.4	tl	performance
+hindi maganda	-2.8	tl	general
+hindi original	-3.3	taglish	authenticity
+hindi sulit	-2.7	tl	value
+kulang	-2.2	tl	completeness
+legit	2.3	taglish	authenticity
+ligtas	1.8	tl	safety
+low quality	-2.8	en	quality
+mabagal	-1.9	tl	performance
+madaling masira	-3.2	tl	durability
+maganda	2.6	tl	general
+mahal	-1.2	tl	value
+mahina	-2.0	tl	performance
+mahusay	2.7	tl	general
+maiksi battery life	-2.6	taglish	performance
+maayos	2.2	tl	general
+maayos naman	1.8	tl	general
+maluwag	-1.8	tl	quality
+matibay	2.5	tl	durability
+mabilis delivery	1.7	taglish	delivery
+mabilis malowbat	-3.0	taglish	performance
+mabilis masira	-3.3	tl	durability
+mukhang peke	-3.3	tl	authenticity
+nakakadismaya	-2.8	tl	general
+nasira	-3.2	tl	durability
+nasira agad	-3.4	tl	durability
+no power	-3.2	en	performance
+not original	-3.3	en	authenticity
+not working	-3.4	en	performance
+not worth it	-2.9	en	value
+okay naman	1.3	taglish	general
+original	1.8	taglish	authenticity
+palpak	-3.0	tl	quality
+panalo	2.6	tl	general
+peke	-3.4	tl	authenticity
+poor quality	-3.0	en	quality
+recommend ko	2.2	taglish	general
+sablay	-2.5	tl	quality
+sakto	1.4	tl	general
+sayang	-1.9	tl	value
+sayang pera	-3.1	tl	value
+scam	-3.6	taglish	authenticity
+sira	-3.1	tl	quality
+sirain	-2.9	tl	durability
+sulit	2.7	tl	value
+sulit sa presyo	3.1	tl	value
+swabe	2.2	tl	performance
+stopped working	-3.3	en	performance
+umiinit	-2.0	tl	safety
+value for money	2.7	en	value
+walang problema	2.3	tl	general
+walang sira	2.2	tl	quality
+walang tunog	-2.5	tl	performance
+worth it	2.6	en	value
+ayaw gumana	-3.4	tl	performance
+di gumagana	-3.4	tl	performance
+di maganda	-2.8	tl	general
+di sulit	-2.7	tl	value

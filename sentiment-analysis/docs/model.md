@@ -1,0 +1,72 @@
+# DeFaketive sentiment model
+
+The first model version is a local, explainable extension of NLTK VADER for
+English, Filipino, and Taglish Philippine e-commerce reviews. It does not call
+an external AI service.
+
+## What the model returns
+
+Each review receives:
+
+- positive, neutral, negative, and compound VADER scores;
+- a `positive`, `neutral`, or `negative` label;
+- the matched sentiment terms and their lexicon values;
+- product-risk categories and matched evidence;
+- an independent severity-based risk score.
+
+Risk detection is separate from sentiment. A neutral sentence such as “The
+battery stopped working after one week” still receives a performance/durability
+warning even if its general emotional language is weak.
+
+The JSON workflow also fingerprints normalized comments, marks duplicates, and
+excludes duplicate copies from product-level aggregation.
+
+## Install the model resource
+
+```powershell
+.\.venv\Scripts\Activate.ps1
+python -m pip install -r requirements.txt
+python -m nltk.downloader vader_lexicon
+```
+
+## Analyze one review
+
+```powershell
+python -m defaketive_sentiment --text "Maganda pero mabilis masira"
+```
+
+## Analyze scraped Shopee or Lazada JSON
+
+```powershell
+python -m defaketive_sentiment ..\shopee_ph_laptop.json
+```
+
+The default output is `shopee_ph_laptop_analyzed.json`. The original scrape is
+not overwritten.
+
+## Analyze a CSV
+
+```powershell
+python -m defaketive_sentiment reviews.csv --text-column content
+```
+
+The output contains flattened scores, evidence, risk categories, and duplicate
+markers.
+
+## Research status
+
+`defaketive-vader-seed-0.1.0` is an engineering baseline, not a validated final
+research model. The Filipino/Taglish entries are deliberately kept in editable
+TSV files under `defaketive_sentiment/lexicons`. Before reporting model accuracy, the project
+must create a human-annotated validation set, measure inter-annotator agreement,
+freeze training and test splits, tune thresholds only on training/development
+data, and report precision, recall, F1, confusion matrices, and error analysis.
+
+The preliminary product risk score is:
+
+```text
+100 * (0.30 * negative_review_ratio + 0.70 * keyword_failure_rate)
+```
+
+These weights must be confirmed with the research advisers and validated before
+the score is described as calibrated product reliability.
