@@ -119,7 +119,8 @@ def inject_landing_theme() -> None:
         [data-testid="stAppViewContainer"] > .main {{ background:#F5F6F8; }}
         .block-container {{ max-width:1440px; padding:0 .9rem 3rem !important; }}
         .st-key-landing_hero, .st-key-how_it_works, .st-key-safety_section,
-        .st-key-member_section, .st-key-landing_footer, .st-key-inline_analysis {{
+        .st-key-member_section, .st-key-landing_footer, .st-key-inline_analysis,
+        .st-key-inline_search_results {{
             font-family:'DM Sans',Inter,sans-serif;
         }}
         .st-key-landing_hero {{
@@ -208,6 +209,32 @@ def inject_landing_theme() -> None:
         .st-key-landing_footer {{ background:#101010;color:#D0D5DD;border-radius:30px;padding:3.4rem 4.8rem;margin-top:1rem; }}
         .footer-brand {{ color:white;font-size:1.4rem;font-weight:700; }} .footer-note {{ color:#98A2B3;font-size:.8rem;line-height:1.65;max-width:550px; }}
         .footer-links {{ display:flex;justify-content:flex-end;gap:1.4rem;flex-wrap:wrap;color:#D0D5DD;font-size:.78rem; }}
+        .st-key-inline_search_results {{ background:#F7F6F0;color:#11152F;border-radius:30px;padding:4.6rem 4rem;margin-top:1rem; }}
+        .search-results-head {{ display:flex;justify-content:space-between;gap:2rem;align-items:flex-end;margin-bottom:1.5rem; }}
+        .search-results-count {{ color:#344054;font-size:.76rem;font-weight:800;letter-spacing:.08em;text-transform:uppercase; }}
+        .search-results-title {{ color:#101323 !important;font-size:clamp(2rem,4vw,3.65rem) !important;letter-spacing:-.055em !important;line-height:1 !important;margin:.4rem 0 .55rem !important; }}
+        .search-results-source {{ color:#667085;font-size:.88rem; }}
+        .st-key-search_result_filters {{ border-top:1px solid #D8D9D5;border-bottom:1px solid #D8D9D5;padding:1rem 0 .45rem;margin-bottom:1.7rem; }}
+        .st-key-search_result_filters label {{ color:#475467 !important;font-size:.72rem !important;font-weight:700 !important; }}
+        .st-key-search_result_filters div[data-baseweb="select"] > div {{ background:white;border-color:#D0D5DD;border-radius:999px;min-height:2.55rem; }}
+        [class*="st-key-search_result_card_"] {{ background:white;border:1px solid #EAECF0;border-radius:18px;padding:.8rem;box-shadow:0 10px 28px rgba(16,24,40,.055);height:100%;overflow:hidden; }}
+        [class*="st-key-search_result_card_"] [data-testid="stButton"] button {{ border:0;border-radius:12px;background:#11152F;color:white;min-height:2.8rem;font-size:.78rem;font-weight:800; }}
+        [class*="st-key-search_result_card_"] [data-testid="stButton"] button:hover {{ background:#4F46E5;color:white; }}
+        .search-card-image {{ width:100%;height:210px;object-fit:cover;border-radius:13px;background:#E4E7EC;display:block; }}
+        .search-card-placeholder {{ width:100%;height:210px;border-radius:13px;background:linear-gradient(135deg,#E4E7EC,#F2F4F7);display:grid;place-items:center;color:#98A2B3;font-size:2rem; }}
+        .search-card-body {{ padding:.85rem .2rem .35rem; }}
+        .search-card-flags {{ display:flex;align-items:center;justify-content:space-between;gap:.5rem;margin-bottom:.65rem; }}
+        .search-card-platform {{ color:#4F46E5;background:#EEF0FF;border-radius:999px;padding:.22rem .5rem;font-size:.62rem;font-weight:800; }}
+        .search-card-reliability {{ color:#067647;font-size:.67rem;font-weight:800; }}
+        .search-card-name {{ color:#101323;font-size:1rem;font-weight:800;line-height:1.3;min-height:2.6rem;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden; }}
+        .search-card-rating {{ color:#F79009;font-size:.75rem;font-weight:700;margin:.5rem 0; }}
+        .search-card-rating span {{ color:#667085;font-weight:500;margin-left:.35rem; }}
+        .search-card-bottom {{ display:flex;justify-content:space-between;align-items:flex-end;gap:.5rem;margin-top:.8rem; }}
+        .search-card-price {{ color:#101323;font-size:1.3rem;font-weight:800; }}
+        .search-card-risk {{ font-size:.65rem;font-weight:800;text-transform:uppercase; }}
+        [class*="st-key-search_result_row_"] {{ margin-bottom:1rem; }}
+        .search-pagination {{ color:#667085;text-align:center;font-size:.75rem;margin-top:.5rem; }}
+        .st-key-search_back [data-testid="stButton"] button {{ border-radius:999px;border:1px solid #D0D5DD;background:white;color:#11152F;font-weight:800; }}
         .st-key-inline_analysis {{ background:#F7F6F0;color:#11152F;border-radius:30px;padding:4.6rem 4rem;margin-top:1rem; }}
         .analysis-overline {{ font-size:.78rem;font-weight:800;color:#475467;letter-spacing:.08em;text-transform:uppercase; }}
         .analysis-heading {{ color:#101323 !important;font-size:clamp(2rem,4vw,3.7rem) !important;letter-spacing:-.055em !important;line-height:1 !important;margin:.45rem 0 2.4rem !important; }}
@@ -245,16 +272,18 @@ def inject_landing_theme() -> None:
         .alternative-body {{ padding:1rem; }} .alternative-name {{ color:#11152F;font-weight:800;font-size:.88rem;min-height:2.6rem; }}
         .alternative-score {{ color:#12B76A;font-size:.72rem;font-weight:800; }} .alternative-price {{ color:#11152F;font-size:1.1rem;font-weight:800;margin-top:.5rem; }}
         @media(max-width:900px) {{
-          .st-key-landing_hero,.st-key-how_it_works,.st-key-safety_section,.st-key-member_section,.st-key-landing_footer,.st-key-inline_analysis {{ padding-left:1.5rem;padding-right:1.5rem; }}
+          .st-key-landing_hero,.st-key-how_it_works,.st-key-safety_section,.st-key-member_section,.st-key-landing_footer,.st-key-inline_analysis,.st-key-inline_search_results {{ padding-left:1.5rem;padding-right:1.5rem; }}
           .hero-stats {{ margin-top:2rem; }} .stats-grid {{ grid-template-columns:1fr 1fr; }} .stats-grid > div:last-child {{ grid-column:1/-1; }}
           .process-visual {{ border-radius:36px;padding:1.3rem; }} .analysis-card {{ grid-template-columns:1fr;justify-items:center; }}
           .landing-nav-link, .st-key-landing_nav [data-testid="stButton"] {{ display:none !important; }} .review-grid,.alternatives-grid {{ grid-template-columns:1fr 1fr; }} .analysis-product-grid {{ grid-template-columns:160px 1fr; }} .analysis-product-image {{ width:160px;height:150px; }}
+          [class*="st-key-search_result_row_"] [data-testid="stHorizontalBlock"] {{ flex-wrap:wrap; }} [class*="st-key-search_result_row_"] [data-testid="stColumn"] {{ min-width:calc(50% - 1rem);flex:1 1 calc(50% - 1rem); }}
         }}
         @media(max-width:600px) {{
           .block-container {{ padding:0 .35rem 2rem !important; }} .st-key-landing_hero {{ padding-top:.8rem;padding-bottom:3rem;border-radius:0 0 22px 22px; }}
           .landing-title {{ font-size:3.25rem; }} .hero-kicker {{ margin-top:2.5rem; }} .hero-stats {{ padding:1.1rem; }} .stat-number {{ font-size:1.65rem; }}
           .stats-bottom {{ grid-template-columns:1fr; }} .st-key-how_it_works,.st-key-safety_section,.st-key-member_section {{ padding-top:3.5rem;padding-bottom:3.5rem;border-radius:22px; }}
           .section-title,.safety-title,.member-title {{ font-size:3.35rem; }} .safety-grid {{ grid-template-columns:1fr; }} .preview-grid {{ grid-template-columns:1fr; }} .review-grid,.alternatives-grid {{ grid-template-columns:1fr; }} .analysis-product-grid {{ grid-template-columns:1fr; }} .analysis-product-image {{ width:100%;height:220px; }} .analysis-alert {{ font-size:.95rem; }} .analysis-alert small {{ display:none; }}
+          .st-key-inline_search_results {{ padding-top:3rem;padding-bottom:3rem;border-radius:22px; }} .search-results-head {{ display:block; }} .search-card-image,.search-card-placeholder {{ height:200px; }} [class*="st-key-search_result_row_"] [data-testid="stColumn"] {{ min-width:100%;flex-basis:100%; }}
         }}
         </style>
         """,
@@ -439,18 +468,41 @@ def landing_page(products: list[dict[str, Any]]) -> None:
             if not keyword.strip():
                 st.error("Enter a product name or supported marketplace link to begin.")
             else:
-                found = run_live_scrape(keyword.strip(), 5, 30)
+                submitted_query = keyword.strip()
+                parsed_query = urlsplit(submitted_query)
+                is_link_search = parsed_query.scheme in {"http", "https"} and bool(parsed_query.netloc)
+                for stale_key in ("search_mode", "search_result_query", "search_result_page", "inline_result_link", "selected_link"):
+                    st.session_state.pop(stale_key, None)
+                found = run_live_scrape(submitted_query, 1 if is_link_search else 6, 30)
                 if found:
                     st.session_state.uploaded_products = found
-                    st.session_state.selected_link = found[0].get("link")
-                    st.session_state.inline_result_link = found[0].get("link")
+                    st.session_state.search_result_query = submitted_query
+                    st.session_state.search_result_page = 0
+                    for filter_key in ("inline-platform-filter", "inline-price-filter", "inline-risk-filter", "inline-sort"):
+                        st.session_state.pop(filter_key, None)
+                    if is_link_search:
+                        st.session_state.search_mode = "link"
+                        st.session_state.selected_link = found[0].get("link")
+                        st.session_state.inline_result_link = found[0].get("link")
+                    else:
+                        st.session_state.search_mode = "name"
+                        st.session_state.pop("selected_link", None)
+                        st.session_state.pop("inline_result_link", None)
                     st.session_state.page = "Search"
                     st.rerun()
 
     inline_link = st.session_state.get("inline_result_link")
     inline_product = next((item for item in products if item.get("link") == inline_link), None)
     if inline_product:
+        if st.session_state.get("search_mode") == "name":
+            with st.container(key="search_back"):
+                if st.button("← Back to product results", key="back-to-inline-results"):
+                    st.session_state.pop("inline_result_link", None)
+                    st.session_state.pop("selected_link", None)
+                    st.rerun()
         inline_product_analysis(inline_product, products)
+    elif st.session_state.get("search_mode") == "name" and st.session_state.get("search_result_query") and products:
+        inline_name_results(st.session_state.search_result_query, products)
 
     with st.container(key="how_it_works"):
         heading, intro = st.columns([1, 1], gap="large")
@@ -599,6 +651,138 @@ def highlight_review(review: dict[str, Any]) -> str:
     for term in terms:
         text = re.sub(f"(?i)({re.escape(html.escape(term))})", r"<mark>\1</mark>", text)
     return text
+
+
+def inline_name_results(query: str, products: list[dict[str, Any]]) -> None:
+    """Render product-name search matches within the public homepage."""
+    platforms = sorted({platform_name(product) for product in products})
+    if len(platforms) == 1:
+        source_text = platforms[0]
+    elif len(platforms) == 2:
+        source_text = " and ".join(platforms)
+    else:
+        source_text = ", ".join(platforms[:-1]) + f", and {platforms[-1]}"
+
+    with st.container(key="inline_search_results"):
+        st.markdown(
+            f'<div class="search-results-head"><div><div class="search-results-count">{len(products):,} results</div>'
+            f'<h2 class="search-results-title">Results for “{html.escape(query)}”</h2>'
+            f'<div class="search-results-source">Collected from {html.escape(source_text)} · choose a product to analyze</div></div></div>',
+            unsafe_allow_html=True,
+        )
+
+        with st.container(key="search_result_filters"):
+            platform_col, price_col, risk_col, sort_col = st.columns([1.05, 1.05, 1.2, 1.35])
+            selected_platforms = platform_col.multiselect(
+                "Platform", platforms, default=platforms, key="inline-platform-filter"
+            )
+            price_band = price_col.selectbox(
+                "Price",
+                ["All prices", "Under ₱500", "₱500–₱1,000", "₱1,000–₱2,500", "₱2,500+"],
+                key="inline-price-filter",
+            )
+            selected_risks = risk_col.multiselect(
+                "Risk level", ["Low", "Moderate", "High"], default=["Low", "Moderate", "High"], key="inline-risk-filter"
+            )
+            sort_order = sort_col.selectbox(
+                "Sort",
+                ["Reliability score", "Price: low to high", "Price: high to low", "Review count"],
+                key="inline-sort",
+            )
+
+        visible = [
+            product for product in products
+            if platform_name(product) in selected_platforms
+            and risk_level((product.get("sentiment_summary") or {}).get("risk_score")) in selected_risks
+        ]
+
+        def in_price_band(product: dict[str, Any]) -> bool:
+            price = price_value(product.get("price"))
+            if price_band == "All prices":
+                return True
+            if price is None:
+                return False
+            if price_band == "Under ₱500":
+                return price < 500
+            if price_band == "₱500–₱1,000":
+                return 500 <= price <= 1000
+            if price_band == "₱1,000–₱2,500":
+                return 1000 < price <= 2500
+            return price > 2500
+
+        visible = [product for product in visible if in_price_band(product)]
+        if sort_order == "Reliability score":
+            visible.sort(key=product_reliability, reverse=True)
+        elif sort_order == "Price: low to high":
+            visible.sort(key=lambda product: price_value(product.get("price")) or float("inf"))
+        elif sort_order == "Price: high to low":
+            visible.sort(key=lambda product: price_value(product.get("price")) or -1, reverse=True)
+        else:
+            visible.sort(key=lambda product: int((product.get("sentiment_summary") or {}).get("review_count") or 0), reverse=True)
+
+        if not visible:
+            st.info("No collected products match these filters.")
+            return
+
+        page_size = 6
+        total_pages = max(1, (len(visible) + page_size - 1) // page_size)
+        page = min(max(0, int(st.session_state.get("search_result_page", 0))), total_pages - 1)
+        st.session_state.search_result_page = page
+        page_products = visible[page * page_size:(page + 1) * page_size]
+        st.caption(f"Showing {page * page_size + 1}–{page * page_size + len(page_products)} of {len(visible)} matching products")
+
+        for row_start in range(0, len(page_products), 3):
+            with st.container(key=f"search_result_row_{page}_{row_start // 3}"):
+                columns = st.columns(3, gap="large")
+                for offset, (column, product) in enumerate(zip(columns, page_products[row_start:row_start + 3])):
+                    result_index = page * page_size + row_start + offset
+                    summary = product.get("sentiment_summary") or {}
+                    level = risk_level(summary.get("risk_score"))
+                    reliability = product_reliability(product)
+                    name = html.escape(str(product.get("name") or "Unnamed product"))
+                    raw_image_url = str(product.get("img") or "").strip()
+                    if raw_image_url.startswith("//"):
+                        raw_image_url = "https:" + raw_image_url
+                    parsed_image_url = urlsplit(raw_image_url)
+                    image_url = html.escape(raw_image_url, quote=True) if parsed_image_url.scheme in {"http", "https"} else ""
+                    image_markup = (
+                        f'<img class="search-card-image" src="{image_url}" alt="{name}">'
+                        if image_url else '<div class="search-card-placeholder" aria-label="Product image unavailable">◇</div>'
+                    )
+                    rating = html.escape(str(product.get("rating") or "—"))
+                    raw_review_count = summary.get("review_count")
+                    try:
+                        sampled_reviews = max(0, int(str(raw_review_count).replace(",", "")))
+                    except (TypeError, ValueError):
+                        sampled_reviews = len(product.get("comments") or [])
+                    with column:
+                        with st.container(key=f"search_result_card_{result_index}"):
+                            st.markdown(
+                                f'{image_markup}<div class="search-card-body"><div class="search-card-flags">'
+                                f'<span class="search-card-platform">{html.escape(platform_name(product))}</span>'
+                                f'<span class="search-card-reliability">{reliability:.0f}% reliability</span></div>'
+                                f'<div class="search-card-name">{name}</div>'
+                                f'<div class="search-card-rating">★ {rating}<span>{sampled_reviews:,} sampled reviews</span></div>'
+                                f'<div class="search-card-bottom"><span class="search-card-price">{html.escape(money(product.get("price")))}</span>'
+                                f'<span class="search-card-risk" style="color:{RISK_COLORS[level]}">{level} risk</span></div></div>',
+                                unsafe_allow_html=True,
+                            )
+                            key_hash = hashlib.sha256(
+                                f"{result_index}|{product.get('link') or ''}".encode("utf-8")
+                            ).hexdigest()[:12]
+                            if st.button("Analyze reviews →", key=f"inline-view-{key_hash}", width="stretch"):
+                                st.session_state.selected_link = product.get("link")
+                                st.session_state.inline_result_link = product.get("link")
+                                st.rerun()
+
+        previous_col, page_col, next_col = st.columns([1, 1.4, 1])
+        if previous_col.button("← Previous", disabled=page == 0, key="inline-results-previous", width="stretch"):
+            st.session_state.search_result_page = page - 1
+            st.rerun()
+        page_col.markdown(f'<div class="search-pagination">Page {page + 1} of {total_pages}</div>', unsafe_allow_html=True)
+        if next_col.button("Next →", disabled=page >= total_pages - 1, key="inline-results-next", width="stretch"):
+            st.session_state.search_result_page = page + 1
+            st.rerun()
 
 
 def inline_product_analysis(product: dict[str, Any], products: list[dict[str, Any]]) -> None:
@@ -1001,12 +1185,16 @@ def sidebar() -> str:
         if uploaded:
             try:
                 st.session_state.uploaded_products = analyze_products(load_products(uploaded.getvalue()))
+                for key in ("search_mode", "search_result_query", "search_result_page", "inline_result_link", "selected_link"):
+                    st.session_state.pop(key, None)
                 save_products(st.session_state.uploaded_products, source=uploaded.name)
                 st.success("Dataset loaded")
             except Exception as exc:
                 st.error(f"Could not load file: {exc}")
         if st.session_state.get("uploaded_products") is not None and st.button("Use latest saved results"):
             st.session_state.pop("uploaded_products", None)
+            for key in ("search_mode", "search_result_query", "search_result_page", "inline_result_link", "selected_link"):
+                st.session_state.pop(key, None)
             st.rerun()
         st.divider()
         st.caption("Shopee PH · Lazada beta · Temu beta\n\nExplainable Taglish sentiment model")
