@@ -25,6 +25,38 @@ def search_slug(keyword: str) -> str:
 
 PLATFORM_NAMES = {"shopee": "Shopee PH", "lazada": "Lazada PH", "temu": "Temu PH"}
 
+PRODUCT_IMAGE_FIELDS = (
+    "img",
+    "image",
+    "image_url",
+    "imageUrl",
+    "thumbnail",
+    "thumbnail_url",
+    "thumbnailUrl",
+    "picture",
+    "picture_url",
+    "images",
+    "pictures",
+    "media",
+)
+
+NESTED_IMAGE_FIELDS = (
+    "url",
+    "secure_url",
+    "src",
+    "image",
+    "image_url",
+    "imageUrl",
+    "original",
+    "large",
+    "main",
+    "thumbnail",
+    "thumbnail_url",
+    "thumbnailUrl",
+    "images",
+    "pictures",
+)
+
 RECOMMENDATION_STOP_WORDS = {
     "a", "an", "and", "for", "from", "in", "more", "new", "of", "on",
     "original", "series", "the", "to", "with",
@@ -75,6 +107,58 @@ def product_platform(product: dict[str, Any]) -> str:
 
 def platform_name(product: dict[str, Any]) -> str:
     return PLATFORM_NAMES[product_platform(product)]
+
+
+def product_image_url(product: dict[str, Any]) -> str:
+    """Return the first valid web image URL found in common product fields.
+
+    Marketplace exports are inconsistent: an image may be a string, a
+    protocol-relative URL, a list, or a nested mapping such as
+    ``{"image": {"url": "..."}}``. Local paths and non-web schemes are not
+    safe for browser image markup, so they deliberately resolve to an empty
+    string.
+    """
+    if not isinstance(product, dict):
+        return ""
+    for field in PRODUCT_IMAGE_FIELDS:
+        if field not in product:
+            continue
+        resolved = _resolve_product_image_value(product[field], set())
+        if resolved:
+            return resolved
+    return ""
+
+
+def _resolve_product_image_value(value: Any, seen: set[int]) -> str:
+    if isinstance(value, str):
+        candidate = value.strip()
+        if candidate.startswith("//"):
+            candidate = f"https:{candidate}"
+        if not candidate or any(character in candidate for character in "\r\n\t"):
+            return ""
+        parsed = urlsplit(candidate)
+        if parsed.scheme.casefold() not in {"http", "https"} or not parsed.netloc:
+            return ""
+        return candidate
+
+    if not isinstance(value, (dict, list, tuple)):
+        return ""
+    identity = id(value)
+    if identity in seen:
+        return ""
+    seen.add(identity)
+
+    if isinstance(value, dict):
+        ordered_values = [value[field] for field in NESTED_IMAGE_FIELDS if field in value]
+        ordered_fields = set(NESTED_IMAGE_FIELDS)
+        ordered_values.extend(item for field, item in value.items() if field not in ordered_fields)
+    else:
+        ordered_values = value
+    for item in ordered_values:
+        resolved = _resolve_product_image_value(item, seen)
+        if resolved:
+            return resolved
+    return ""
 
 
 def output_path(keyword: str, platform: str = "shopee") -> Path:
@@ -440,14 +524,113 @@ def rank_alternatives(product: dict[str, Any], products: list[dict[str, Any]], l
 
 
 def risk_keyword_counts(product: dict[str, Any]) -> dict[str, int]:
-    """Aggregate active, explainable risk terms from analyzed reviews."""
+    """Count unique sampled reviews containing each active risk term."""
     counts: Counter[str] = Counter()
     for review in product.get("comments") or []:
+        if review.get("is_duplicate"):
+            continue
         analysis = review.get("sentiment_analysis") or {}
-        for evidence in (analysis.get("risk") or {}).get("evidence") or []:
-            if not evidence.get("negated") and evidence.get("term"):
-                counts[str(evidence["term"]).casefold()] += 1
+        review_terms = {
+            str(evidence["term"]).strip().casefold()
+            for evidence in (analysis.get("risk") or {}).get("evidence") or []
+            if evidence.get("term") and not evidence.get("negated")
+        }
+        counts.update(term for term in review_terms if term)
     return dict(counts.most_common())
+
+
+def review_signal_counts(product: dict[str, Any]) -> dict[str, int]:
+    """Count active sentiment-language signals once per unique review.
+
+    These terms are a descriptive fallback for the dashboard when no defect or
+    fraud terms are present. They must not be presented as risk evidence.
+    """
+    counts: Counter[str] = Counter()
+    for review in product.get("comments") or []:
+        if review.get("is_duplicate"):
+            continue
+        analysis = review.get("sentiment_analysis") or {}
+        review_terms = {
+            str(evidence["term"]).strip().casefold()
+            for evidence in analysis.get("sentiment_evidence") or []
+            if evidence.get("term") and not evidence.get("negated")
+        }
+        counts.update(term for term in review_terms if term)
+    return dict(counts.most_common())
+
+
+def weighted_risk_breakdown(product: dict[str, Any]) -> dict[str, float | int]:
+    """Return the WSM inputs and their contributions on a 0..100 scale."""
+    summary = product.get("sentiment_summary") or {}
+    unique_reviews = [
+        review
+        for review in product.get("comments") or []
+        if isinstance(review, dict) and not review.get("is_duplicate")
+    ]
+    try:
+        review_count = max(0, int(summary.get("review_count")))
+    except (TypeError, ValueError):
+        review_count = len(unique_reviews)
+    if not review_count:
+        review_count = len(unique_reviews)
+
+    sentiment_counts = summary.get("sentiment_counts") or {}
+    ratios = summary.get("sentiment_ratios") or {}
+
+    def bounded_ratio(value: Any) -> float:
+        try:
+            return min(1.0, max(0.0, float(value)))
+        except (TypeError, ValueError):
+            return 0.0
+
+    negative_count_value = sentiment_counts.get("negative")
+    try:
+        negative_reviews = max(0, int(negative_count_value))
+    except (TypeError, ValueError):
+        negative_reviews = sum(
+            1
+            for review in unique_reviews
+            if (review.get("sentiment_analysis") or {}).get("label") == "negative"
+        )
+    negative_reviews = min(review_count, negative_reviews) if review_count else 0
+    if negative_count_value is not None and review_count:
+        negative_ratio = negative_reviews / review_count
+    elif "negative" in ratios:
+        negative_ratio = bounded_ratio(ratios.get("negative"))
+    else:
+        negative_ratio = negative_reviews / review_count if review_count else 0.0
+
+    risk_review_value = summary.get("risk_review_count")
+    try:
+        risk_reviews = max(0, int(risk_review_value))
+    except (TypeError, ValueError):
+        risk_reviews = sum(
+            1
+            for review in unique_reviews
+            if ((review.get("sentiment_analysis") or {}).get("risk") or {}).get("detected")
+        )
+    risk_reviews = min(review_count, risk_reviews) if review_count else 0
+    if risk_review_value is not None and review_count:
+        defect_review_ratio = risk_reviews / review_count
+    elif "keyword_failure_rate" in summary:
+        defect_review_ratio = bounded_ratio(summary.get("keyword_failure_rate"))
+    else:
+        defect_review_ratio = risk_reviews / review_count if review_count else 0.0
+
+    negative_points = 30.0 * negative_ratio
+    defect_points = 70.0 * defect_review_ratio
+    return {
+        "review_count": review_count,
+        "negative_reviews": negative_reviews,
+        "risk_reviews": risk_reviews,
+        "negative_ratio": negative_ratio,
+        "defect_review_ratio": defect_review_ratio,
+        "negative_weight": 0.30,
+        "defect_weight": 0.70,
+        "negative_points": negative_points,
+        "defect_points": defect_points,
+        "total_points": negative_points + defect_points,
+    }
 
 
 def review_rows(products: list[dict[str, Any]]) -> list[dict[str, Any]]:

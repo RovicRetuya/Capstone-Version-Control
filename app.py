@@ -35,6 +35,7 @@ from dashboard_utils import (
     platform_name,
     price_value,
     product_platform,
+    product_image_url,
     product_rows,
     product_reliability,
     product_risk_level,
@@ -42,9 +43,11 @@ from dashboard_utils import (
     rank_recommendations,
     recommendation_search_query,
     result_files,
+    review_signal_counts,
     review_rows,
     risk_keyword_counts,
     risk_level,
+    weighted_risk_breakdown,
 )
 from data_store import (
     database_counts,
@@ -82,9 +85,18 @@ def inject_theme() -> None:
         f"""
         <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
-        :root {{ --indigo:{INDIGO}; --green:{GREEN}; --amber:{AMBER}; --red:{RED}; }}
-        html, body, [class*="css"] {{ font-family: Inter, sans-serif; color:{INK}; }}
-        .stApp {{ background:#F8F9FC; }}
+        :root {{
+            --indigo:{INDIGO}; --green:{GREEN}; --amber:{AMBER}; --red:{RED};
+            --def-bg:var(--background-color,#F8F9FC);
+            --def-surface:var(--secondary-background-color,#FFFFFF);
+            --def-text:var(--text-color,#101828);
+            --def-muted:color-mix(in srgb,var(--text-color,#101828) 64%,transparent);
+            --def-border:color-mix(in srgb,var(--text-color,#101828) 18%,transparent);
+            --def-accent:color-mix(in srgb,var(--primary-color,#3E4784) 78%,var(--text-color,#101828) 22%);
+            --def-shadow:color-mix(in srgb,#000000 14%,transparent);
+        }}
+        html, body, [class*="css"] {{ font-family:Inter,sans-serif;color:var(--def-text); }}
+        .stApp, [data-testid="stAppViewContainer"] > .main {{ background:var(--def-bg);color:var(--def-text); }}
         [data-testid="stSidebar"] {{ background:#242B52; }}
         [data-testid="stSidebar"] * {{ color:#F2F4F7; }}
         [data-testid="stSidebar"] hr {{ border-color:#475467; }}
@@ -95,26 +107,26 @@ def inject_theme() -> None:
         h1,h2,h3 {{ letter-spacing:-.03em; }}
         .brand {{ font-size:1.25rem; font-weight:800; color:white; padding:.45rem 0 1rem; }}
         .brand-dot {{ color:#6CE9A6; }}
-        .eyebrow {{ color:{INDIGO}; font-size:.74rem; letter-spacing:.12em; text-transform:uppercase; font-weight:800; }}
+        .eyebrow {{ color:var(--def-accent); font-size:.74rem; letter-spacing:.12em; text-transform:uppercase; font-weight:800; }}
         .hero {{ padding:2.6rem 2.8rem; border-radius:24px; background:linear-gradient(135deg,#30386B,#5B67A6); color:white; box-shadow:0 18px 45px rgba(62,71,132,.18); }}
         .hero h1 {{ color:white; font-size:2.65rem; max-width:760px; margin:.35rem 0 .75rem; }}
         .hero p {{ color:#E4E7EC; max-width:700px; font-size:1.05rem; }}
-        .card {{ background:white; border:1px solid #EAECF0; border-radius:16px; padding:1.25rem; box-shadow:0 4px 14px rgba(16,24,40,.045); height:100%; }}
-        .metric-label {{ color:{MUTED}; font-size:.78rem; font-weight:600; }}
-        .metric-value {{ color:{INK}; font-size:1.75rem; font-weight:800; line-height:1.2; margin-top:.35rem; }}
-        .muted {{ color:{MUTED}; }}
+        .card {{ background:var(--def-surface); color:var(--def-text); border:1px solid var(--def-border); border-radius:16px; padding:1.25rem; box-shadow:0 4px 14px var(--def-shadow); height:100%; }}
+        .metric-label {{ color:var(--def-muted); font-size:.78rem; font-weight:600; }}
+        .metric-value {{ color:var(--def-text); font-size:1.75rem; font-weight:800; line-height:1.2; margin-top:.35rem; }}
+        .muted {{ color:var(--def-muted); }}
         .risk-pill {{ display:inline-flex; align-items:center; gap:.35rem; padding:.3rem .65rem; border-radius:999px; color:white; font-size:.74rem; font-weight:700; }}
         .platform-pill {{ display:inline-block; background:#FFF0EB; color:#C4320A; border-radius:999px; padding:.27rem .62rem; font-size:.72rem; font-weight:700; }}
         .alert-high {{ background:#FEF3F2; border:1px solid #FECDCA; border-left:5px solid {RED}; border-radius:14px; padding:1rem 1.15rem; color:#912018; }}
-        .review {{ background:white; border:1px solid #EAECF0; border-radius:14px; padding:1rem 1.1rem; margin-bottom:.65rem; }}
-        .review-top {{ display:flex; justify-content:space-between; color:{MUTED}; font-size:.76rem; margin-bottom:.55rem; }}
+        .review {{ background:var(--def-surface); color:var(--def-text); border:1px solid var(--def-border); border-radius:14px; padding:1rem 1.1rem; margin-bottom:.65rem; }}
+        .review-top {{ display:flex; justify-content:space-between; color:var(--def-muted); font-size:.76rem; margin-bottom:.55rem; }}
         mark {{ background:#FEE4E2; color:#B42318; border-radius:4px; padding:1px 3px; font-weight:700; }}
-        .step {{ text-align:center; border-top:3px solid #D0D5DD; padding-top:.85rem; color:{MUTED}; font-size:.85rem; }}
-        .step strong {{ display:block; color:{INK}; margin-bottom:.2rem; }}
+        .step {{ text-align:center; border-top:3px solid var(--def-border); padding-top:.85rem; color:var(--def-muted); font-size:.85rem; }}
+        .step strong {{ display:block; color:var(--def-text); margin-bottom:.2rem; }}
         div[data-testid="stButton"] button, div[data-testid="stFormSubmitButton"] button {{ border-radius:10px; font-weight:700; }}
         div[data-testid="stFormSubmitButton"] button[kind="primary"], div[data-testid="stButton"] button[kind="primary"] {{ background:{INDIGO}; border-color:{INDIGO}; }}
-        div[data-testid="stMetric"] {{ background:white; border:1px solid #EAECF0; border-radius:16px; padding:1rem; box-shadow:0 4px 14px rgba(16,24,40,.04); }}
-        [data-testid="stDataFrame"] {{ border:1px solid #EAECF0; border-radius:14px; overflow:hidden; }}
+        div[data-testid="stMetric"] {{ background:var(--def-surface); color:var(--def-text); border:1px solid var(--def-border); border-radius:16px; padding:1rem; box-shadow:0 4px 14px var(--def-shadow); }}
+        [data-testid="stDataFrame"] {{ border:1px solid var(--def-border); border-radius:14px; overflow:hidden; }}
         @media(max-width:700px) {{ .hero {{ padding:1.5rem; }} .hero h1 {{ font-size:2rem; }} .block-container {{ padding:.8rem 1rem 3rem; }} }}
         </style>
         """,
@@ -250,25 +262,67 @@ def inject_landing_theme() -> None:
         [class*="st-key-search_result_row_"] {{ margin-bottom:1rem; }}
         .search-pagination {{ color:#667085;text-align:center;font-size:.75rem;margin-top:.5rem; }}
         .st-key-search_back [data-testid="stButton"] button {{ border-radius:999px;border:1px solid #D0D5DD;background:white;color:#11152F;font-weight:800; }}
-        .st-key-inline_analysis {{ background:#F7F6F0;color:#11152F;border-radius:30px;padding:4.6rem 4rem;margin-top:1rem; }}
+        .st-key-inline_analysis {{ background:#F8F9FC;color:#11152F;border-radius:30px;padding:4.6rem 4rem;margin-top:1rem; }}
         .analysis-overline {{ font-size:.78rem;font-weight:800;color:#475467;letter-spacing:.08em;text-transform:uppercase; }}
         .analysis-heading {{ color:#101323 !important;font-size:clamp(2rem,4vw,3.7rem) !important;letter-spacing:-.055em !important;line-height:1 !important;margin:.45rem 0 2.4rem !important; }}
-        .analysis-product {{ background:#ECECE8;border:1px solid #D0D1CD;border-radius:22px;padding:1.2rem; }}
+        .analysis-product {{ background:white;border:1px solid #E4E7EC;border-radius:22px;padding:1.2rem;box-shadow:0 1px 2px rgba(16,24,40,.04); }}
         .analysis-product-grid {{ display:grid;grid-template-columns:220px 1fr auto;gap:1.25rem;align-items:center; }}
         .analysis-product-image {{ width:220px;height:180px;border-radius:16px;object-fit:cover;background:#D8D9D5; }}
+        .analysis-product-placeholder {{ display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.55rem;background:linear-gradient(145deg,#EEF0FF,#F8F9FC);border:1px dashed #C7CCF5;color:#59627A;text-align:center;font-size:.72rem;font-weight:700; }}
+        .analysis-product-placeholder svg {{ width:42px;height:42px;color:#3E4784; }}
         .analysis-product h3 {{ color:#11152F !important;font-size:1.55rem !important;margin:.2rem 0 .5rem !important; }}
         .analysis-meta {{ color:#667085;font-size:.76rem;margin:.25rem 0; }}
+        .rating-star {{ color:#F79009;font-size:1rem;line-height:1;vertical-align:-.04em;margin-right:.2rem; }}
         .analysis-description {{ color:#525866;font-size:.8rem;line-height:1.55;display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden; }}
         .analysis-price {{ color:#344054;font-size:1.6rem;font-weight:700;margin-top:.75rem; }}
         .analysis-alert {{ display:flex;align-items:center;gap:1rem;color:white;border-radius:18px;padding:1.15rem 1.4rem;margin:1rem 0;font-size:1.25rem;font-weight:700; }}
-        .analysis-alert.high {{ background:#F01920; }} .analysis-alert.moderate {{ background:#F79009; }} .analysis-alert.low {{ background:#12B76A; }}
+        .analysis-alert.high {{ background:#F04438; }} .analysis-alert.moderate {{ background:#F79009; }} .analysis-alert.low {{ background:#12B76A; }}
         .analysis-alert-icon {{ display:grid;place-items:center;width:34px;height:34px;border:1px solid rgba(255,255,255,.75);border-radius:9px;flex:0 0 auto; }}
         .analysis-alert small {{ margin-left:auto;font-size:.68rem;font-weight:600;color:white;opacity:.88; }}
-        .analysis-panel {{ background:white;border:1px solid #D8D9D5;border-radius:22px;padding:1.35rem;height:100%; }}
-        .analysis-panel-title {{ color:#11152F;font-size:1.08rem;font-weight:800;margin-bottom:.6rem; }}
-        .score-number {{ color:#1769C2;font-size:2.4rem;line-height:1;font-weight:500;letter-spacing:-.05em; }}
-        .score-level {{ font-size:.78rem;font-weight:800;text-transform:uppercase;margin:.5rem 0; }}
+        .analysis-panel {{ background:white;border:1px solid #E6E8EC;border-radius:20px;padding:1.35rem;height:100%; }}
+        .st-key-inline_risk_panel,.st-key-inline_breakdown_panel,.st-key-inline_sentiment_panel,.st-key-inline_terms_panel,
+        .st-key-product_breakdown_panel,.st-key-product_terms_panel {{ background:white;border:1px solid #E6E8EC;border-radius:20px;padding:1.25rem 1.35rem;box-shadow:0 1px 2px rgba(16,24,40,.04); }}
+        .st-key-inline_risk_panel,.st-key-inline_breakdown_panel {{ min-height:390px; }}
+        .st-key-inline_sentiment_panel,.st-key-inline_terms_panel {{ min-height:430px;margin-top:.4rem; }}
+        .analysis-panel-title {{ color:#11152F;font-size:1.02rem;font-weight:800;margin-bottom:.22rem;letter-spacing:-.015em; }}
+        .analysis-panel-subtitle {{ color:#7A8291;font-size:.74rem;line-height:1.45;margin-bottom:1rem; }}
         .formula-note {{ display:flex;justify-content:space-between;gap:1rem;color:#667085;font-size:.72rem;padding-top:.7rem;border-top:1px solid #EAECF0; }}
+        .wsm-row {{ display:grid;grid-template-columns:minmax(170px,1fr) auto;align-items:center;gap:1rem;padding:1rem 0;border-top:1px solid #EEF0F3; }}
+        .wsm-row:first-of-type {{ border-top:0;padding-top:.3rem; }}
+        .wsm-name {{ display:flex;align-items:center;gap:.65rem;min-width:0; }}
+        .wsm-dot {{ width:9px;height:9px;border-radius:50%;flex:0 0 auto; }}
+        .wsm-name b {{ display:block;color:#11152F;font-size:.82rem;line-height:1.3; }}
+        .wsm-name small {{ display:block;color:#7A8291;font-size:.7rem;margin-top:.16rem; }}
+        .wsm-equation {{ display:grid;grid-template-columns:68px 10px 60px 10px 78px;align-items:center;gap:.28rem;text-align:right; }}
+        .wsm-equation span,.wsm-equation strong {{ color:#11152F;font-size:.8rem;white-space:nowrap; }}
+        .wsm-equation small {{ display:block;color:#98A2B3;font-size:.52rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin-bottom:.12rem; }}
+        .wsm-equation i {{ color:#98A2B3;font-style:normal;text-align:center; }}
+        .wsm-total {{ background:#F4F5FF;border:1px solid #DDE1FF;border-radius:13px;padding:.82rem .9rem;margin-top:.55rem; }}
+        .wsm-total-head {{ display:flex;align-items:flex-end;justify-content:space-between;gap:1rem; }}
+        .wsm-total-label {{ color:#242B52;font-size:.7rem;font-weight:800;letter-spacing:.04em; }}
+        .wsm-total-note {{ color:#667085;font-size:.62rem;margin-top:.12rem; }}
+        .wsm-total-score {{ font-size:1.22rem;font-weight:800;white-space:nowrap; }}
+        .wsm-score-track {{ height:7px;background:#E1E4F5;border-radius:99px;overflow:hidden;margin-top:.7rem; }}
+        .wsm-score-track span {{ display:block;height:100%;border-radius:99px; }}
+        .term-panel-head {{ display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;margin-bottom:1rem; }}
+        .term-status {{ display:inline-flex;align-items:center;gap:.3rem;border-radius:99px;padding:.26rem .52rem;font-size:.58rem;font-weight:800;white-space:nowrap; }}
+        .term-status.clear {{ color:#3E4784;background:#EEF0FF; }} .term-status.flagged {{ color:#B42318;background:#FEF3F2; }}
+        .term-state {{ display:flex;align-items:center;gap:.75rem;background:#F4F5FF;border:1px solid #DDE1FF;border-radius:13px;padding:.8rem .85rem; }}
+        .term-state.flagged {{ background:#FEF3F2;border-color:#FECDCA; }}
+        .term-state-icon {{ display:grid;place-items:center;width:38px;height:38px;border-radius:11px;background:white;color:#3E4784;font-size:1rem;font-weight:800;flex:0 0 auto; }}
+        .term-state.flagged .term-state-icon {{ color:#D92D20; }}
+        .term-state b {{ display:block;color:#242B52;font-size:.8rem; }} .term-state.flagged b {{ color:#912018; }}
+        .term-state small {{ display:block;color:#667085;font-size:.68rem;margin-top:.12rem; }}
+        .signal-heading {{ display:flex;align-items:center;justify-content:space-between;gap:1rem;margin:1rem 0 .65rem;color:#344054;font-size:.74rem;font-weight:750; }}
+        .signal-heading span {{ color:#7A8291;font-size:.62rem;font-weight:500; }}
+        .signal-chips {{ display:flex;flex-wrap:wrap;gap:.5rem; }}
+        .signal-chip {{ display:inline-flex;align-items:center;gap:.38rem;color:#3E4784;background:#F8F9FC;border:1px solid #E4E7EC;border-radius:99px;padding:.42rem .58rem;font-size:.72rem;text-transform:capitalize; }}
+        .signal-chip b {{ display:grid;place-items:center;min-width:19px;height:19px;border-radius:99px;background:#EEF0FF;color:#242B52;font-size:.6rem; }}
+        .signal-chip.risk {{ color:#B42318;background:#FFF8F7;border-color:#FECDCA; }} .signal-chip.risk b {{ color:#B42318;background:#FEE4E2; }}
+        .term-coverage {{ display:grid;grid-template-columns:repeat(3,1fr);gap:.55rem;border-top:1px solid #EEF0F3;margin-top:1rem;padding-top:.85rem; }}
+        .term-coverage div {{ color:#7A8291;font-size:.58rem;line-height:1.3; }}
+        .term-coverage b {{ display:block;color:#344054;font-size:.85rem;margin-bottom:.08rem; }}
+        .keyword-empty {{ min-height:130px;display:grid;place-items:center;text-align:center;border:1px dashed #D8DCE3;border-radius:14px;background:#FCFCFD;padding:1.25rem;color:#7A8291;font-size:.72rem;line-height:1.5; }}
         .evidence-shell {{ background:white;border:1px solid #D8D9D5;border-radius:22px;padding:1.5rem;margin-top:1rem; }}
         .review-grid {{ display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:#D0D5DD;border:1px solid #D0D5DD;margin-top:1rem; }}
         .inline-review {{ background:white;padding:1rem;min-height:190px; }}
@@ -287,6 +341,12 @@ def inject_landing_theme() -> None:
         .alternative-body {{ padding:1rem; }} .alternative-name {{ color:#11152F;font-weight:800;font-size:.88rem;min-height:2.6rem; }}
         .alternative-meta {{ color:#667085;font-size:.67rem;line-height:1.45;margin-top:.55rem; }}
         .alternative-score {{ color:#12B76A;font-size:.72rem;font-weight:800; }} .alternative-price {{ color:#11152F;font-size:1.1rem;font-weight:800;margin-top:.5rem; }}
+        [class*="recommendation_action"] {{ background:#EEF0FF;border:1px solid #D5D9FF;border-radius:18px;padding:1rem 1.1rem;margin-top:1rem;box-shadow:0 8px 24px rgba(62,71,132,.08); }}
+        .recommendation-action-title {{ color:#242B52;font-size:.9rem;font-weight:800;margin-bottom:.2rem; }}
+        .recommendation-action-copy {{ color:#59627A;font-size:.7rem;line-height:1.45; }}
+        [class*="recommendation_action"] [data-testid="stButton"] button {{ width:100%;min-height:3rem;border:0 !important;border-radius:12px !important;background:#3E4784 !important;color:#FFF !important;font-weight:800 !important;box-shadow:0 7px 16px rgba(62,71,132,.2); }}
+        [class*="recommendation_action"] [data-testid="stButton"] button * {{ color:#FFF !important; }}
+        [class*="recommendation_action"] [data-testid="stButton"] button:hover {{ background:#2F376C !important;color:#FFF !important; }}
         @media(max-width:900px) {{
           .st-key-landing_hero,.st-key-how_it_works,.st-key-safety_section,.st-key-member_section,.st-key-landing_footer,.st-key-inline_analysis,.st-key-inline_search_results {{ padding-left:1.5rem;padding-right:1.5rem; }}
           .hero-stats {{ margin-top:2rem; }} .stats-grid {{ grid-template-columns:1fr 1fr; }} .stats-grid > div:last-child {{ grid-column:1/-1; }}
@@ -300,6 +360,8 @@ def inject_landing_theme() -> None:
           .stats-bottom {{ grid-template-columns:1fr; }} .st-key-how_it_works,.st-key-safety_section,.st-key-member_section {{ padding-top:3.5rem;padding-bottom:3.5rem;border-radius:22px; }}
           .section-title,.safety-title,.member-title {{ font-size:3.35rem; }} .safety-grid {{ grid-template-columns:1fr; }} .preview-grid {{ grid-template-columns:1fr; }} .review-grid,.alternatives-grid {{ grid-template-columns:1fr; }} .analysis-product-grid {{ grid-template-columns:1fr; }} .analysis-product-image {{ width:100%;height:220px; }} .analysis-alert {{ font-size:.95rem; }} .analysis-alert small {{ display:none; }}
           .st-key-inline_search_results {{ padding-top:3rem;padding-bottom:3rem;border-radius:22px; }} .search-results-head {{ display:block; }} .search-card-image,.search-card-placeholder {{ height:200px; }} [class*="st-key-search_result_row_"] [data-testid="stColumn"] {{ min-width:100%;flex-basis:100%; }}
+          .wsm-row {{ grid-template-columns:1fr;gap:.75rem; }} .wsm-equation {{ grid-template-columns:1fr auto 1fr auto 1fr;text-align:left; }} .wsm-total-head {{ align-items:flex-start; }}
+          .st-key-inline_risk_panel,.st-key-inline_breakdown_panel,.st-key-inline_sentiment_panel,.st-key-inline_terms_panel {{ min-height:0; }}
         }}
         </style>
         """,
@@ -461,7 +523,7 @@ def render_recommendations(
             review_count = int(summary.get("review_count") or len(alternative.get("comments") or []))
             alt_name = html.escape(str(alternative.get("name") or "Recommended product"))
             alt_url = html.escape(str(alternative.get("link") or "#"), quote=True)
-            alt_image = html.escape(str(alternative.get("img") or ""), quote=True)
+            alt_image = html.escape(product_image_url(alternative), quote=True)
             alt_cover = f'<img src="{alt_image}" alt="">' if alt_image else "&#9671;"
             cards.append(
                 f'<a class="alternative-card" href="{alt_url}" target="_blank" rel="noopener">'
@@ -483,7 +545,22 @@ def render_recommendations(
 
     query = recommendation_search_query(product)
     button_label = "Find more reviewed alternatives" if recommendations else "Find similar reviewed products"
-    if st.button(button_label, key=f"{key_prefix}-find-recommendations"):
+    action_key = f"{key_prefix.replace('-', '_')}_recommendation_action"
+    with st.container(key=action_key):
+        action_copy, action_button = st.columns([1.6, 1], vertical_alignment="center")
+        action_copy.markdown(
+            '<div class="recommendation-action-title">Compare with reviewed alternatives</div>'
+            '<div class="recommendation-action-copy">Search the same marketplace, analyze the reviews, '
+            'and rank similar products by reliability.</div>',
+            unsafe_allow_html=True,
+        )
+        find_recommendations = action_button.button(
+            button_label,
+            key=f"{key_prefix}-find-recommendations",
+            type="primary",
+            width="stretch",
+        )
+    if find_recommendations:
         discovered = run_live_scrape(query, 6, 30, platform=product_platform(product))
         if discovered:
             st.session_state.uploaded_products = merge_product_catalogs(products, discovered)
@@ -542,9 +619,10 @@ def landing_page(products: list[dict[str, Any]]) -> None:
                     submitted = submit_col.form_submit_button("Check now", type="primary", use_container_width=True)
                     source_col, live_col = st.columns([1.4, 2.6], vertical_alignment="bottom")
                     shopper_platform = source_col.selectbox(
-                        "Marketplace for product-name searches",
+                        "Marketplace",
                         options=("shopee", "lazada", "temu"),
                         format_func=lambda value: {"shopee": "Shopee PH", "lazada": "Lazada", "temu": "Temu PH"}[value],
+                        label_visibility="collapsed",
                     )
                     live_scan = live_col.checkbox(
                         "Live marketplace scan",
@@ -753,8 +831,9 @@ def results_page(products: list[dict[str, Any]]) -> None:
             score = summary.get("risk_score", 0)
             with column:
                 st.markdown('<div class="card">', unsafe_allow_html=True)
-                if product.get("img"):
-                    st.image(product["img"], use_container_width=True)
+                image = product_image_url(product)
+                if image:
+                    st.image(image, use_container_width=True)
                 st.markdown(
                     f'<span class="platform-pill">{platform_name(product)}</span> '
                     f'{risk_badge(score, summary.get("risk_score_scale"))}',
@@ -774,13 +853,126 @@ def results_page(products: list[dict[str, Any]]) -> None:
 def gauge(score_100: float) -> go.Figure:
     level = risk_level(score_100, "percent")
     return go.Figure(go.Indicator(
-        mode="gauge+number", value=score_100 / 100,
-        number={"valueformat": ".2f", "font": {"size": 42, "color": INK}},
+        mode="gauge+number", value=score_100,
+        number={"valueformat": ".1f", "suffix": "/100", "font": {"size": 36, "color": INK}},
         title={"text": f"{level.upper()} RISK", "font": {"size": 14, "color": RISK_COLORS[level]}},
-        gauge={"axis": {"range": [0, 1], "tickwidth": 0, "tickcolor": "white"}, "bar": {"color": RISK_COLORS[level], "thickness": .28},
+        gauge={"axis": {"range": [0, 100], "tickwidth": 0, "tickcolor": "white"}, "bar": {"color": RISK_COLORS[level], "thickness": .28},
                "bgcolor": "white", "borderwidth": 0,
-               "steps": [{"range": [0, .30], "color": "#D1FADF"}, {"range": [.30, .60], "color": "#FEF0C7"}, {"range": [.60, 1], "color": "#FEE4E2"}],
-               "threshold": {"line": {"color": INK, "width": 3}, "thickness": .7, "value": score_100 / 100}}))
+               "steps": [{"range": [0, 30], "color": "#D1FADF"}, {"range": [30, 60], "color": "#FEF0C7"}, {"range": [60, 100], "color": "#FEE4E2"}],
+               "threshold": {"line": {"color": INK, "width": 3}, "thickness": .7, "value": score_100}}))
+
+
+def render_weighted_score_breakdown(
+    product: dict[str, Any], score: float, risk_color: str
+) -> None:
+    """Render WSM rates, weights, and point contributions without mixing scales."""
+    values = weighted_risk_breakdown(product)
+    review_count = int(values["review_count"])
+    negative_reviews = int(values["negative_reviews"])
+    risk_reviews = int(values["risk_reviews"])
+    negative_rate = float(values["negative_ratio"])
+    defect_rate = float(values["defect_review_ratio"])
+    negative_points = float(values["negative_points"])
+    defect_points = float(values["defect_points"])
+    calculated_score = float(values["total_points"])
+    score_is_current = abs(calculated_score - score) <= 0.11
+    total_note = (
+        f"{negative_points:.1f} + {defect_points:.1f} contribution points"
+        if score_is_current
+        else f"Saved result shown; re-analyze to refresh the component totals"
+    )
+
+    st.markdown(
+        '<div class="analysis-panel-title">Weighted score breakdown</div>'
+        '<div class="analysis-panel-subtitle">Observed rate × configured weight = contribution to the final score.</div>',
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        f"""<div class="wsm-row">
+          <div class="wsm-name"><span class="wsm-dot" style="background:#F79009"></span><div>
+          <b>Negative sentiment</b><small>{negative_reviews:,} of {review_count:,} sampled reviews</small></div></div>
+          <div class="wsm-equation">
+            <span><small>Rate</small>{negative_rate:.1%}</span><i>&times;</i>
+            <span><small>Weight</small>30%</span><i>=</i>
+            <strong><small>Points</small>{negative_points:.1f}</strong>
+          </div>
+        </div>
+        <div class="wsm-row">
+          <div class="wsm-name"><span class="wsm-dot" style="background:#F04438"></span><div>
+          <b>Defect or fraud terms</b><small>{risk_reviews:,} of {review_count:,} sampled reviews</small></div></div>
+          <div class="wsm-equation">
+            <span><small>Rate</small>{defect_rate:.1%}</span><i>&times;</i>
+            <span><small>Weight</small>70%</span><i>=</i>
+            <strong><small>Points</small>{defect_points:.1f}</strong>
+          </div>
+        </div>
+        <div class="wsm-total"><div class="wsm-total-head"><div><div class="wsm-total-label">FINAL WEIGHTED RISK</div>
+        <div class="wsm-total-note">{total_note}</div></div><div class="wsm-total-score" style="color:{risk_color}">{score:.1f}/100</div></div>
+        <div class="wsm-score-track"><span style="width:{score:.2f}%;background:{risk_color}"></span></div></div>""",
+        unsafe_allow_html=True,
+    )
+
+
+def render_term_or_signal_panel(product: dict[str, Any]) -> None:
+    """Render compact risk-term evidence or a neutral language fallback."""
+    values = weighted_risk_breakdown(product)
+    summary = product.get("sentiment_summary") or {}
+    review_count = int(values["review_count"])
+    risk_reviews = int(values["risk_reviews"])
+    try:
+        duplicate_count = max(0, int(summary.get("duplicate_review_count")))
+    except (TypeError, ValueError):
+        duplicate_count = sum(
+            1 for review in product.get("comments") or []
+            if isinstance(review, dict) and review.get("is_duplicate")
+        )
+
+    keywords = risk_keyword_counts(product)
+    signals = review_signal_counts(product) if not keywords else {}
+    if keywords:
+        title = "Detected defect terms"
+        subtitle = "Active, non-negated matches in unique sampled reviews."
+        status_class = "flagged"
+        status_icon = "!"
+        status_title = f"{risk_reviews:,} review{'s' if risk_reviews != 1 else ''} contained an active risk term"
+        status_copy = "Open the review evidence below to inspect each match in context."
+        heading = "Matched terms"
+        heading_note = "Included in the weighted risk score"
+        chip_class = " risk"
+        entries = list(keywords.items())[:8]
+    else:
+        title = "Common review language"
+        subtitle = "Useful context when no defect or fraud phrase is matched."
+        status_class = ""
+        status_icon = "0"
+        status_title = "No active risk terms in this sample"
+        status_copy = f"{review_count:,} unique written review{'s' if review_count != 1 else ''} checked."
+        heading = "Other language found"
+        heading_note = "Context only - not included in the risk score"
+        chip_class = ""
+        entries = list(signals.items())[:8]
+
+    chips = "".join(
+        f'<span class="signal-chip{chip_class}">{html.escape(term)}<b>{count:,}</b></span>'
+        for term, count in entries
+    )
+    content = (
+        f'<div class="signal-chips">{chips}</div>'
+        if chips
+        else '<div class="keyword-empty"><div><b>No additional language signals were matched.</b><br>'
+             'This describes only the collected review sample.</div></div>'
+    )
+    st.markdown(
+        f'<div class="term-panel-head"><div><div class="analysis-panel-title">{title}</div>'
+        f'<div class="analysis-panel-subtitle" style="margin-bottom:0">{subtitle}</div></div>'
+        f'<span class="term-status {"flagged" if keywords else "clear"}">{"RISK EVIDENCE" if keywords else "CONTEXT ONLY"}</span></div>'
+        f'<div class="term-state {status_class}"><div class="term-state-icon">{status_icon}</div><div>'
+        f'<b>{status_title}</b><small>{status_copy}</small></div></div>'
+        f'<div class="signal-heading"><b>{heading}</b><span>{heading_note}</span></div>{content}'
+        f'<div class="term-coverage"><div><b>{review_count:,}</b>unique reviews checked</div>'
+        f'<div><b>{risk_reviews:,}</b>risk-term reviews</div><div><b>{duplicate_count:,}</b>duplicates excluded</div></div>',
+        unsafe_allow_html=True,
+    )
 
 
 def highlight_review(review: dict[str, Any]) -> str:
@@ -934,7 +1126,7 @@ def inline_product_analysis(product: dict[str, Any], products: list[dict[str, An
     review_count = int(summary.get("review_count") or len(product.get("comments") or []))
     name = html.escape(str(product.get("name") or "Unnamed product"))
     description = html.escape(str(product.get("description") or "No product description was collected."))
-    image_url = html.escape(str(product.get("img") or ""), quote=True)
+    image_url = html.escape(product_image_url(product), quote=True)
     listing_url = html.escape(str(product.get("link") or "#"), quote=True)
     rating = html.escape(str(product.get("rating") or "—"))
     alert_text = {
@@ -950,12 +1142,21 @@ def inline_product_analysis(product: dict[str, Any], products: list[dict[str, An
             f'<h2 class="analysis-heading">Analysis for “{name}”</h2>',
             unsafe_allow_html=True,
         )
-        image_markup = f'<img class="analysis-product-image" src="{image_url}" alt="Product image">' if image_url else '<div class="analysis-product-image" style="display:grid;place-items:center;color:#667085">Product image unavailable</div>'
+        image_markup = (
+            f'<img class="analysis-product-image" src="{image_url}" alt="{name}" loading="lazy" referrerpolicy="no-referrer">'
+            if image_url
+            else '<div class="analysis-product-image analysis-product-placeholder" role="img" aria-label="Listing image unavailable">'
+            '<svg viewBox="0 0 48 48" fill="none" aria-hidden="true"><path d="M14 16h20l-2 23H16l-2-23Z" '
+            'stroke="currentColor" stroke-width="2.5" stroke-linejoin="round"/><path d="M19 18v-5a5 5 0 0 1 10 0v5" '
+            'stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/><path d="m19 31 4-4 3 3 3-3 4 4" '
+            'stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+            '<span>Listing image unavailable</span></div>'
+        )
         st.markdown(
             f"""<div class="analysis-product"><div class="analysis-product-grid">
             {image_markup}
             <div><span class="platform-pill">{platform_name(product)}</span><h3>{name}</h3>
-            <div class="analysis-meta"><b>{rating} star rating</b> &nbsp;·&nbsp; {review_count:,} unique reviews analyzed</div>
+            <div class="analysis-meta"><b><span class="rating-star" aria-hidden="true">&#9733;</span>{rating} star rating</b> &nbsp;·&nbsp; {review_count:,} unique reviews analyzed</div>
             <div class="analysis-description">{description}</div><div class="analysis-price">{html.escape(money(product.get('price')))}</div></div>
             <div><a class="learn-pill" href="{listing_url}" target="_blank" rel="noopener">Original listing &#8599;</a></div>
             </div></div>""",
@@ -966,79 +1167,50 @@ def inline_product_analysis(product: dict[str, Any], products: list[dict[str, An
             unsafe_allow_html=True,
         )
 
-        score_col, breakdown_col = st.columns([.72, 1.7], gap="large")
+        score_col, breakdown_col = st.columns([1, 1.6], gap="large")
         with score_col:
-            st.markdown(
-                f'<div class="analysis-panel-title">Risk score</div><div class="score-number">{score:.0f}/100</div>'
-                f'<div class="score-level" style="color:{risk_color}">{level} risk</div>',
-                unsafe_allow_html=True,
-            )
-            risk_figure = gauge(score)
-            risk_figure.update_layout(height=235, margin=dict(l=5, r=5, t=20, b=5), paper_bgcolor="rgba(0,0,0,0)")
-            st.plotly_chart(risk_figure, use_container_width=True, config={"displayModeBar": False}, key="inline-risk-gauge")
-            st.markdown(
-                '<div class="formula-note"><span>Low 0–30<br>Moderate 31–60<br>High 61–100</span><span>Decision support only.<br>Inspect the evidence below.</span></div>',
-                unsafe_allow_html=True,
-            )
+            with st.container(key="inline_risk_panel"):
+                st.markdown('<div class="analysis-panel-title">Risk score</div><div class="analysis-panel-subtitle">Calculated from the unique sampled reviews.</div>', unsafe_allow_html=True)
+                risk_figure = gauge(score)
+                risk_figure.update_layout(height=255, margin=dict(l=5, r=5, t=15, b=5), paper_bgcolor="rgba(0,0,0,0)")
+                st.plotly_chart(risk_figure, width="stretch", config={"displayModeBar": False}, key="inline-risk-gauge")
+                st.markdown(
+                    '<div class="formula-note"><span>Low 0–30<br>Moderate 31–60<br>High 61–100</span><span>Decision support only.<br>Inspect the evidence below.</span></div>',
+                    unsafe_allow_html=True,
+                )
         with breakdown_col:
-            st.markdown('<div class="analysis-panel-title">Weighted score breakdown</div>', unsafe_allow_html=True)
-            negative = float((summary.get("sentiment_ratios") or {}).get("negative", 0))
-            failure = float(summary.get("keyword_failure_rate") or 0)
-            components = pd.DataFrame(
-                {"Component": ["Negative review ratio", "Keyword failure rate"], "Percent": [negative * 100, failure * 100]}
-            )
-            bars = px.bar(
-                components,
-                x="Percent",
-                y="Component",
-                orientation="h",
-                color="Component",
-                color_discrete_map={"Negative review ratio": "#FF966B", "Keyword failure rate": "#FF3131"},
-                text=components["Percent"].map(lambda value: f"{value:.1f}%"),
-            )
-            bars.update_traces(textposition="outside", marker_line_width=0)
-            bars.update_layout(
-                height=270,
-                showlegend=False,
-                xaxis=dict(range=[0, 105], title=None, ticksuffix="%", gridcolor="#E4E7EC"),
-                yaxis=dict(title=None, autorange="reversed"),
-                margin=dict(l=20, r=35, t=20, b=35),
-                paper_bgcolor="rgba(0,0,0,0)",
-                plot_bgcolor="rgba(0,0,0,0)",
-            )
-            st.plotly_chart(bars, use_container_width=True, config={"displayModeBar": False}, key="inline-breakdown")
-            st.markdown(
-                f'<div class="formula-note"><span>Formula: (negative ratio × 0.30) + (failure rate × 0.70)</span><b style="color:{risk_color}">{score / 100:.2f} risk result</b></div>',
-                unsafe_allow_html=True,
-            )
+            with st.container(key="inline_breakdown_panel"):
+                render_weighted_score_breakdown(product, score, risk_color)
 
         sentiment_col, keyword_col = st.columns(2, gap="large")
         counts = summary.get("sentiment_counts") or {"positive": 0, "neutral": 0, "negative": 0}
         with sentiment_col:
-            st.markdown('<div class="analysis-panel-title">Sentiment summary</div>', unsafe_allow_html=True)
-            sentiment_frame = pd.DataFrame(
-                {"Sentiment": ["Positive", "Neutral", "Negative"], "Reviews": [counts.get("positive", 0), counts.get("neutral", 0), counts.get("negative", 0)]}
-            )
-            sentiment_chart = px.pie(
-                sentiment_frame,
-                values="Reviews",
-                names="Sentiment",
-                hole=.18,
-                color="Sentiment",
-                color_discrete_map={"Positive": "#6AD092", "Neutral": "#DED8CE", "Negative": "#FF6B70"},
-            )
-            sentiment_chart.update_layout(height=330, margin=dict(l=5, r=5, t=10, b=10), legend=dict(orientation="h", y=-.05), paper_bgcolor="rgba(0,0,0,0)")
-            st.plotly_chart(sentiment_chart, use_container_width=True, config={"displayModeBar": False}, key="inline-sentiment")
+            with st.container(key="inline_sentiment_panel"):
+                st.markdown('<div class="analysis-panel-title">Sentiment summary</div>', unsafe_allow_html=True)
+                sentiment_frame = pd.DataFrame(
+                    {"Sentiment": ["Positive", "Neutral", "Negative"], "Reviews": [counts.get("positive", 0), counts.get("neutral", 0), counts.get("negative", 0)]}
+                )
+                sentiment_chart = px.pie(
+                    sentiment_frame,
+                    values="Reviews",
+                    names="Sentiment",
+                    hole=.64,
+                    color="Sentiment",
+                    color_discrete_map={"Positive": GREEN, "Neutral": "#98A2B3", "Negative": RED},
+                )
+                sentiment_chart.update_traces(marker=dict(line=dict(color="white", width=3)))
+                sentiment_chart.add_annotation(
+                    x=.5,
+                    y=.5,
+                    text=f"<b>{sum(int(value or 0) for value in counts.values()):,}</b><br><span style='font-size:10px'>reviews</span>",
+                    showarrow=False,
+                    font=dict(size=18, color=INK),
+                )
+                sentiment_chart.update_layout(height=330, margin=dict(l=5, r=5, t=10, b=10), legend=dict(orientation="h", y=-.05), paper_bgcolor="rgba(0,0,0,0)")
+                st.plotly_chart(sentiment_chart, width="stretch", config={"displayModeBar": False}, key="inline-sentiment")
         with keyword_col:
-            st.markdown('<div class="analysis-panel-title">Detected keyword counter</div>', unsafe_allow_html=True)
-            keywords = risk_keyword_counts(product)
-            if keywords:
-                keyword_frame = pd.DataFrame(list(keywords.items())[:8], columns=["Keyword", "Mentions"])
-                keyword_chart = px.bar(keyword_frame, x="Keyword", y="Mentions", color="Keyword", color_discrete_sequence=["#8FB0E7", "#67DCCF", "#111111", "#70B0FF", "#AE8CE1", "#6DD890"])
-                keyword_chart.update_layout(height=330, showlegend=False, margin=dict(l=5, r=5, t=10, b=35), yaxis_title=None, xaxis_title=None, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
-                st.plotly_chart(keyword_chart, use_container_width=True, config={"displayModeBar": False}, key="inline-keywords")
-            else:
-                st.success("No active defect terms were found in the sampled reviews.")
+            with st.container(key="inline_terms_panel"):
+                render_term_or_signal_panel(product)
 
         reviews = [item for item in product.get("comments") or [] if isinstance(item, dict) and not item.get("is_duplicate")][:6]
         st.markdown('<div class="analysis-overline" style="margin-top:2.5rem">Product reviews</div>', unsafe_allow_html=True)
@@ -1070,7 +1242,9 @@ def product_page(products: list[dict[str, Any]]) -> None:
     level = product_risk_level(product)
     top_left, details, gauge_col = st.columns([1.1, 2.3, 1.4])
     with top_left:
-        if product.get("img"): st.image(product["img"], use_container_width=True)
+        image = product_image_url(product)
+        if image:
+            st.image(image, use_container_width=True)
     with details:
         st.markdown(f'<span class="platform-pill">{platform_name(product)}</span>', unsafe_allow_html=True)
         st.header(product.get("name") or "Unnamed product")
@@ -1080,19 +1254,16 @@ def product_page(products: list[dict[str, Any]]) -> None:
     with gauge_col:
         figure = gauge(score)
         figure.update_layout(height=245, margin=dict(l=15, r=15, t=35, b=5), paper_bgcolor="rgba(0,0,0,0)")
-        st.plotly_chart(figure, use_container_width=True, config={"displayModeBar": False})
+        st.plotly_chart(figure, width="stretch", config={"displayModeBar": False})
         st.caption(f"Reliability score · {product_reliability(product):.0f}/100")
     if level == "High":
         st.markdown('<div class="alert-high"><strong>High-risk review pattern detected</strong><br>This product shows strong counterfeit or defect indicators. Review the evidence and compare safer alternatives below.</div>', unsafe_allow_html=True)
     st.write("")
     st.subheader("Why this score?")
-    negative = float((summary.get("sentiment_ratios") or {}).get("negative", 0))
-    failure = float(summary.get("keyword_failure_rate") or 0)
-    c1, c2 = st.columns(2)
-    c1.progress(negative, text=f"Negative review ratio · {negative:.0%} × 30%")
-    c2.progress(failure, text=f"Keyword failure rate · {failure:.0%} × 70%")
+    with st.container(key="product_breakdown_panel"):
+        render_weighted_score_breakdown(product, score, RISK_COLORS[level])
     with st.expander("How is this calculated?"):
-        st.write("Risk score = 0.30 × negative review ratio + 0.70 × keyword failure rate. Duplicate reviews are excluded. Scores of 0–0.30 are Low, 0.31–0.60 Moderate, and 0.61–1.00 High. This is decision support, not proof that a listing is counterfeit.")
+        st.write("Risk score = 30% of the negative-review rate + 70% of the rate of reviews containing active defect or fraud terms. Duplicate reviews are excluded. Scores of 0–30 are Low, 31–60 Moderate, and 61–100 High. This is decision support, not proof that a listing is counterfeit.")
     counts = summary.get("sentiment_counts") or {"positive": 0, "neutral": 0, "negative": 0}
     chart1, chart2 = st.columns([1, 1.5])
     with chart1:
@@ -1102,15 +1273,8 @@ def product_page(products: list[dict[str, Any]]) -> None:
         fig.update_layout(height=290, margin=dict(l=5, r=5, t=5, b=5), legend=dict(orientation="h", y=-.08), paper_bgcolor="rgba(0,0,0,0)")
         st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
     with chart2:
-        st.subheader("Detected defect terms")
-        keywords = risk_keyword_counts(product)
-        if keywords:
-            term_frame = pd.DataFrame(list(keywords.items())[:8], columns=["Keyword", "Mentions"])
-            fig = px.bar(term_frame.sort_values("Mentions"), x="Mentions", y="Keyword", orientation="h", color_discrete_sequence=[RED])
-            fig.update_layout(height=290, margin=dict(l=5, r=5, t=5, b=5), paper_bgcolor="rgba(0,0,0,0)")
-            st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
-        else:
-            st.success("No active high-risk terms were found in the sampled reviews.")
+        with st.container(key="product_terms_panel"):
+            render_term_or_signal_panel(product)
     st.subheader("Review evidence")
     sentiment_filter = st.segmented_control("Sentiment", ["All", "Positive", "Neutral", "Negative", "Flagged"], default="All")
     reviews = [item for item in product.get("comments") or [] if not item.get("is_duplicate")]

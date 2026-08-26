@@ -33,6 +33,47 @@ class TestLazadaScraper(unittest.TestCase):
         self.assertIn("--no-first-run", self.scraper.options.arguments)
         self.assertIn("--disable-search-engine-choice-screen", self.scraper.options.arguments)
 
+    def test_product_image_prefers_current_v2_gallery(self):
+        class Element:
+            def __init__(self, **attributes):
+                self.attributes = attributes
+
+            def get_attribute(self, name):
+                return self.attributes.get(name, "")
+
+        class Root:
+            def find_elements(self, _by, selector):
+                elements = {
+                    '.gallery-preview-panel-v2__content img': [
+                        Element(src="https://img.lazcdn.com/v2-product.jpg")
+                    ],
+                    'meta[property="og:image"]': [
+                        Element(content="https://img.lazcdn.com/metadata.jpg")
+                    ],
+                }
+                return elements.get(selector, [])
+
+        self.assertEqual(
+            self.scraper._product_image_url(Root()),
+            "https://img.lazcdn.com/v2-product.jpg",
+        )
+
+    def test_product_image_falls_back_to_social_metadata(self):
+        class Element:
+            def get_attribute(self, name):
+                return "https://img.lazcdn.com/metadata.jpg" if name == "content" else ""
+
+        class Root:
+            def find_elements(self, _by, selector):
+                if selector == 'meta[property="og:image"]':
+                    return [Element()]
+                return []
+
+        self.assertEqual(
+            self.scraper._product_image_url(Root()),
+            "https://img.lazcdn.com/metadata.jpg",
+        )
+
     def test_requires_keyword_or_product_url(self):
         with self.assertRaises(ValueError):
             LazadaScraper()

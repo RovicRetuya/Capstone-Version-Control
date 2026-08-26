@@ -356,6 +356,28 @@ class LazadaScraper:
                 continue
         return ""
 
+    @classmethod
+    def _product_image_url(cls, root):
+        gallery_selectors = (
+            '.gallery-preview-panel-v2__content img',
+            '.gallery-preview-panel__content img',
+            '[data-qa-locator="product-image"] img',
+            '[data-qa-locator="product-image"]',
+        )
+        return (
+            cls._first_attribute(root, gallery_selectors, "src")
+            or cls._first_attribute(root, gallery_selectors, "data-src")
+            or cls._first_attribute(
+                root,
+                (
+                    'meta[property="og:image"]',
+                    'meta[name="twitter:image"]',
+                    'meta[property="twitter:image"]',
+                ),
+                "content",
+            )
+        )
+
     def _save_debug_artifacts(self, kind):
         if not self.driver:
             return
@@ -1440,9 +1462,7 @@ class LazadaScraper:
         product["description"] = self._first_text(
             self.driver, ('#module_product_detail', '.pdp-product-desc', '[data-qa-locator="product-description"]')
         )
-        product["img"] = product.get("img") or self._first_attribute(
-            self.driver, ('.gallery-preview-panel__content img', '[data-qa-locator="product-image"] img'), "src"
-        )
+        product["img"] = product.get("img") or self._product_image_url(self.driver)
 
         if not self._scroll_to_reviews():
             logging.warning("Review section not found for %s", product["link"])

@@ -11,6 +11,7 @@ from dashboard_utils import (
     normalized_risk_score,
     price_value,
     platform_name,
+    product_image_url,
     product_reliability,
     product_risk_level,
     product_risk_percent,
@@ -18,11 +19,13 @@ from dashboard_utils import (
     rank_recommendations,
     recommendation_search_query,
     reliability_score,
+    review_signal_counts,
     review_rows,
     risk_keyword_counts,
     risk_level,
     risk_score_percent,
     search_slug,
+    weighted_risk_breakdown,
 )
 
 
@@ -116,6 +119,27 @@ class TestDashboardUtils(unittest.TestCase):
         with self.assertRaises(ValueError):
             detect_marketplace("https://example.com/item")
 
+    def test_product_image_url_normalizes_common_nested_fields(self):
+        self.assertEqual(
+            product_image_url({"img": "//img.lazcdn.com/product.jpg"}),
+            "https://img.lazcdn.com/product.jpg",
+        )
+        self.assertEqual(
+            product_image_url(
+                {
+                    "image": {"src": "", "original": [None, {"url": "https://cdn.example/item.png"}]},
+                    "thumbnail": "https://cdn.example/fallback.png",
+                }
+            ),
+            "https://cdn.example/item.png",
+        )
+
+    def test_product_image_url_rejects_non_web_and_invalid_values(self):
+        self.assertEqual(product_image_url({"img": "C:\\downloads\\product.jpg"}), "")
+        self.assertEqual(product_image_url({"image": "javascript:alert(1)"}), "")
+        self.assertEqual(product_image_url({"images": [None, "", "/relative/image.jpg"]}), "")
+        self.assertEqual(product_image_url({"img": "", "thumbnail_url": "https://cdn.example/valid.jpg"}), "https://cdn.example/valid.jpg")
+
     def test_price_value_uses_range_midpoint(self):
         self.assertEqual(price_value("₱1,000 - ₱1,500"), 1250.0)
         self.assertEqual(price_value("â‚±299"), 299.0)
@@ -164,12 +188,54 @@ class TestDashboardUtils(unittest.TestCase):
         self.assertEqual(rank_alternatives(current, [current, other_category, same_category], 2)[0]["link"], "same")
 
     def test_keyword_counts_ignore_negated_evidence(self):
-        product = {"comments": [{"sentiment_analysis": {"risk": {"evidence": [
-            {"term": "Sira", "negated": False},
-            {"term": "peke", "negated": True},
-            {"term": "sira", "negated": False},
-        ]}}}]}
-        self.assertEqual(risk_keyword_counts(product), {"sira": 2})
+        product = {"comments": [
+            {"sentiment_analysis": {"risk": {"evidence": [
+                {"term": "Sira", "negated": False},
+                {"term": "peke", "negated": True},
+                {"term": "sira", "negated": False},
+            ]}}},
+            {"is_duplicate": True, "sentiment_analysis": {"risk": {"evidence": [
+                {"term": "scam", "negated": False},
+            ]}}},
+        ]}
+        self.assertEqual(risk_keyword_counts(product), {"sira": 1})
+
+    def test_review_signal_counts_once_per_unique_review(self):
+        product = {"comments": [
+            {"sentiment_analysis": {"sentiment_evidence": [
+                {"term": "Good", "negated": False},
+                {"term": "good", "negated": False},
+                {"term": "nice", "negated": True},
+            ]}},
+            {"sentiment_analysis": {"sentiment_evidence": [
+                {"term": "good", "negated": False},
+                {"term": "sulit", "negated": False},
+            ]}},
+            {"is_duplicate": True, "sentiment_analysis": {"sentiment_evidence": [
+                {"term": "excellent", "negated": False},
+            ]}},
+        ]}
+        self.assertEqual(review_signal_counts(product), {"good": 2, "sulit": 1})
+
+    def test_weighted_risk_breakdown_uses_point_contributions(self):
+        product = {"sentiment_summary": {
+            "review_count": 10,
+            "sentiment_counts": {"positive": 7, "neutral": 1, "negative": 2},
+            "sentiment_ratios": {"positive": .7, "neutral": .1, "negative": .2},
+            "risk_review_count": 1,
+            "keyword_failure_rate": .1,
+        }}
+        breakdown = weighted_risk_breakdown(product)
+        self.assertEqual(breakdown["negative_reviews"], 2)
+        self.assertEqual(breakdown["risk_reviews"], 1)
+        self.assertAlmostEqual(breakdown["negative_points"], 6.0)
+        self.assertAlmostEqual(breakdown["defect_points"], 7.0)
+        self.assertAlmostEqual(breakdown["total_points"], 13.0)
+
+    def test_weighted_risk_breakdown_handles_no_reviews(self):
+        breakdown = weighted_risk_breakdown({})
+        self.assertEqual(breakdown["review_count"], 0)
+        self.assertEqual(breakdown["total_points"], 0.0)
 
 
 if __name__ == "__main__":

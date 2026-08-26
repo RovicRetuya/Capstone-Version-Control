@@ -41,6 +41,22 @@ def sample_products(count=6):
 
 
 class TestAppSearchFlow(unittest.TestCase):
+    def test_dashboard_and_report_styles_follow_streamlit_theme(self):
+        for page in ("Admin overview", "Feedback survey"):
+            with self.subTest(page=page):
+                app = AppTest.from_file(APP_PATH, default_timeout=90)
+                app.session_state["page"] = page
+                app.session_state["uploaded_products"] = sample_products(1)
+                app.run()
+                styles = " ".join(markdown.value for markdown in app.markdown)
+
+                self.assertFalse(app.exception)
+                self.assertIn("--def-bg:var(--background-color", styles)
+                self.assertIn("--def-surface:var(--secondary-background-color", styles)
+                self.assertIn("--def-text:var(--text-color", styles)
+                self.assertIn("background:var(--def-surface)", styles)
+                self.assertIn("color:var(--def-text)", styles)
+
     def test_shopper_can_choose_live_marketplace_scraping(self):
         app = AppTest.from_file(APP_PATH, default_timeout=90)
         app.session_state["page"] = "Landing"
@@ -50,9 +66,7 @@ class TestAppSearchFlow(unittest.TestCase):
 
         self.assertFalse(app.exception)
         self.assertTrue(any(widget.label == "Live marketplace scan" for widget in app.checkbox))
-        self.assertTrue(
-            any(widget.label == "Marketplace for product-name searches" for widget in app.selectbox)
-        )
+        self.assertTrue(any(widget.label == "Marketplace" for widget in app.selectbox))
 
     def test_shopper_can_use_saved_search_without_starting_scraper(self):
         app = AppTest.from_file(APP_PATH, default_timeout=90)
@@ -104,6 +118,44 @@ class TestAppSearchFlow(unittest.TestCase):
         self.assertNotIn("Results for", text)
         self.assertFalse(any(button.label == "← Back to product results" for button in app.button))
 
+    def test_analysis_header_shows_listing_image_and_rating_star(self):
+        products = sample_products(1)
+        products[0]["img"] = "//cdn.example.com/product.jpg"
+
+        app = self.app_with_products("link", products)
+        header = next(
+            markdown.value
+            for markdown in app.markdown
+            if '<div class="analysis-product">' in markdown.value
+        )
+
+        self.assertFalse(app.exception)
+        self.assertIn('src="https://cdn.example.com/product.jpg"', header)
+        self.assertIn('class="rating-star"', header)
+        self.assertIn("4.5 star rating", header)
+
+    def test_analysis_header_uses_designed_image_placeholder(self):
+        app = self.app_with_products("link", sample_products(1))
+        header = next(
+            markdown.value
+            for markdown in app.markdown
+            if '<div class="analysis-product">' in markdown.value
+        )
+
+        self.assertFalse(app.exception)
+        self.assertIn("analysis-product-placeholder", header)
+        self.assertIn("Listing image unavailable", header)
+
+    def test_recommendation_action_has_readable_primary_styling(self):
+        app = self.app_with_products("link", sample_products(1))
+        styles = " ".join(markdown.value for markdown in app.markdown)
+
+        self.assertFalse(app.exception)
+        self.assertTrue(any(button.label.startswith("Find ") for button in app.button))
+        self.assertIn('class*="recommendation_action"', styles)
+        self.assertIn("background:#3E4784 !important", styles)
+        self.assertIn("color:#FFF !important", styles)
+
     def test_one_percent_risk_is_rendered_as_low_not_high(self):
         products = sample_products(1)
         products[0]["sentiment_summary"].update(
@@ -124,6 +176,57 @@ class TestAppSearchFlow(unittest.TestCase):
         self.assertFalse(app.exception)
         self.assertIn("Lower risk", text)
         self.assertNotIn("Not recommended", text)
+
+    def test_empty_risk_terms_show_review_signals_and_clear_weighted_math(self):
+        products = sample_products(1)
+        products[0]["comments"][0]["sentiment_analysis"]["sentiment_evidence"] = [
+            {"term": "good", "negated": False},
+            {"term": "sulit", "negated": False},
+        ]
+        products[0]["sentiment_summary"].update(
+            {"risk_score": 0, "risk_score_scale": "percent", "risk_review_count": 0}
+        )
+
+        app = self.app_with_products("link", products)
+        text = " ".join(markdown.value for markdown in app.markdown)
+
+        self.assertFalse(app.exception)
+        self.assertIn("Weighted score breakdown", text)
+        self.assertIn("0.0 + 0.0 contribution points", text)
+        self.assertIn("Common review language", text)
+        self.assertIn("No active risk terms in this sample", text)
+        self.assertIn("not included in the risk score", text)
+
+    def test_active_risk_terms_replace_context_fallback(self):
+        products = sample_products(1)
+        products[0]["comments"][0]["sentiment_analysis"].update(
+            {
+                "label": "negative",
+                "risk": {
+                    "detected": True,
+                    "evidence": [{"term": "sira", "negated": False}],
+                },
+            }
+        )
+        products[0]["sentiment_summary"].update(
+            {
+                "risk_score": 100,
+                "risk_score_scale": "percent",
+                "risk_review_count": 1,
+                "keyword_failure_rate": 1,
+                "sentiment_counts": {"positive": 0, "neutral": 0, "negative": 1},
+                "sentiment_ratios": {"positive": 0, "neutral": 0, "negative": 1},
+            }
+        )
+
+        app = self.app_with_products("link", products)
+        text = " ".join(markdown.value for markdown in app.markdown)
+
+        self.assertFalse(app.exception)
+        self.assertIn("Detected defect terms", text)
+        self.assertIn("RISK EVIDENCE", text)
+        self.assertIn("sira", text)
+        self.assertNotIn("Common review language", text)
 
     def test_analysis_shows_good_similar_product_recommendation(self):
         products = sample_products(2)
