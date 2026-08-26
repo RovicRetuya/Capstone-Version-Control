@@ -63,7 +63,7 @@ class ShopeeScraper:
         product_urls=None,
         output=None,
         interactive=True,
-        verification_timeout=600,
+        verification_timeout=900,
     ):
         self.driver = None
         self.search_term = search_term
@@ -1322,7 +1322,7 @@ def build_parser():
     parser.add_argument(
         "--verification-timeout",
         type=int,
-        default=600,
+        default=900,
         help="Seconds to wait for login/captcha completion in --no-prompt mode",
     )
     return parser

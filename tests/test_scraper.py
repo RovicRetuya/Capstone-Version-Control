@@ -201,6 +201,7 @@ class TestShopeeScraper(unittest.TestCase):
         self.assertEqual(args.product_url, ["https://shopee.ph/sample-i.1.2"])
         self.assertEqual(args.output, "result.json")
         self.assertTrue(args.no_prompt)
+        self.assertEqual(args.verification_timeout, 900)
 
     def test_normalizes_atomic_review_snapshot(self):
         class FakeDriver:

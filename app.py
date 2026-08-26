@@ -55,6 +55,8 @@ RED = "#F04438"
 INK = "#101828"
 MUTED = "#667085"
 RISK_COLORS = {"Low": GREEN, "Moderate": AMBER, "High": RED}
+MANUAL_VERIFICATION_TIMEOUT = 900
+SCRAPER_PROCESS_TIMEOUT = MANUAL_VERIFICATION_TIMEOUT + 300
 
 st.set_page_config(
     page_title="DeFaketive · Review Risk Intelligence",
@@ -369,7 +371,7 @@ def run_live_scrape(keyword: str, product_count: int, review_count: int, platfor
     browser_profile = ROOT / ".browser_profiles" / marketplace
     browser_profile.mkdir(parents=True, exist_ok=True)
     if marketplace == "shopee":
-        command = [sys.executable, str(ROOT / "src" / "retriv.py"), "-n", str(product_count), "-r", str(review_count), "--output", str(target), "--no-prompt", "--chrome-user-data-dir", str(browser_profile)]
+        command = [sys.executable, str(ROOT / "src" / "retriv.py"), "-n", str(product_count), "-r", str(review_count), "--output", str(target), "--no-prompt", "--verification-timeout", str(MANUAL_VERIFICATION_TIMEOUT), "--chrome-user-data-dir", str(browser_profile)]
         command.extend(["--product-url", keyword] if direct_url else ["-k", keyword])
     elif marketplace == "lazada":
         command = [sys.executable, str(ROOT / "lazada-scraper" / "src" / "lazada_scraper.py"), "-n", str(product_count), "-r", str(review_count), "--output", str(target), "--no-verification-pause", "--verification-timeout", "600", "--chrome-user-data-dir", str(browser_profile)]
@@ -379,13 +381,28 @@ def run_live_scrape(keyword: str, product_count: int, review_count: int, platfor
         command.extend(["--product-url", keyword] if direct_url else [keyword])
     with st.status("Starting live analysis…", expanded=True) as status:
         st.write(f"1 of 3 · Scraping public {marketplace.title()} product reviews…")
-        st.caption("A dedicated marketplace Chrome window will open. Log in on first use, then leave that window open—DeFaketive closes it automatically and remembers the session for later runs.")
-        result = subprocess.run(command, cwd=ROOT, capture_output=True, text=True, timeout=900)
+        st.caption(
+            "A dedicated marketplace Chrome window will open. If a login or CAPTCHA appears, complete it "
+            "yourself within 15 minutes and leave the window open. DeFaketive resumes automatically after "
+            "verification and remembers the session for later runs."
+        )
+        try:
+            result = subprocess.run(
+                command,
+                cwd=ROOT,
+                capture_output=True,
+                text=True,
+                timeout=SCRAPER_PROCESS_TIMEOUT,
+            )
+        except subprocess.TimeoutExpired:
+            status.update(label="Marketplace verification timed out", state="error")
+            st.error("The CAPTCHA or login was not completed within 15 minutes. Start a new scan when you are ready to finish the verification.")
+            return []
         if result.returncode:
             status.update(label="The scrape could not be completed", state="error")
             diagnostic = f"{result.stdout}\n{result.stderr}"
             if "SHOPEE_VERIFICATION_BLOCKED" in diagnostic:
-                st.error("Shopee temporarily rejected the automated browser. Do not keep retrying. Wait before another live attempt, or use a previously saved JSON dataset for the demonstration.")
+                st.error("Shopee showed 'Try Again Later' instead of a solvable CAPTCHA. There is nothing to complete on that page; wait for Shopee's cooldown before another live attempt, or use a saved result.")
             else:
                 st.code((result.stderr or result.stdout)[-3000:], language="text")
             return []
