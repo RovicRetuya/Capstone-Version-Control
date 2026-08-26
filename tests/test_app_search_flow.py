@@ -41,6 +41,35 @@ def sample_products(count=6):
 
 
 class TestAppSearchFlow(unittest.TestCase):
+    def test_shopper_can_choose_live_marketplace_scraping(self):
+        app = AppTest.from_file(APP_PATH, default_timeout=90)
+        app.session_state["page"] = "Landing"
+        app.session_state["uploaded_products"] = sample_products()
+
+        app.run()
+
+        self.assertFalse(app.exception)
+        self.assertTrue(any(widget.label == "Live marketplace scan" for widget in app.checkbox))
+        self.assertTrue(
+            any(widget.label == "Marketplace for product-name searches" for widget in app.selectbox)
+        )
+
+    def test_shopper_can_use_saved_search_without_starting_scraper(self):
+        app = AppTest.from_file(APP_PATH, default_timeout=90)
+        app.session_state["page"] = "Landing"
+        app.session_state["uploaded_products"] = sample_products()
+        app.run()
+
+        next(widget for widget in app.text_input if widget.label == "Product link or search").input(
+            "sample gadget"
+        )
+        next(widget for widget in app.checkbox if widget.label == "Live marketplace scan").uncheck()
+        next(button for button in app.button if button.label == "Check now").click().run()
+
+        self.assertFalse(app.exception)
+        self.assertEqual(app.session_state["page"], "Search")
+        self.assertEqual(app.session_state["search_mode"], "name")
+
     def app_with_products(self, mode, products=None):
         products = products or sample_products()
         app = AppTest.from_file(APP_PATH, default_timeout=90)

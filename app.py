@@ -439,8 +439,8 @@ def landing_page(products: list[dict[str, Any]]) -> None:
             )
             st.markdown('<h1 class="landing-title">Bago mo bilhin,<br>i-check muna.</h1>', unsafe_allow_html=True)
             st.markdown(
-                '<p class="landing-lead">Paste a product link or search for a gadget already analyzed in the DeFaketive database. '
-                'DeFaketive reads the collected reviews, detects English, Filipino, and Taglish risk signals, '
+                '<p class="landing-lead">Paste a supported marketplace link or search for a gadget to collect and analyze its reviews. '
+                'DeFaketive detects English, Filipino, and Taglish risk signals, '
                 'and explains what influenced the product score before you buy.</p>',
                 unsafe_allow_html=True,
             )
@@ -453,6 +453,17 @@ def landing_page(products: list[dict[str, Any]]) -> None:
                         label_visibility="collapsed",
                     )
                     submitted = submit_col.form_submit_button("Check now", type="primary", use_container_width=True)
+                    source_col, live_col = st.columns([1.4, 2.6], vertical_alignment="bottom")
+                    shopper_platform = source_col.selectbox(
+                        "Marketplace for product-name searches",
+                        options=("shopee", "lazada", "temu"),
+                        format_func=lambda value: {"shopee": "Shopee PH", "lazada": "Lazada", "temu": "Temu PH"}[value],
+                    )
+                    live_scan = live_col.checkbox(
+                        "Live marketplace scan",
+                        value=True,
+                        help="Collect fresh public reviews in a dedicated browser. Marketplace verification may be required.",
+                    )
             st.markdown(
                 """<div class="platform-row" aria-label="Supported marketplaces">
                 <span class="market-pill shopee"><b>S</b> Shopee PH</span>
@@ -488,7 +499,20 @@ def landing_page(products: list[dict[str, Any]]) -> None:
                 is_link_search = parsed_query.scheme in {"http", "https"} and bool(parsed_query.netloc)
                 for stale_key in ("search_mode", "search_result_query", "search_result_page", "inline_result_link", "selected_link"):
                     st.session_state.pop(stale_key, None)
-                found = cached_product_matches(products, submitted_query, 1 if is_link_search else 6)
+                cached = cached_product_matches(products, submitted_query, 1 if is_link_search else 6)
+                found = (
+                    run_live_scrape(
+                        submitted_query,
+                        1 if is_link_search else 6,
+                        30,
+                        shopper_platform,
+                    )
+                    if live_scan
+                    else cached
+                )
+                if live_scan and not found and cached:
+                    st.info("The live scan was unavailable, so DeFaketive is showing the most recent saved analysis instead.")
+                    found = cached
                 if found:
                     st.session_state.uploaded_products = found
                     st.session_state.search_result_query = submitted_query
@@ -506,7 +530,10 @@ def landing_page(products: list[dict[str, Any]]) -> None:
                     st.session_state.page = "Search"
                     st.rerun()
                 else:
-                    st.warning("No analyzed match is available in the local database yet. Live marketplace collection is restricted to the Admin Scraper Manager so shopper searches do not repeatedly trigger anti-bot verification.")
+                    if live_scan:
+                        st.warning("No usable product data was collected and no saved analysis matched this search.")
+                    else:
+                        st.warning("No saved analysis matched this search. Enable Live marketplace scan to collect fresh reviews.")
 
     inline_link = st.session_state.get("inline_result_link")
     inline_product = next((item for item in products if item.get("link") == inline_link), None)
