@@ -1,5 +1,5 @@
 
-# DeFaketive Philippine Marketplace Review Analyzer
+# DeFaketive Philippine E-Commerce Review Analyzer
 
 This research prototype collects public product and review data from Shopee Philippines, with beta Lazada Philippines and Temu connectors, then produces explainable Taglish sentiment and review-risk reports in a Streamlit dashboard.
 
