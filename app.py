@@ -71,6 +71,17 @@ MUTED = "#667085"
 RISK_COLORS = {"Low": GREEN, "Moderate": AMBER, "High": RED}
 MANUAL_VERIFICATION_TIMEOUT = 900
 SCRAPER_PROCESS_TIMEOUT = MANUAL_VERIFICATION_TIMEOUT + 300
+NAVIGATION_PAGES = (
+    "Search",
+    "Search results",
+    "Product analysis",
+    "Feedback survey",
+    "Admin overview",
+    "Scraper manager",
+    "Lexicon manager",
+    "Product database",
+    "Model evaluation",
+)
 
 st.set_page_config(
     page_title="DeFaketive · Review Risk Intelligence",
@@ -140,11 +151,15 @@ def inject_landing_theme() -> None:
         f"""
         <style>
         @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,600&display=swap');
-        section[data-testid="stSidebar"], [data-testid="collapsedControl"] {{ display:none !important; }}
-        [data-testid="stHeader"], [data-testid="stToolbar"], .stAppToolbar,
-        #MainMenu, footer {{ display:none !important; }}
-        [data-testid="stAppViewContainer"] > .main {{ background:#F5F6F8; }}
-        .block-container {{ max-width:1440px; padding:0 .9rem 3rem !important; }}
+        body:has(.st-key-landing_hero) section[data-testid="stSidebar"],
+        body:has(.st-key-landing_hero) [data-testid="collapsedControl"] {{ display:none !important; }}
+        body:has(.st-key-landing_hero) [data-testid="stHeader"],
+        body:has(.st-key-landing_hero) [data-testid="stToolbar"],
+        body:has(.st-key-landing_hero) .stAppToolbar,
+        body:has(.st-key-landing_hero) #MainMenu,
+        body:has(.st-key-landing_hero) footer {{ display:none !important; }}
+        body:has(.st-key-landing_hero) [data-testid="stAppViewContainer"] > .main {{ background:#F5F6F8; }}
+        body:has(.st-key-landing_hero) .block-container {{ max-width:1440px; padding:0 .9rem 3rem !important; }}
         .st-key-landing_hero, .st-key-how_it_works, .st-key-safety_section,
         .st-key-member_section, .st-key-landing_footer, .st-key-inline_analysis,
         .st-key-inline_search_results {{
@@ -423,9 +438,24 @@ def get_products() -> list[dict[str, Any]]:
     return []
 
 
+def request_page(page: str) -> None:
+    """Queue a page change so the sidebar widget and routed page stay in sync."""
+    if page not in NAVIGATION_PAGES:
+        raise ValueError(f"Unknown page: {page}")
+    st.session_state.page = page
+    st.session_state["_navigation_target"] = page
+
+
+def back_to_home_button(key: str) -> None:
+    """Render a reliable public-page return action."""
+    if st.button("← Back to home", key=key):
+        request_page("Search")
+        st.rerun()
+
+
 def set_selected(product: dict[str, Any]) -> None:
     st.session_state.selected_link = product.get("link")
-    st.session_state.page = "Product analysis"
+    request_page("Product analysis")
 
 
 def selected_product(products: list[dict[str, Any]]) -> dict[str, Any] | None:
@@ -589,10 +619,10 @@ def landing_page(products: list[dict[str, Any]]) -> None:
             nav_b.markdown('<div class="landing-nav-link">Risk scoring</div>', unsafe_allow_html=True)
             nav_c.markdown('<div class="landing-nav-link">Support</div>', unsafe_allow_html=True)
             if report.button("Reports", use_container_width=True, key="landing-reports"):
-                st.session_state.page = "Search results"
+                request_page("Search results")
                 st.rerun()
             if dashboard.button("Dashboard", type="primary", use_container_width=True, key="landing-dashboard"):
-                st.session_state.page = "Admin overview"
+                request_page("Admin overview")
                 st.rerun()
 
         hero_copy, hero_numbers = st.columns([1.05, .95], gap="large")
@@ -692,7 +722,7 @@ def landing_page(products: list[dict[str, Any]]) -> None:
                         st.session_state.search_mode = "name"
                         st.session_state.pop("selected_link", None)
                         st.session_state.pop("inline_result_link", None)
-                    st.session_state.page = "Search"
+                    request_page("Search")
                     st.rerun()
                 else:
                     if live_scan:
@@ -781,7 +811,7 @@ def landing_page(products: list[dict[str, Any]]) -> None:
             )
             with st.container(key="member_cta"):
                 if st.button("Open dashboard  ->", key="member-dashboard"):
-                    st.session_state.page = "Admin overview"
+                    request_page("Admin overview")
                     st.rerun()
         with member_preview:
             st.markdown(
@@ -802,6 +832,7 @@ def landing_page(products: list[dict[str, Any]]) -> None:
 
 
 def results_page(products: list[dict[str, Any]]) -> None:
+    back_to_home_button("reports-back-home")
     st.markdown('<div class="eyebrow">Shopper portal</div>', unsafe_allow_html=True)
     st.title("Search results")
     st.caption("Products are ranked by reliability score. Open a result to inspect the underlying review evidence.")
@@ -1304,6 +1335,7 @@ def database_page(products: list[dict[str, Any]]) -> None:
 
 
 def overview_page(products: list[dict[str, Any]]) -> None:
+    back_to_home_button("dashboard-back-home")
     st.markdown('<div class="eyebrow">Administration</div>', unsafe_allow_html=True)
     st.title("System overview")
     reviews = review_rows(products)
@@ -1412,6 +1444,7 @@ def model_page() -> None:
 
 
 def survey_page() -> None:
+    back_to_home_button("survey-back-home")
     st.markdown('<div class="eyebrow">Customer acceptance</div>', unsafe_allow_html=True)
     st.title("SUS / UMUX feedback")
     st.caption("SUS uses a 1–5 scale; UMUX uses its standard 1–7 scale. Scores are calculated and stored without collecting identity data.")
@@ -1451,15 +1484,29 @@ def survey_page() -> None:
         st.success(f"Thank you. Your anonymous response was saved · SUS {sus_result:.1f}/100 · UMUX {umux_result:.1f}/100")
 
 
+def _sync_page_from_sidebar() -> None:
+    selected = st.session_state.get("navigation")
+    if selected in NAVIGATION_PAGES:
+        st.session_state.page = selected
+
+
 def sidebar() -> str:
     with st.sidebar:
         st.markdown('<div class="brand">DeFaketive<span class="brand-dot">.</span></div>', unsafe_allow_html=True)
         st.caption("REVIEW RISK INTELLIGENCE")
-        user_pages = ["Search", "Search results", "Product analysis", "Feedback survey"]
-        admin_pages = ["Admin overview", "Scraper manager", "Lexicon manager", "Product database", "Model evaluation"]
         current = st.session_state.get("page", "Search")
-        options = user_pages + admin_pages
-        page = st.selectbox("Navigate", options, index=options.index(current) if current in options else 0)
+        options = list(NAVIGATION_PAGES)
+        pending_target = st.session_state.pop("_navigation_target", None)
+        if pending_target in NAVIGATION_PAGES:
+            st.session_state.navigation = pending_target
+        elif "navigation" not in st.session_state or st.session_state.navigation not in NAVIGATION_PAGES:
+            st.session_state.navigation = current if current in NAVIGATION_PAGES else "Search"
+        page = st.selectbox(
+            "Navigate",
+            options,
+            key="navigation",
+            on_change=_sync_page_from_sidebar,
+        )
         st.session_state.page = page
         st.divider()
         uploaded = st.file_uploader("Load scraper JSON", type=["json"], help="Load an existing Shopee scraper result without running Chrome.")

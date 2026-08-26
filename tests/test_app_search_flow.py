@@ -41,6 +41,42 @@ def sample_products(count=6):
 
 
 class TestAppSearchFlow(unittest.TestCase):
+    def assert_landing_destination_returns_home(self, button_label, expected_page):
+        app = AppTest.from_file(APP_PATH, default_timeout=90)
+        app.session_state["page"] = "Search"
+        app.session_state["uploaded_products"] = sample_products(1)
+        app.run()
+
+        next(button for button in app.button if button.label == button_label).click().run()
+        self.assertFalse(app.exception)
+        self.assertEqual(app.session_state["page"], expected_page)
+        self.assertEqual(app.session_state["navigation"], expected_page)
+
+        next(button for button in app.button if button.label == "← Back to home").click().run()
+        self.assertFalse(app.exception)
+        self.assertEqual(app.session_state["page"], "Search")
+        self.assertEqual(app.session_state["navigation"], "Search")
+        self.assertIn("Bago mo bilhin", " ".join(markdown.value for markdown in app.markdown))
+
+    def test_reports_navigation_can_return_home(self):
+        self.assert_landing_destination_returns_home("Reports", "Search results")
+
+    def test_dashboard_navigation_can_return_home(self):
+        self.assert_landing_destination_returns_home("Dashboard", "Admin overview")
+
+    def test_landing_sidebar_hide_rule_is_scoped_to_home(self):
+        app = AppTest.from_file(APP_PATH, default_timeout=90)
+        app.session_state["page"] = "Search"
+        app.session_state["uploaded_products"] = sample_products(1)
+        app.run()
+        styles = " ".join(markdown.value for markdown in app.markdown)
+
+        self.assertFalse(app.exception)
+        self.assertIn(
+            'body:has(.st-key-landing_hero) section[data-testid="stSidebar"]',
+            styles,
+        )
+
     def test_dashboard_and_report_styles_follow_streamlit_theme(self):
         for page in ("Admin overview", "Feedback survey"):
             with self.subTest(page=page):
