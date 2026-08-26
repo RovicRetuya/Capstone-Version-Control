@@ -125,6 +125,7 @@ class TestDefaketiveSentimentModel(unittest.TestCase):
         self.assertEqual(summary["review_count"], 2)
         self.assertEqual(summary["risk_review_count"], 1)
         self.assertEqual(summary["risk_score"], 50.0)
+        self.assertEqual(summary["risk_score_scale"], "percent")
 
 
 if __name__ == "__main__":

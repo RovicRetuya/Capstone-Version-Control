@@ -11,11 +11,14 @@ from dashboard_utils import (
     price_value,
     platform_name,
     product_reliability,
+    product_risk_level,
+    product_risk_percent,
     rank_alternatives,
     reliability_score,
     review_rows,
     risk_keyword_counts,
     risk_level,
+    risk_score_percent,
     search_slug,
 )
 
@@ -67,11 +70,29 @@ class TestDashboardUtils(unittest.TestCase):
     def test_risk_display_helpers(self):
         self.assertEqual(normalized_risk_score(61), 0.61)
         self.assertEqual(normalized_risk_score(0.4), 0.4)
+        self.assertEqual(normalized_risk_score(1.0, "percent"), 0.01)
+        self.assertEqual(normalized_risk_score(1.0, "ratio"), 1.0)
+        self.assertEqual(risk_score_percent(1.0, "percent"), 1.0)
         self.assertEqual(risk_level(30), "Low")
         self.assertEqual(risk_level(31), "Moderate")
         self.assertEqual(risk_level(61), "High")
+        self.assertEqual(risk_level(1.0, "percent"), "Low")
+        self.assertEqual(risk_level(1.0, "ratio"), "High")
         self.assertEqual(reliability_score(61), 39.0)
         self.assertEqual(reliability_score(20, 0.75), 55.0)
+        self.assertEqual(reliability_score(1.0, 0.6667, "percent"), 65.7)
+
+    def test_product_risk_helpers_respect_explicit_percent_scale(self):
+        product = {
+            "sentiment_summary": {
+                "risk_score": 1.0,
+                "risk_score_scale": "percent",
+                "sentiment_ratios": {"positive": 0.6667},
+            }
+        }
+        self.assertEqual(product_risk_percent(product), 1.0)
+        self.assertEqual(product_risk_level(product), "Low")
+        self.assertEqual(product_reliability(product), 65.7)
 
     def test_product_reliability_and_alternative_ranking(self):
         current = {"link": "current", "category": "Audio", "sentiment_summary": {"risk_score": 70, "sentiment_ratios": {"positive": .2}}}

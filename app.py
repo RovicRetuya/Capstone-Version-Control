@@ -35,6 +35,8 @@ from dashboard_utils import (
     price_value,
     product_rows,
     product_reliability,
+    product_risk_level,
+    product_risk_percent,
     rank_alternatives,
     result_files,
     review_rows,
@@ -295,8 +297,8 @@ def inject_landing_theme() -> None:
     )
 
 
-def risk_badge(score: Any) -> str:
-    level = risk_level(score)
+def risk_badge(score: Any, scale: Any | None = None) -> str:
+    level = risk_level(score, scale)
     dot = {"Low": "●", "Moderate": "▲", "High": "◆"}[level]
     return f'<span class="risk-pill" style="background:{RISK_COLORS[level]}">{dot} {level} risk</span>'
 
@@ -319,7 +321,10 @@ def metric_card(label: str, value: str, note: str = "") -> None:
 def analyzed_file(path: str, modified: float) -> list[dict[str, Any]]:
     del modified
     products = load_products(path)
-    if products and all(product.get("sentiment_summary") for product in products):
+    if products and all(
+        (product.get("sentiment_summary") or {}).get("risk_score_scale")
+        for product in products
+    ):
         return products
     return analyze_products(products)
 
@@ -424,7 +429,7 @@ def run_live_scrape(keyword: str, product_count: int, review_count: int, platfor
 def landing_page(products: list[dict[str, Any]]) -> None:
     inject_landing_theme()
     review_total = sum(len(item.get("comments") or []) for item in products)
-    high_total = sum(risk_level((item.get("sentiment_summary") or {}).get("risk_score")) == "High" for item in products)
+    high_total = sum(product_risk_level(item) == "High" for item in products)
     analyzed_total = sum(bool(item.get("sentiment_summary")) for item in products)
     reliabilities = [product_reliability(item) for item in products]
     average_reliability = sum(reliabilities) / len(reliabilities) if reliabilities else 0
@@ -664,7 +669,12 @@ def results_page(products: list[dict[str, Any]]) -> None:
     query = f1.text_input("Filter products", placeholder="Search within results")
     risk_filter = f2.multiselect("Risk level", ["Low", "Moderate", "High"], default=["Low", "Moderate", "High"])
     sort = f3.selectbox("Sort by", ["Reliability score", "Price: low to high", "Review count"])
-    visible = [p for p in products if query.casefold() in p.get("name", "").casefold() and risk_level((p.get("sentiment_summary") or {}).get("risk_score")) in risk_filter]
+    visible = [
+        p
+        for p in products
+        if query.casefold() in p.get("name", "").casefold()
+        and product_risk_level(p) in risk_filter
+    ]
     if sort == "Reliability score":
         visible.sort(key=product_reliability, reverse=True)
     elif sort == "Price: low to high":
@@ -680,7 +690,11 @@ def results_page(products: list[dict[str, Any]]) -> None:
                 st.markdown('<div class="card">', unsafe_allow_html=True)
                 if product.get("img"):
                     st.image(product["img"], use_container_width=True)
-                st.markdown(f'<span class="platform-pill">{platform_name(product)}</span> {risk_badge(score)}', unsafe_allow_html=True)
+                st.markdown(
+                    f'<span class="platform-pill">{platform_name(product)}</span> '
+                    f'{risk_badge(score, summary.get("risk_score_scale"))}',
+                    unsafe_allow_html=True,
+                )
                 st.markdown(f"**{product.get('name') or 'Unnamed product'}**")
                 st.markdown(f"### {money(product.get('price'))}")
                 st.caption(f"★ {product.get('rating') or '—'} · {len(product.get('comments') or []):,} sampled reviews")
@@ -693,7 +707,7 @@ def results_page(products: list[dict[str, Any]]) -> None:
 
 
 def gauge(score_100: float) -> go.Figure:
-    level = risk_level(score_100)
+    level = risk_level(score_100, "percent")
     return go.Figure(go.Indicator(
         mode="gauge+number", value=score_100 / 100,
         number={"valueformat": ".2f", "font": {"size": 42, "color": INK}},
@@ -754,7 +768,7 @@ def inline_name_results(query: str, products: list[dict[str, Any]]) -> None:
         visible = [
             product for product in products
             if platform_name(product) in selected_platforms
-            and risk_level((product.get("sentiment_summary") or {}).get("risk_score")) in selected_risks
+            and product_risk_level(product) in selected_risks
         ]
 
         def in_price_band(product: dict[str, Any]) -> bool:
@@ -798,7 +812,7 @@ def inline_name_results(query: str, products: list[dict[str, Any]]) -> None:
                 for offset, (column, product) in enumerate(zip(columns, page_products[row_start:row_start + 3])):
                     result_index = page * page_size + row_start + offset
                     summary = product.get("sentiment_summary") or {}
-                    level = risk_level(summary.get("risk_score"))
+                    level = product_risk_level(product)
                     reliability = product_reliability(product)
                     name = html.escape(str(product.get("name") or "Unnamed product"))
                     raw_image_url = str(product.get("img") or "").strip()
@@ -849,8 +863,8 @@ def inline_name_results(query: str, products: list[dict[str, Any]]) -> None:
 def inline_product_analysis(product: dict[str, Any], products: list[dict[str, Any]]) -> None:
     """Render a completed search report directly within the public homepage."""
     summary = product.get("sentiment_summary") or {}
-    score = float(summary.get("risk_score") or 0)
-    level = risk_level(score)
+    score = product_risk_percent(product)
+    level = product_risk_level(product)
     level_class = level.casefold()
     review_count = int(summary.get("review_count") or len(product.get("comments") or []))
     name = html.escape(str(product.get("name") or "Unnamed product"))
@@ -1002,7 +1016,8 @@ def product_page(products: list[dict[str, Any]]) -> None:
         st.info("Choose a product from Search results first.")
         return
     summary = product.get("sentiment_summary") or {}
-    score = float(summary.get("risk_score") or 0)
+    score = product_risk_percent(product)
+    level = product_risk_level(product)
     top_left, details, gauge_col = st.columns([1.1, 2.3, 1.4])
     with top_left:
         if product.get("img"): st.image(product["img"], use_container_width=True)
@@ -1017,7 +1032,7 @@ def product_page(products: list[dict[str, Any]]) -> None:
         figure.update_layout(height=245, margin=dict(l=15, r=15, t=35, b=5), paper_bgcolor="rgba(0,0,0,0)")
         st.plotly_chart(figure, use_container_width=True, config={"displayModeBar": False})
         st.caption(f"Reliability score · {product_reliability(product):.0f}/100")
-    if risk_level(score) == "High":
+    if level == "High":
         st.markdown('<div class="alert-high"><strong>High-risk review pattern detected</strong><br>This product shows strong counterfeit or defect indicators. Review the evidence and compare safer alternatives below.</div>', unsafe_allow_html=True)
     st.write("")
     st.subheader("Why this score?")
@@ -1088,7 +1103,7 @@ def overview_page(products: list[dict[str, Any]]) -> None:
     st.markdown('<div class="eyebrow">Administration</div>', unsafe_allow_html=True)
     st.title("System overview")
     reviews = review_rows(products)
-    levels = [risk_level((p.get("sentiment_summary") or {}).get("risk_score")) for p in products]
+    levels = [product_risk_level(product) for product in products]
     high = levels.count("High")
     cols = st.columns(5)
     values = [("Products analyzed", str(len(products))), ("Reviews scraped", f"{len(reviews):,}"), ("High-risk flags", str(high)), ("Model F1-score", "—"), ("Avg. SUS score", "—")]

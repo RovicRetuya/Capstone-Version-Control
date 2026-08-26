@@ -104,6 +104,27 @@ class TestAppSearchFlow(unittest.TestCase):
         self.assertNotIn("Results for", text)
         self.assertFalse(any(button.label == "← Back to product results" for button in app.button))
 
+    def test_one_percent_risk_is_rendered_as_low_not_high(self):
+        products = sample_products(1)
+        products[0]["sentiment_summary"].update(
+            {
+                "risk_score": 1.0,
+                "risk_score_scale": "percent",
+                "sentiment_ratios": {
+                    "positive": 0.6667,
+                    "neutral": 0.3,
+                    "negative": 0.0333,
+                },
+            }
+        )
+
+        app = self.app_with_products("link", products)
+        text = " ".join(markdown.value for markdown in app.markdown)
+
+        self.assertFalse(app.exception)
+        self.assertIn("Lower risk", text)
+        self.assertNotIn("Not recommended", text)
+
     def test_name_grid_tolerates_duplicate_links_and_invalid_review_counts(self):
         products = sample_products(2)
         products[1]["link"] = products[0]["link"]

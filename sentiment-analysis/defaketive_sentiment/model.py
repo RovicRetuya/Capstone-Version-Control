@@ -315,6 +315,7 @@ class DefaketiveSentimentModel:
                 "risk_review_count": 0,
                 "keyword_failure_rate": 0.0,
                 "risk_score": 0.0,
+                "risk_score_scale": "percent",
                 "risk_categories": {},
             }
 
@@ -338,6 +339,7 @@ class DefaketiveSentimentModel:
             "risk_review_count": len(risky),
             "keyword_failure_rate": round(failure_rate, 4),
             "risk_score": round(risk_score, 2),
+            "risk_score_scale": "percent",
             "risk_categories": dict(sorted(category_counts.items())),
         }
 

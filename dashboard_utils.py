@@ -165,8 +165,10 @@ def product_rows(products: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 "Total ratings": int(product.get("total_rating") or 0),
                 "Location": product.get("location", ""),
                 "Platform": platform_name(product),
-                "Risk score": summary.get("risk_score"),
-                "Risk level": risk_level(summary.get("risk_score")),
+                "Risk score": risk_score_percent(
+                    summary.get("risk_score"), summary.get("risk_score_scale")
+                ),
+                "Risk level": product_risk_level(product),
                 "Reliability score": product_reliability(product),
                 "Link": product.get("link", ""),
             }
@@ -174,19 +176,33 @@ def product_rows(products: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return rows
 
 
-def normalized_risk_score(value: Any) -> float:
-    """Return a product risk score on the dashboard's 0..1 scale."""
+def normalized_risk_score(value: Any, scale: Any | None = None) -> float:
+    """Return a risk score on 0..1 using explicit units when available.
+
+    Older imported datasets did not record a unit, so their values retain the
+    historical heuristic: values above 1 are percentages and values up to 1
+    are ratios. New analyses always include ``risk_score_scale`` to remove the
+    otherwise unavoidable ambiguity around low percentage scores such as 1.0.
+    """
     try:
         score = float(value)
     except (TypeError, ValueError):
         return 0.0
-    if score > 1:
+    unit = str(scale or "").strip().casefold()
+    if unit in {"percent", "percentage", "0-100"}:
+        score /= 100
+    elif unit not in {"ratio", "proportion", "fraction", "0-1"} and score > 1:
         score /= 100
     return min(1.0, max(0.0, score))
 
 
-def risk_level(value: Any) -> str:
-    score = normalized_risk_score(value)
+def risk_score_percent(value: Any, scale: Any | None = None) -> float:
+    """Return a bounded risk score on the dashboard's 0..100 display scale."""
+    return round(100 * normalized_risk_score(value, scale), 2)
+
+
+def risk_level(value: Any, scale: Any | None = None) -> str:
+    score = normalized_risk_score(value, scale)
     if score >= 0.61:
         return "High"
     if score >= 0.31:
@@ -194,13 +210,17 @@ def risk_level(value: Any) -> str:
     return "Low"
 
 
-def reliability_score(risk: Any, positive_ratio: Any | None = None) -> float:
+def reliability_score(
+    risk: Any,
+    positive_ratio: Any | None = None,
+    risk_scale: Any | None = None,
+) -> float:
     """Return the manuscript reliability score on a bounded 0..100 scale.
 
     With a positive ratio this implements Positive Ratio - Risk Score. The
     one-argument form is retained for compatibility with older saved results.
     """
-    normalized_risk = normalized_risk_score(risk)
+    normalized_risk = normalized_risk_score(risk, risk_scale)
     if positive_ratio is None:
         return round(100 * (1 - normalized_risk), 1)
     try:
@@ -215,7 +235,21 @@ def reliability_score(risk: Any, positive_ratio: Any | None = None) -> float:
 def product_reliability(product: dict[str, Any]) -> float:
     summary = product.get("sentiment_summary") or {}
     positive = (summary.get("sentiment_ratios") or {}).get("positive")
-    return reliability_score(summary.get("risk_score"), positive)
+    return reliability_score(
+        summary.get("risk_score"), positive, summary.get("risk_score_scale")
+    )
+
+
+def product_risk_percent(product: dict[str, Any]) -> float:
+    summary = product.get("sentiment_summary") or {}
+    return risk_score_percent(
+        summary.get("risk_score"), summary.get("risk_score_scale")
+    )
+
+
+def product_risk_level(product: dict[str, Any]) -> str:
+    summary = product.get("sentiment_summary") or {}
+    return risk_level(summary.get("risk_score"), summary.get("risk_score_scale"))
 
 
 def rank_alternatives(product: dict[str, Any], products: list[dict[str, Any]], limit: int = 3) -> list[dict[str, Any]]:
