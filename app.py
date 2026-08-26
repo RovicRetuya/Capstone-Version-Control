@@ -24,6 +24,7 @@ import streamlit as st
 from dashboard_utils import (
     ROOT,
     analyze_products,
+    cached_product_matches,
     csv_bytes,
     detect_marketplace,
     has_usable_products,
@@ -438,8 +439,8 @@ def landing_page(products: list[dict[str, Any]]) -> None:
             )
             st.markdown('<h1 class="landing-title">Bago mo bilhin,<br>i-check muna.</h1>', unsafe_allow_html=True)
             st.markdown(
-                '<p class="landing-lead">Paste a Shopee, Lazada, or Temu Philippines product link—or search Shopee for a gadget. '
-                'DeFaketive reads public reviews, detects English, Filipino, and Taglish risk signals, '
+                '<p class="landing-lead">Paste a product link or search for a gadget already analyzed in the DeFaketive database. '
+                'DeFaketive reads the collected reviews, detects English, Filipino, and Taglish risk signals, '
                 'and explains what influenced the product score before you buy.</p>',
                 unsafe_allow_html=True,
             )
@@ -487,7 +488,7 @@ def landing_page(products: list[dict[str, Any]]) -> None:
                 is_link_search = parsed_query.scheme in {"http", "https"} and bool(parsed_query.netloc)
                 for stale_key in ("search_mode", "search_result_query", "search_result_page", "inline_result_link", "selected_link"):
                     st.session_state.pop(stale_key, None)
-                found = run_live_scrape(submitted_query, 1 if is_link_search else 6, 30)
+                found = cached_product_matches(products, submitted_query, 1 if is_link_search else 6)
                 if found:
                     st.session_state.uploaded_products = found
                     st.session_state.search_result_query = submitted_query
@@ -504,6 +505,8 @@ def landing_page(products: list[dict[str, Any]]) -> None:
                         st.session_state.pop("inline_result_link", None)
                     st.session_state.page = "Search"
                     st.rerun()
+                else:
+                    st.warning("No analyzed match is available in the local database yet. Live marketplace collection is restricted to the Admin Scraper Manager so shopper searches do not repeatedly trigger anti-bot verification.")
 
     inline_link = st.session_state.get("inline_result_link")
     inline_product = next((item for item in products if item.get("link") == inline_link), None)
@@ -1064,6 +1067,7 @@ def scraper_page() -> None:
     st.markdown('<div class="eyebrow">Administration · Objective 1</div>', unsafe_allow_html=True)
     st.title("Scraper manager")
     st.caption("Create Shopee, Lazada, or Temu Philippines collection jobs and inspect locally saved runs.")
+    st.warning("Marketplace sites may block automated collection. Never retry a CAPTCHA or verification failure repeatedly. Wait for the marketplace cooldown or import an authorized dataset instead.")
     with st.expander("＋ New scrape job", expanded=True):
         with st.form("admin-scrape"):
             c0, c1, c2, c3 = st.columns([1.2, 3, 1, 1])

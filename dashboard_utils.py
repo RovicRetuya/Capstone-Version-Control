@@ -97,6 +97,41 @@ def has_usable_products(products: list[dict[str, Any]]) -> bool:
     )
 
 
+def cached_product_matches(
+    products: list[dict[str, Any]], query: str, limit: int = 6
+) -> list[dict[str, Any]]:
+    """Find analyzed products without making a marketplace request."""
+    value = str(query or "").strip()
+    if not value or limit <= 0:
+        return []
+    parsed = urlsplit(value)
+    if parsed.scheme in {"http", "https"} and parsed.netloc:
+        target = (parsed.netloc.casefold().removeprefix("www."), parsed.path.rstrip("/").casefold())
+        matches = []
+        for product in products:
+            product_url = urlsplit(str(product.get("link") or ""))
+            identity = (
+                product_url.netloc.casefold().removeprefix("www."),
+                product_url.path.rstrip("/").casefold(),
+            )
+            if identity == target:
+                matches.append(product)
+        return matches[:limit]
+
+    terms = re.findall(r"[a-z0-9]+", value.casefold())
+    if not terms:
+        return []
+    ranked = []
+    for index, product in enumerate(products):
+        name = str(product.get("name") or "").casefold()
+        overlap = sum(term in name for term in terms)
+        if overlap:
+            exact_phrase = int(value.casefold() in name)
+            ranked.append((exact_phrase, overlap / len(terms), product_reliability(product), -index, product))
+    ranked.sort(key=lambda item: item[:4], reverse=True)
+    return [item[-1] for item in ranked[:limit]]
+
+
 def price_value(value: Any) -> float | None:
     text = str(value or "").replace("â‚±", "₱")
     numbers = re.findall(r"\d[\d,]*(?:\.\d+)?", text)

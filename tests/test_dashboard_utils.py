@@ -2,6 +2,7 @@ import json
 import unittest
 
 from dashboard_utils import (
+    cached_product_matches,
     csv_bytes,
     detect_marketplace,
     load_products,
@@ -20,6 +21,18 @@ from dashboard_utils import (
 
 
 class TestDashboardUtils(unittest.TestCase):
+    def test_cached_product_matching_uses_names_and_normalized_links(self):
+        products = [
+            {"name": "Raspberry Pi Pico 2 Board", "link": "https://shopee.ph/sample-i.1.2?tracking=1", "sentiment_summary": {"risk_score": 20}},
+            {"name": "Wireless Earbuds", "link": "https://www.lazada.com.ph/products/earbuds-i1-s2.html", "sentiment_summary": {"risk_score": 10}},
+        ]
+        self.assertEqual(cached_product_matches(products, "raspberry pico")[0]["name"], "Raspberry Pi Pico 2 Board")
+        self.assertEqual(
+            cached_product_matches(products, "https://shopee.ph/sample-i.1.2?from=share")[0]["name"],
+            "Raspberry Pi Pico 2 Board",
+        )
+        self.assertEqual(cached_product_matches(products, "not in database"), [])
+
     def test_usable_product_detection_rejects_blank_failed_scrapes(self):
         self.assertFalse(has_usable_products([{"link": "https://shopee.ph/item-i.1.2", "comments": []}]))
         self.assertTrue(has_usable_products([{"name": "Real product", "comments": []}]))
