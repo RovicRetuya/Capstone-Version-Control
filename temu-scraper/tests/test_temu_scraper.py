@@ -1,4 +1,5 @@
 import unittest
+import pickle
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from urllib.parse import parse_qs, urlsplit
@@ -22,6 +23,46 @@ class TestTemuScraper(unittest.TestCase):
         self.assertEqual(self.scraper.review_limit, 20)
         self.assertEqual(self.scraper.pages, 2)
         self.assertEqual(self.scraper.out_file, "temu_ph_laptop_stand.json")
+        self.assertIn("--no-first-run", self.scraper.options.arguments)
+        self.assertIn("--disable-search-engine-choice-screen", self.scraper.options.arguments)
+
+    def test_cookie_save_is_atomic_and_preserves_previous_session_on_browser_failure(self):
+        class BrokenDriver:
+            @staticmethod
+            def get_cookies():
+                raise RuntimeError("browser closed")
+
+        with TemporaryDirectory() as directory:
+            cookie_path = Path(directory) / "cookies.dat"
+            original = [{"name": "session", "value": "existing"}]
+            cookie_path.write_bytes(pickle.dumps(original))
+            self.scraper.cookies_file = str(cookie_path)
+            self.scraper.driver = BrokenDriver()
+            self.scraper._save_cookies()
+            self.assertEqual(pickle.loads(cookie_path.read_bytes()), original)
+
+            class EmptyDriver:
+                @staticmethod
+                def get_cookies():
+                    return []
+
+            self.scraper.driver = EmptyDriver()
+            self.scraper._save_cookies()
+            self.assertEqual(pickle.loads(cookie_path.read_bytes()), original)
+
+    def test_prepares_session_before_checking_login(self):
+        events = []
+        self.scraper._safe_get = lambda url, check_verification=True: events.append(
+            ("open", url, check_verification)
+        )
+        self.scraper._load_cookies = lambda: events.append(("cookies",)) or False
+        self.scraper._check_verification = lambda: events.append(("verify",)) or False
+
+        self.assertTrue(self.scraper._prepare_session())
+        self.assertEqual(
+            events,
+            [("open", self.scraper.MARKET_HOME, False), ("cookies",), ("verify",)],
+        )
 
     def test_requires_keyword_or_product_url(self):
         with self.assertRaises(ValueError):
@@ -163,7 +204,7 @@ class TestTemuScraper(unittest.TestCase):
             text = "Sign in to continue"
 
         class FakeDriver:
-            current_url = "https://www.temu.com/login.html?from=search"
+            current_url = b"https://www.temu.com/login.html?from=search"
             title = "Sign in / Register"
 
             @staticmethod

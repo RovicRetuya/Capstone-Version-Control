@@ -30,6 +30,8 @@ class TestLazadaScraper(unittest.TestCase):
             self.scraper.discovery_checkpoint_file,
             "lazada_ph_laptop_stand_discovery.json",
         )
+        self.assertIn("--no-first-run", self.scraper.options.arguments)
+        self.assertIn("--disable-search-engine-choice-screen", self.scraper.options.arguments)
 
     def test_requires_keyword_or_product_url(self):
         with self.assertRaises(ValueError):
@@ -408,6 +410,30 @@ class TestLazadaScraper(unittest.TestCase):
             self.scraper.driver = BrokenDriver()
             self.scraper._save_cookies()
             self.assertEqual(pickle.loads(cookie_path.read_bytes()), original)
+
+    def test_prepares_session_before_checking_login(self):
+        events = []
+        self.scraper._safe_get = lambda url, check_verification=True: events.append(
+            ("open", url, check_verification)
+        )
+        self.scraper._restore_or_request_login = lambda: events.append(("restore",)) or True
+
+        self.assertTrue(self.scraper._prepare_session())
+        self.assertEqual(
+            events,
+            [("open", self.scraper.BASE_URL, False), ("restore",)],
+        )
+
+    def test_login_detection_accepts_byte_url(self):
+        class FakeDriver:
+            current_url = b"https://www.lazada.com.ph/catalog/?q=test"
+
+            @staticmethod
+            def find_elements(_by, _selector):
+                return []
+
+        self.scraper.driver = FakeDriver()
+        self.assertFalse(self.scraper._login_required())
 
     def test_records_no_reviews_as_a_terminal_product_result(self):
         product = {

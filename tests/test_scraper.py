@@ -1,4 +1,5 @@
 import unittest
+import pickle
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from urllib.parse import parse_qs, urlsplit
@@ -27,6 +28,63 @@ class TestShopeeScraper(unittest.TestCase):
         self.assertEqual(self.scraper.site, 'shopee.ph')
         self.assertEqual(self.scraper.base_url, 'https://shopee.ph')
         self.assertEqual(self.scraper.cookies_file, 'cookies_shopee_ph.dat')
+        self.assertIn('--no-first-run', self.scraper.options.arguments)
+        self.assertIn('--disable-search-engine-choice-screen', self.scraper.options.arguments)
+
+    def test_uses_explicit_persistent_browser_profile(self):
+        with TemporaryDirectory() as directory:
+            scraper = ShopeeScraper('test', 1, True, 0, chrome_user_data_dir=directory)
+            profile_argument = next(
+                argument for argument in scraper.options.arguments
+                if argument.startswith('--user-data-dir=')
+            )
+            self.assertTrue(Path(profile_argument.split('=', 1)[1]).samefile(directory))
+
+    def test_cookie_save_is_atomic_and_preserves_previous_session_on_browser_failure(self):
+        class BrokenDriver:
+            @staticmethod
+            def get_cookies():
+                raise RuntimeError('browser closed')
+
+        with TemporaryDirectory() as directory:
+            cookie_path = Path(directory) / 'cookies.dat'
+            original = [{'name': 'session', 'value': 'existing'}]
+            cookie_path.write_bytes(pickle.dumps(original))
+            self.scraper.cookies_file = str(cookie_path)
+            self.scraper.driver = BrokenDriver()
+            self.scraper._save_cookies()
+            self.assertEqual(pickle.loads(cookie_path.read_bytes()), original)
+
+            class EmptyDriver:
+                @staticmethod
+                def get_cookies():
+                    return []
+
+            self.scraper.driver = EmptyDriver()
+            self.scraper._save_cookies()
+            self.assertEqual(pickle.loads(cookie_path.read_bytes()), original)
+
+    def test_prepares_session_before_checking_login(self):
+        events = []
+        self.scraper._safe_get = lambda url, check_verification=True: events.append(
+            ("open", url, check_verification)
+        )
+        self.scraper._load_cookies = lambda: events.append(("cookies",)) or False
+        self.scraper._check_captcha = lambda: events.append(("verify",)) or False
+
+        self.scraper._prepare_session()
+
+        self.assertEqual(
+            events,
+            [("open", "https://shopee.ph", False), ("cookies",), ("verify",)],
+        )
+
+    def test_captcha_check_accepts_byte_url(self):
+        class FakeDriver:
+            current_url = b"https://shopee.ph/search?keyword=test"
+
+        self.scraper.driver = FakeDriver()
+        self.assertFalse(self.scraper._check_captcha())
 
     def test_detects_installed_chrome_major(self):
         major = self.scraper._detect_chrome_major()

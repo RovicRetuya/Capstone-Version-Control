@@ -1,4 +1,5 @@
 .venv/
+.browser_profiles/
 __pycache__/
 *.py[cod]
 cookies_shopee*.dat

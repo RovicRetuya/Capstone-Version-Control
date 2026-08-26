@@ -149,6 +149,10 @@ class TemuScraper:
         self.options.add_argument("--disable-dev-shm-usage")
         self.options.add_argument("--start-maximized")
         self.options.add_argument("--lang=en-PH")
+        self.options.add_argument("--no-first-run")
+        self.options.add_argument("--no-default-browser-check")
+        self.options.add_argument("--disable-default-apps")
+        self.options.add_argument("--disable-search-engine-choice-screen")
 
     @staticmethod
     def _detect_chrome_major():
@@ -302,27 +306,51 @@ class TemuScraper:
     def _save_cookies(self):
         if not self.driver:
             return
+        temporary_path = f"{self.cookies_file}.tmp"
         try:
-            with open(self.cookies_file, "wb") as file:
-                pickle.dump(self.driver.get_cookies(), file)
+            cookies = self.driver.get_cookies()
+            if not cookies:
+                logging.warning("Temu returned no cookies; keeping the previous session file")
+                return
+            with open(temporary_path, "wb") as file:
+                pickle.dump(cookies, file)
+            os.replace(temporary_path, self.cookies_file)
+            logging.info("Saved %s Temu session cookie(s)", len(cookies))
         except Exception as exc:
             logging.warning("Could not save Temu cookies: %s", exc)
+        finally:
+            if os.path.exists(temporary_path):
+                try:
+                    os.remove(temporary_path)
+                except OSError:
+                    pass
 
     def _load_cookies(self):
-        if self._cookies_loaded or not os.path.exists(self.cookies_file):
-            return
+        if self._cookies_loaded:
+            return True
+        if not os.path.exists(self.cookies_file):
+            return False
+        if os.path.getsize(self.cookies_file) == 0:
+            logging.warning("The Temu session cookie file is empty; manual login is required")
+            return False
         try:
             with open(self.cookies_file, "rb") as file:
                 cookies = pickle.load(file)
+            loaded = 0
             for cookie in cookies:
                 cookie.pop("sameSite", None)
                 try:
                     self.driver.add_cookie(cookie)
+                    loaded += 1
                 except Exception:
                     continue
-            self._cookies_loaded = True
+            self._cookies_loaded = loaded > 0
+            if self._cookies_loaded:
+                logging.info("Restored %s Temu session cookie(s)", loaded)
+            return self._cookies_loaded
         except Exception as exc:
             logging.warning("Could not load Temu cookies: %s", exc)
+            return False
 
     def _load_existing_data(self):
         if not os.path.exists(self.out_file):
@@ -405,7 +433,10 @@ class TemuScraper:
         )
 
     def _verification_detected(self):
-        path = urlsplit(self.driver.current_url).path.casefold()
+        current_url = self.driver.current_url
+        if isinstance(current_url, bytes):
+            current_url = current_url.decode("utf-8", errors="replace")
+        path = urlsplit(str(current_url or "")).path.casefold()
         title = (self.driver.title or "").casefold()
         body = ""
         try:
@@ -448,7 +479,7 @@ class TemuScraper:
             blocked = False
         return blocked
 
-    def _safe_get(self, url):
+    def _safe_get(self, url, check_verification=True):
         self.driver.get(url)
         try:
             WebDriverWait(self.driver, 30).until(
@@ -457,7 +488,24 @@ class TemuScraper:
         except TimeoutException:
             logging.warning("Timed out waiting for %s", url)
         time.sleep(1)
-        return self._check_verification()
+        if check_verification:
+            return self._check_verification()
+        return False
+
+    def _prepare_session(self):
+        """Restore saved authentication before waiting on Temu login gates."""
+        self._safe_get(self.MARKET_HOME, check_verification=False)
+        restored = self._load_cookies()
+        if restored:
+            self.driver.refresh()
+            try:
+                WebDriverWait(self.driver, 30).until(
+                    lambda driver: driver.execute_script("return document.readyState") == "complete"
+                )
+            except TimeoutException:
+                logging.warning("Timed out refreshing the restored Temu session")
+            time.sleep(1)
+        return not self._check_verification()
 
     def _dismiss_popups(self):
         xpath = (
@@ -1203,11 +1251,7 @@ class TemuScraper:
         self.driver.maximize_window()
         successful_details = 0
         try:
-            self._safe_get(self.MARKET_HOME)
-            self._load_cookies()
-            if self._cookies_loaded:
-                self.driver.refresh()
-                time.sleep(1)
+            self._prepare_session()
             if self.product_urls:
                 products = [self._product_from_url(url) for url in self.product_urls]
             else:

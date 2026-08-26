@@ -193,6 +193,10 @@ class LazadaScraper:
         self.options.add_argument("--disable-blink-features=AutomationControlled")
         self.options.add_argument("--start-maximized")
         self.options.add_argument("--lang=en-PH")
+        self.options.add_argument("--no-first-run")
+        self.options.add_argument("--no-default-browser-check")
+        self.options.add_argument("--disable-default-apps")
+        self.options.add_argument("--disable-search-engine-choice-screen")
 
     @staticmethod
     def _detect_chrome_major():
@@ -407,7 +411,10 @@ class LazadaScraper:
             return False
 
     def _login_required(self):
-        path = urlsplit(self.driver.current_url).path.casefold()
+        current_url = self.driver.current_url
+        if isinstance(current_url, bytes):
+            current_url = current_url.decode("utf-8", errors="replace")
+        path = urlsplit(str(current_url or "")).path.casefold()
         if "/login" in path:
             return True
         selectors = (
@@ -734,7 +741,10 @@ class LazadaScraper:
         return context == "5" and product.get("applied_rating_filters") == [1, 2, 3, 4, 5]
 
     def _verification_detected(self):
-        path = urlsplit(self.driver.current_url).path.casefold()
+        current_url = self.driver.current_url
+        if isinstance(current_url, bytes):
+            current_url = current_url.decode("utf-8", errors="replace")
+        path = urlsplit(str(current_url or "")).path.casefold()
         title = (self.driver.title or "").casefold()
         body = ""
         try:
@@ -758,7 +768,7 @@ class LazadaScraper:
             blocked = False
         return blocked
 
-    def _safe_get(self, url):
+    def _safe_get(self, url, check_verification=True):
         self.driver.get(url)
         try:
             WebDriverWait(self.driver, 25).until(
@@ -766,7 +776,13 @@ class LazadaScraper:
             )
         except TimeoutException:
             logging.warning("Timed out waiting for %s", url)
-        self._check_verification()
+        if check_verification:
+            self._check_verification()
+
+    def _prepare_session(self):
+        """Restore saved authentication before waiting on Lazada login gates."""
+        self._safe_get(self.BASE_URL, check_verification=False)
+        return self._restore_or_request_login()
 
     def _product_link_from_card(self, card):
         try:
@@ -1557,8 +1573,7 @@ class LazadaScraper:
         self.driver = SafeChrome(**kwargs)
         self.driver.maximize_window()
         try:
-            self._safe_get(self.BASE_URL)
-            self._restore_or_request_login()
+            self._prepare_session()
             if self.product_urls:
                 products = [self._product_from_url(url) for url in self.product_urls]
             else:

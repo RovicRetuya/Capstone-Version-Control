@@ -362,17 +362,22 @@ def run_live_scrape(keyword: str, product_count: int, review_count: int, platfor
         return []
     direct_id = hashlib.sha256(keyword.strip().encode("utf-8")).hexdigest()[:12]
     target = output_path(f"direct_{direct_id}" if direct_url else keyword, marketplace)
+    # Keep scraper authentication separate from the user's everyday Chrome
+    # profile while preserving it between dashboard runs.
+    browser_profile = ROOT / ".browser_profiles" / marketplace
+    browser_profile.mkdir(parents=True, exist_ok=True)
     if marketplace == "shopee":
-        command = [sys.executable, str(ROOT / "src" / "retriv.py"), "-n", str(product_count), "-r", str(review_count), "--output", str(target), "--no-prompt"]
+        command = [sys.executable, str(ROOT / "src" / "retriv.py"), "-n", str(product_count), "-r", str(review_count), "--output", str(target), "--no-prompt", "--chrome-user-data-dir", str(browser_profile)]
         command.extend(["--product-url", keyword] if direct_url else ["-k", keyword])
     elif marketplace == "lazada":
-        command = [sys.executable, str(ROOT / "lazada-scraper" / "src" / "lazada_scraper.py"), "-n", str(product_count), "-r", str(review_count), "--output", str(target), "--no-verification-pause", "--verification-timeout", "600"]
+        command = [sys.executable, str(ROOT / "lazada-scraper" / "src" / "lazada_scraper.py"), "-n", str(product_count), "-r", str(review_count), "--output", str(target), "--no-verification-pause", "--verification-timeout", "600", "--chrome-user-data-dir", str(browser_profile)]
         command.extend(["--product-url", keyword] if direct_url else [keyword])
     else:
-        command = [sys.executable, str(ROOT / "temu-scraper" / "src" / "temu_scraper.py"), "-n", str(product_count), "-r", str(review_count), "--output", str(target), "--no-verification-pause", "--verification-timeout", "600"]
+        command = [sys.executable, str(ROOT / "temu-scraper" / "src" / "temu_scraper.py"), "-n", str(product_count), "-r", str(review_count), "--output", str(target), "--no-verification-pause", "--verification-timeout", "600", "--chrome-user-data-dir", str(browser_profile)]
         command.extend(["--product-url", keyword] if direct_url else [keyword])
     with st.status("Starting live analysis…", expanded=True) as status:
         st.write(f"1 of 3 · Scraping public {marketplace.title()} product reviews…")
+        st.caption("A dedicated marketplace Chrome window will open. Log in on first use, then leave that window open—DeFaketive closes it automatically and remembers the session for later runs.")
         result = subprocess.run(command, cwd=ROOT, capture_output=True, text=True, timeout=900)
         if result.returncode:
             status.update(label="The scrape could not be completed", state="error")
