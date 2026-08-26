@@ -649,6 +649,11 @@ class ShopeeScraper:
         path = urlsplit(str(current_url or "")).path.lower()
         blocked_paths = ("/buyer/login", "/captcha", "/verify", "/security-check")
         if any(token in path for token in blocked_paths):
+            if self._verification_cannot_continue():
+                raise TimeoutException(
+                    "SHOPEE_VERIFICATION_BLOCKED: Shopee could not complete verification. "
+                    "Stop automated requests and wait before trying again."
+                )
             logging.info("Shopee login or verification detected. Complete it in Chrome.")
             if self.interactive:
                 input("Press Enter after the Shopee page is ready...")
@@ -656,6 +661,11 @@ class ShopeeScraper:
                 deadline = time.time() + self.verification_timeout
                 while time.time() < deadline:
                     time.sleep(2)
+                    if self._verification_cannot_continue():
+                        raise TimeoutException(
+                            "SHOPEE_VERIFICATION_BLOCKED: Shopee could not complete verification. "
+                            "Stop automated requests and wait before trying again."
+                        )
                     current_url = self.driver.current_url
                     if isinstance(current_url, bytes):
                         current_url = current_url.decode("utf-8", errors="replace")
@@ -671,6 +681,20 @@ class ShopeeScraper:
             time.sleep(3)
             return True
         return False
+
+    def _verification_cannot_continue(self):
+        try:
+            body = self.driver.find_element(By.TAG_NAME, "body").text.casefold()
+        except Exception:
+            return False
+        return any(
+            phrase in body
+            for phrase in (
+                "please try again later",
+                "verification can't be completed",
+                "verification cannot be completed",
+            )
+        )
 
     def _safe_get(self, url, check_verification=True):
         self.driver.get(url)
@@ -1230,6 +1254,7 @@ class ShopeeScraper:
         self.driver = uc.Chrome(**chrome_kwargs)
         self.driver.maximize_window()
 
+        fatal_error = None
         try:
             if self.output_data:
                 # Establish the PH domain and restore saved authentication before
@@ -1252,6 +1277,7 @@ class ShopeeScraper:
                 self.output_data[link] = product
                 self._periodic_save()
         except Exception as exc:
+            fatal_error = exc
             logging.error("Error scraping Shopee PH: %s", exc, exc_info=True)
         finally:
             logging.info("Saving cookies and quitting Chrome...")
@@ -1261,6 +1287,15 @@ class ShopeeScraper:
 
         self._periodic_save()
         logging.info("Data saved to %s", self.out_file)
+        usable_output = any(
+            str(product.get("name") or "").strip()
+            or bool(product.get("comments"))
+            or product.get("review_status") in {"complete", "no_reviews"}
+            for product in self.output_data.values()
+        )
+        if fatal_error is not None and not usable_output:
+            raise RuntimeError(str(fatal_error)) from fatal_error
+        return list(self.output_data.values())
 
 
 def build_parser():

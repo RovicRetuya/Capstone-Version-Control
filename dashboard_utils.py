@@ -87,6 +87,16 @@ def load_products(source: str | Path | bytes) -> list[dict[str, Any]]:
     return [item for item in data if isinstance(item, dict)]
 
 
+def has_usable_products(products: list[dict[str, Any]]) -> bool:
+    """Return whether a scraper result contains real listing or review data."""
+    return any(
+        str(product.get("name") or "").strip()
+        or bool(product.get("comments"))
+        or product.get("review_status") in {"complete", "no_reviews"}
+        for product in products
+    )
+
+
 def price_value(value: Any) -> float | None:
     text = str(value or "").replace("â‚±", "₱")
     numbers = re.findall(r"\d[\d,]*(?:\.\d+)?", text)

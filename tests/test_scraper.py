@@ -4,6 +4,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from urllib.parse import parse_qs, urlsplit
 
+from selenium.common.exceptions import TimeoutException
 from src.retriv import ShopeeScraper, build_parser
 
 
@@ -85,6 +86,21 @@ class TestShopeeScraper(unittest.TestCase):
 
         self.scraper.driver = FakeDriver()
         self.assertFalse(self.scraper._check_captcha())
+
+    def test_terminal_verification_failure_stops_without_retrying(self):
+        class Body:
+            text = "Please Try Again Later. Verification can't be completed."
+
+        class FakeDriver:
+            current_url = "https://shopee.ph/verify/captcha?anti_bot_tracking_id=test"
+
+            @staticmethod
+            def find_element(_by, _value):
+                return Body()
+
+        self.scraper.driver = FakeDriver()
+        with self.assertRaisesRegex(TimeoutException, "SHOPEE_VERIFICATION_BLOCKED"):
+            self.scraper._check_captcha()
 
     def test_detects_installed_chrome_major(self):
         major = self.scraper._detect_chrome_major()

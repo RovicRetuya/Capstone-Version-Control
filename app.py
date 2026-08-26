@@ -26,6 +26,7 @@ from dashboard_utils import (
     analyze_products,
     csv_bytes,
     detect_marketplace,
+    has_usable_products,
     json_bytes,
     load_products,
     output_path,
@@ -331,7 +332,7 @@ def get_products() -> list[dict[str, Any]]:
     for path in files:
         try:
             products = analyzed_file(str(path), path.stat().st_mtime)
-            if not products:
+            if not products or not has_usable_products(products):
                 continue
             save_products(products, source=str(path))
             return products
@@ -381,10 +382,18 @@ def run_live_scrape(keyword: str, product_count: int, review_count: int, platfor
         result = subprocess.run(command, cwd=ROOT, capture_output=True, text=True, timeout=900)
         if result.returncode:
             status.update(label="The scrape could not be completed", state="error")
-            st.code((result.stderr or result.stdout)[-3000:], language="text")
+            diagnostic = f"{result.stdout}\n{result.stderr}"
+            if "SHOPEE_VERIFICATION_BLOCKED" in diagnostic:
+                st.error("Shopee temporarily rejected the automated browser. Do not keep retrying. Wait before another live attempt, or use a previously saved JSON dataset for the demonstration.")
+            else:
+                st.code((result.stderr or result.stdout)[-3000:], language="text")
             return []
         st.write("2 of 3 · Analyzing English, Filipino, and Taglish sentiment…")
         products = load_products(target)
+        if not has_usable_products(products):
+            status.update(label="No usable marketplace data was collected", state="error")
+            st.error("The marketplace did not return a usable product. Your previous saved results were left unchanged.")
+            return []
         analyzed = analyze_products(products)
         target.write_bytes(json_bytes(analyzed))
         save_products(analyzed, source=str(target))

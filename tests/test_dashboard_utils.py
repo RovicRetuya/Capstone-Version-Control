@@ -5,6 +5,7 @@ from dashboard_utils import (
     csv_bytes,
     detect_marketplace,
     load_products,
+    has_usable_products,
     normalized_risk_score,
     price_value,
     platform_name,
@@ -19,6 +20,11 @@ from dashboard_utils import (
 
 
 class TestDashboardUtils(unittest.TestCase):
+    def test_usable_product_detection_rejects_blank_failed_scrapes(self):
+        self.assertFalse(has_usable_products([{"link": "https://shopee.ph/item-i.1.2", "comments": []}]))
+        self.assertTrue(has_usable_products([{"name": "Real product", "comments": []}]))
+        self.assertTrue(has_usable_products([{"review_status": "no_reviews", "comments": []}]))
+
     def test_search_slug(self):
         self.assertEqual(search_slug("Laptop Stand & Bag"), "laptop_stand_bag")
         self.assertEqual(search_slug("!!!"), "search")
