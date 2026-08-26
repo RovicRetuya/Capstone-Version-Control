@@ -7,6 +7,7 @@ from collections import Counter
 import csv
 import io
 import json
+import math
 import re
 import sys
 from pathlib import Path
@@ -23,6 +24,26 @@ def search_slug(keyword: str) -> str:
 
 
 PLATFORM_NAMES = {"shopee": "Shopee PH", "lazada": "Lazada PH", "temu": "Temu PH"}
+
+RECOMMENDATION_STOP_WORDS = {
+    "a", "an", "and", "for", "from", "in", "more", "new", "of", "on",
+    "original", "series", "the", "to", "with",
+}
+
+RECOMMENDATION_PRODUCT_TYPES = (
+    (("power bank", "powerbank", "portable charger"), "power bank", "powerbank"),
+    (("wireless earbuds", "earbuds", "earphones"), "wireless earbuds", "earbuds"),
+    (("headphones", "headphone", "headset"), "headphones", "headphones"),
+    (("wall charger", "charger", "charging adapter"), "charger", "charger"),
+    (("usb cable", "charging cable", "cable"), "cable", "cable"),
+    (("mechanical keyboard", "keyboard"), "keyboard", "keyboard"),
+    (("gaming mouse", "wireless mouse", "mouse"), "mouse", "mouse"),
+    (("smart watch", "smartwatch"), "smart watch", "smartwatch"),
+    (("bluetooth speaker", "speaker"), "speaker", "speaker"),
+    (("monitor",), "monitor", "monitor"),
+    (("laptop",), "laptop", "laptop"),
+    (("camera",), "camera", "camera"),
+)
 
 
 def detect_marketplace(value: str, default: str = "shopee") -> str:
@@ -129,6 +150,157 @@ def cached_product_matches(
             exact_phrase = int(value.casefold() in name)
             ranked.append((exact_phrase, overlap / len(terms), product_reliability(product), -index, product))
     ranked.sort(key=lambda item: item[:4], reverse=True)
+    return [item[-1] for item in ranked[:limit]]
+
+
+def merge_product_catalogs(*catalogs: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Merge analyzed catalogs while preserving the first version of each listing."""
+    merged: list[dict[str, Any]] = []
+    seen: set[tuple[str, str] | tuple[str, str, str]] = set()
+    for catalog in catalogs:
+        for product in catalog or []:
+            if not isinstance(product, dict):
+                continue
+            parsed = urlsplit(str(product.get("link") or ""))
+            if parsed.netloc and parsed.path:
+                identity: tuple[str, str] | tuple[str, str, str] = (
+                    parsed.netloc.casefold().removeprefix("www."),
+                    parsed.path.rstrip("/").casefold(),
+                )
+            else:
+                identity = (
+                    "name",
+                    str(product.get("platform") or "").casefold(),
+                    str(product.get("name") or "").strip().casefold(),
+                )
+            if identity in seen:
+                continue
+            seen.add(identity)
+            merged.append(product)
+    return merged
+
+
+def recommendation_search_query(product: dict[str, Any]) -> str:
+    """Build a compact marketplace query for finding comparable products."""
+    name = re.sub(r"\s+", " ", str(product.get("name") or "").strip().casefold())
+    brand = _recommendation_brand(product)
+    for variants, label, _canonical in RECOMMENDATION_PRODUCT_TYPES:
+        if any(variant in name for variant in variants):
+            return " ".join(part for part in (brand, label) if part).strip()
+    terms = [
+        term
+        for term in re.findall(r"[a-z0-9]+", name)
+        if term not in RECOMMENDATION_STOP_WORDS
+    ]
+    if brand and (not terms or terms[0] != brand.casefold()):
+        terms.insert(0, brand)
+    return " ".join(terms[:4]) or brand or "similar product"
+
+
+def _recommendation_brand(product: dict[str, Any]) -> str:
+    brand = str(product.get("brand") or "").strip()
+    if brand:
+        return brand
+    name_terms = [
+        term for term in re.findall(r"[A-Za-z0-9]+", str(product.get("name") or ""))
+        if term.casefold() not in RECOMMENDATION_STOP_WORDS
+    ]
+    return name_terms[0] if name_terms else ""
+
+
+def _recommendation_terms(product: dict[str, Any]) -> set[str]:
+    text = " ".join(
+        str(product.get(field) or "").casefold()
+        for field in ("name", "category", "brand")
+    )
+    terms = {
+        term for term in re.findall(r"[a-z0-9]+", text)
+        if term not in RECOMMENDATION_STOP_WORDS
+    }
+    if "powerbank" in terms or {"power", "bank"}.issubset(terms):
+        terms.add("powerbank")
+    product_type = _recommendation_type(product)
+    if product_type:
+        terms.add(product_type)
+    return terms
+
+
+def _recommendation_type(product: dict[str, Any]) -> str:
+    text = " ".join(
+        str(product.get(field) or "").casefold()
+        for field in ("name", "category")
+    )
+    for variants, _label, canonical in RECOMMENDATION_PRODUCT_TYPES:
+        if any(variant in text for variant in variants):
+            return canonical
+    return ""
+
+
+def rank_recommendations(
+    product: dict[str, Any],
+    products: list[dict[str, Any]],
+    limit: int = 3,
+    min_reliability: float = 60.0,
+    min_positive_ratio: float = 0.55,
+    min_review_count: int = 5,
+) -> list[dict[str, Any]]:
+    """Rank similar, well-reviewed Low Risk products with explainable signals."""
+    if limit <= 0:
+        return []
+    target_terms = _recommendation_terms(product)
+    target_type = _recommendation_type(product)
+    target_category = str(product.get("category") or "").strip().casefold()
+    target_brand = _recommendation_brand(product).casefold()
+    ranked: list[tuple[float, float, float, int, int, dict[str, Any]]] = []
+    for index, candidate in enumerate(products):
+        if candidate.get("link") == product.get("link") or not candidate.get("sentiment_summary"):
+            continue
+        if product_risk_level(candidate) != "Low":
+            continue
+        summary = candidate.get("sentiment_summary") or {}
+        positive = float((summary.get("sentiment_ratios") or {}).get("positive") or 0)
+        if positive > 1:
+            positive /= 100
+        reliability = product_reliability(candidate)
+        review_count = int(summary.get("review_count") or len(candidate.get("comments") or []))
+        rating = rating_value(candidate.get("rating"))
+        if (
+            reliability < min_reliability
+            or positive < min_positive_ratio
+            or review_count < min_review_count
+            or (rating is not None and rating < 4.0)
+        ):
+            continue
+
+        candidate_terms = _recommendation_terms(candidate)
+        candidate_type = _recommendation_type(candidate)
+        if target_type and candidate_type and target_type != candidate_type:
+            continue
+        overlap = target_terms & candidate_terms
+        candidate_category = str(candidate.get("category") or "").strip().casefold()
+        category_match = bool(target_category and target_category == candidate_category)
+        type_match = bool(target_type and target_type == candidate_type)
+        lexical_similarity = len(overlap) / max(1, min(len(target_terms), len(candidate_terms)))
+        if not category_match and not type_match and (
+            len(overlap) < 3 or lexical_similarity < 0.35
+        ):
+            continue
+        brand_match = bool(
+            target_brand and target_brand == _recommendation_brand(candidate).casefold()
+        )
+        similarity = min(
+            1.0,
+            lexical_similarity + (0.25 if category_match else 0) + (0.08 if brand_match else 0),
+        )
+        evidence = min(1.0, math.log10(review_count + 1) / 2)
+        recommendation_score = (
+            0.55 * similarity
+            + 0.25 * (reliability / 100)
+            + 0.15 * positive
+            + 0.05 * evidence
+        )
+        ranked.append((recommendation_score, reliability, positive, review_count, -index, candidate))
+    ranked.sort(key=lambda item: item[:5], reverse=True)
     return [item[-1] for item in ranked[:limit]]
 
 

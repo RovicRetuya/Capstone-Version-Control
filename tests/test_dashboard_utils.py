@@ -7,6 +7,7 @@ from dashboard_utils import (
     detect_marketplace,
     load_products,
     has_usable_products,
+    merge_product_catalogs,
     normalized_risk_score,
     price_value,
     platform_name,
@@ -14,6 +15,8 @@ from dashboard_utils import (
     product_risk_level,
     product_risk_percent,
     rank_alternatives,
+    rank_recommendations,
+    recommendation_search_query,
     reliability_score,
     review_rows,
     risk_keyword_counts,
@@ -35,6 +38,65 @@ class TestDashboardUtils(unittest.TestCase):
             "Raspberry Pi Pico 2 Board",
         )
         self.assertEqual(cached_product_matches(products, "not in database"), [])
+
+    def test_recommendations_are_similar_low_risk_and_well_reviewed(self):
+        target = {
+            "link": "target",
+            "name": "Anker 25000mAh Laptop Power Bank",
+            "brand": "Anker",
+            "category": "Power Banks",
+            "sentiment_summary": {"risk_score": 1, "risk_score_scale": "percent"},
+        }
+        good_match = {
+            "link": "good",
+            "name": "UGREEN 20000mAh USB-C Power Bank",
+            "brand": "UGREEN",
+            "category": "Power Banks",
+            "rating": 4.8,
+            "sentiment_summary": {
+                "risk_score": 4,
+                "risk_score_scale": "percent",
+                "review_count": 30,
+                "sentiment_ratios": {"positive": 0.9},
+            },
+        }
+        risky_match = {
+            "link": "risky",
+            "name": "Anker Power Bank",
+            "brand": "Anker",
+            "category": "Power Banks",
+            "rating": 4.9,
+            "sentiment_summary": {
+                "risk_score": 70,
+                "risk_score_scale": "percent",
+                "review_count": 30,
+                "sentiment_ratios": {"positive": 0.9},
+            },
+        }
+        unrelated = {
+            "link": "unrelated",
+            "name": "Low-Power USB-C Raspberry Pi Development Board",
+            "rating": 5,
+            "sentiment_summary": {
+                "risk_score": 0,
+                "risk_score_scale": "percent",
+                "review_count": 30,
+                "sentiment_ratios": {"positive": 1},
+            },
+        }
+
+        recommendations = rank_recommendations(
+            target, [target, risky_match, unrelated, good_match], limit=3
+        )
+
+        self.assertEqual([item["link"] for item in recommendations], ["good"])
+        self.assertEqual(recommendation_search_query(target), "Anker power bank")
+
+    def test_merge_product_catalogs_normalizes_tracking_links(self):
+        current = {"name": "Current", "link": "https://www.lazada.com.ph/products/item-i1.html?tracking=1"}
+        stale = {"name": "Stale", "link": "https://lazada.com.ph/products/item-i1.html?tracking=2"}
+        other = {"name": "Other", "link": "https://shopee.ph/other-i.1.2"}
+        self.assertEqual(merge_product_catalogs([current], [stale, other]), [current, other])
 
     def test_usable_product_detection_rejects_blank_failed_scrapes(self):
         self.assertFalse(has_usable_products([{"link": "https://shopee.ph/item-i.1.2", "comments": []}]))

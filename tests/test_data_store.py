@@ -2,7 +2,13 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from data_store import database_counts, save_evaluation_run, save_products, save_survey_response
+from data_store import (
+    database_counts,
+    load_saved_products,
+    save_evaluation_run,
+    save_products,
+    save_survey_response,
+)
 
 
 class TestDataStore(unittest.TestCase):
@@ -20,6 +26,9 @@ class TestDataStore(unittest.TestCase):
             save_survey_response("Monthly", [3] * 10, [4] * 4, 50, 50, path=database)
             save_evaluation_run("verified.csv", {"sample_count": 2, "accuracy": .5, "precision": .5, "recall": .5, "f1": .5, "labels": ["negative", "positive"], "matrix": [[1, 0], [1, 0]]}, path=database)
             self.assertEqual(database_counts(database), {"products": 1, "reviews": 1, "survey_responses": 1, "evaluation_runs": 1})
+            stored = load_saved_products(database)
+            self.assertEqual(len(stored), 1)
+            self.assertEqual(stored[0]["name"], "Test product")
 
 
 if __name__ == "__main__":

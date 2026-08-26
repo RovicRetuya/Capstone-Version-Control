@@ -125,6 +125,26 @@ class TestAppSearchFlow(unittest.TestCase):
         self.assertIn("Lower risk", text)
         self.assertNotIn("Not recommended", text)
 
+    def test_analysis_shows_good_similar_product_recommendation(self):
+        products = sample_products(2)
+        products[0].update({"name": "Anker 25000mAh Power Bank", "brand": "Anker", "category": "Power Banks"})
+        products[1].update({"name": "UGREEN 20000mAh Power Bank", "brand": "UGREEN", "category": "Power Banks", "rating": 4.8})
+        products[1]["sentiment_summary"].update(
+            {
+                "review_count": 30,
+                "risk_score": 5,
+                "risk_score_scale": "percent",
+                "sentiment_ratios": {"positive": 0.9, "neutral": 0.08, "negative": 0.02},
+            }
+        )
+
+        app = self.app_with_products("link", products)
+        text = " ".join(markdown.value for markdown in app.markdown)
+
+        self.assertFalse(app.exception)
+        self.assertIn("Recommended similar products", text)
+        self.assertIn("UGREEN 20000mAh Power Bank", text)
+
     def test_name_grid_tolerates_duplicate_links_and_invalid_review_counts(self):
         products = sample_products(2)
         products[1]["link"] = products[0]["link"]

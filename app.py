@@ -30,20 +30,29 @@ from dashboard_utils import (
     has_usable_products,
     json_bytes,
     load_products,
+    merge_product_catalogs,
     output_path,
     platform_name,
     price_value,
+    product_platform,
     product_rows,
     product_reliability,
     product_risk_level,
     product_risk_percent,
-    rank_alternatives,
+    rank_recommendations,
+    recommendation_search_query,
     result_files,
     review_rows,
     risk_keyword_counts,
     risk_level,
 )
-from data_store import database_counts, save_evaluation_run, save_products, save_survey_response
+from data_store import (
+    database_counts,
+    load_saved_products,
+    save_evaluation_run,
+    save_products,
+    save_survey_response,
+)
 from research_utils import evaluate_labels, score_sus, score_umux
 
 
@@ -272,10 +281,11 @@ def inject_landing_theme() -> None:
         .alternatives-shell {{ background:white;border-radius:22px;padding:1.5rem;margin-top:1rem; }}
         .alternatives-title {{ color:#11152F;font-size:1.25rem;font-weight:800; }} .alternatives-subtitle {{ color:#667085;font-size:.76rem;margin-bottom:1.1rem; }}
         .alternatives-grid {{ display:grid;grid-template-columns:repeat(3,1fr);gap:1rem; }}
-        .alternative-card {{ border:1px solid #EAECF0;border-radius:18px;overflow:hidden;background:white;box-shadow:0 10px 25px rgba(16,24,40,.06); }}
+        .alternative-card {{ border:1px solid #EAECF0;border-radius:18px;overflow:hidden;background:white;box-shadow:0 10px 25px rgba(16,24,40,.06);text-decoration:none; }}
         .alternative-cover {{ height:125px;background:linear-gradient(135deg,#0F9F68,#31B5A4);display:grid;place-items:center;color:white;font-size:2rem;overflow:hidden; }}
         .alternative-cover img {{ width:100%;height:100%;object-fit:cover; }}
         .alternative-body {{ padding:1rem; }} .alternative-name {{ color:#11152F;font-weight:800;font-size:.88rem;min-height:2.6rem; }}
+        .alternative-meta {{ color:#667085;font-size:.67rem;line-height:1.45;margin-top:.55rem; }}
         .alternative-score {{ color:#12B76A;font-size:.72rem;font-weight:800; }} .alternative-price {{ color:#11152F;font-size:1.1rem;font-weight:800;margin-top:.5rem; }}
         @media(max-width:900px) {{
           .st-key-landing_hero,.st-key-how_it_works,.st-key-safety_section,.st-key-member_section,.st-key-landing_footer,.st-key-inline_analysis,.st-key-inline_search_results {{ padding-left:1.5rem;padding-right:1.5rem; }}
@@ -424,6 +434,61 @@ def run_live_scrape(keyword: str, product_count: int, review_count: int, platfor
         status.update(label=f"Analysis complete · {len(analyzed)} products found", state="complete")
         analyzed_file.clear()
         return analyzed
+
+
+def render_recommendations(
+    product: dict[str, Any],
+    products: list[dict[str, Any]],
+    limit: int,
+    key_prefix: str,
+) -> None:
+    """Show analyzed Low Risk matches and allow an on-demand marketplace search."""
+    try:
+        saved_products = load_saved_products()
+    except Exception:
+        saved_products = []
+    catalog = merge_product_catalogs(products, saved_products)
+    recommendations = rank_recommendations(product, catalog, limit=limit)
+    high_risk = product_risk_level(product) == "High"
+    title = "Safer alternatives" if high_risk else "Recommended similar products"
+    if recommendations:
+        cards = []
+        for alternative in recommendations:
+            summary = alternative.get("sentiment_summary") or {}
+            positive = float((summary.get("sentiment_ratios") or {}).get("positive") or 0)
+            if positive > 1:
+                positive /= 100
+            review_count = int(summary.get("review_count") or len(alternative.get("comments") or []))
+            alt_name = html.escape(str(alternative.get("name") or "Recommended product"))
+            alt_url = html.escape(str(alternative.get("link") or "#"), quote=True)
+            alt_image = html.escape(str(alternative.get("img") or ""), quote=True)
+            alt_cover = f'<img src="{alt_image}" alt="">' if alt_image else "&#9671;"
+            cards.append(
+                f'<a class="alternative-card" href="{alt_url}" target="_blank" rel="noopener">'
+                f'<div class="alternative-cover">{alt_cover}</div><div class="alternative-body">'
+                f'<div class="alternative-score">{product_reliability(alternative):.0f}% reliability &middot; Low Risk</div>'
+                f'<div class="alternative-name">{alt_name}</div>'
+                f'<div class="alternative-price">{html.escape(money(alternative.get("price")))}</div>'
+                f'<div class="alternative-meta">{html.escape(platform_name(alternative))} &middot; '
+                f'{positive:.0%} positive &middot; {review_count:,} reviews</div></div></a>'
+            )
+        st.markdown(
+            f'<section class="alternatives-shell"><div class="alternatives-title">{title}</div>'
+            f'<div class="alternatives-subtitle">Similar products with Low Risk, good positive-review ratios, '
+            f'and at least five analyzed reviews.</div><div class="alternatives-grid">{"".join(cards)}</div></section>',
+            unsafe_allow_html=True,
+        )
+    else:
+        st.info("No sufficiently similar Low Risk product is available in the analyzed catalog yet.")
+
+    query = recommendation_search_query(product)
+    button_label = "Find more reviewed alternatives" if recommendations else "Find similar reviewed products"
+    if st.button(button_label, key=f"{key_prefix}-find-recommendations"):
+        discovered = run_live_scrape(query, 6, 30, platform=product_platform(product))
+        if discovered:
+            st.session_state.uploaded_products = merge_product_catalogs(products, discovered)
+            st.rerun()
+    st.caption(f'Recommendation search: “{query}” · Results are ranked only after their reviews are analyzed.')
 
 
 def landing_page(products: list[dict[str, Any]]) -> None:
@@ -992,22 +1057,7 @@ def inline_product_analysis(product: dict[str, Any], products: list[dict[str, An
         else:
             st.info("No written reviews were collected for this product.")
 
-        alternatives = rank_alternatives(product, products, limit=3) if score >= 61 else []
-        if alternatives:
-            alternative_cards = []
-            for alternative in alternatives:
-                alt_name = html.escape(str(alternative.get("name") or "Alternative product"))
-                alt_url = html.escape(str(alternative.get("link") or "#"), quote=True)
-                alt_image = html.escape(str(alternative.get("img") or ""), quote=True)
-                alt_cover = f'<img src="{alt_image}" alt="">' if alt_image else '&#9671;'
-                alt_reliability = product_reliability(alternative)
-                alternative_cards.append(
-                    f'<a class="alternative-card" href="{alt_url}" target="_blank" rel="noopener" style="text-decoration:none"><div class="alternative-cover">{alt_cover}</div><div class="alternative-body"><div class="alternative-score">{alt_reliability:.0f}% reliability</div><div class="alternative-name">{alt_name}</div><div class="alternative-price">{html.escape(money(alternative.get("price")))}</div></div></a>'
-                )
-            st.markdown(
-                f'<section class="alternatives-shell"><div class="alternatives-title">Safer alternatives</div><div class="alternatives-subtitle">Ranked from the currently collected dataset by reliability score.</div><div class="alternatives-grid">{"".join(alternative_cards)}</div></section>',
-                unsafe_allow_html=True,
-            )
+        render_recommendations(product, products, limit=3, key_prefix="inline")
 
 
 def product_page(products: list[dict[str, Any]]) -> None:
@@ -1072,17 +1122,7 @@ def product_page(products: list[dict[str, Any]]) -> None:
         color = {"Positive": GREEN, "Neutral": "#667085", "Negative": RED}.get(label, "#667085")
         stars = "★" * int(review.get("rating") or 0)
         st.markdown(f'<div class="review"><div class="review-top"><span><b>{html.escape(review.get("author") or "Verified shopper")}</b> · {stars}</span><span style="color:{color};font-weight:700">{label}</span></div>{highlight_review(review)}</div>', unsafe_allow_html=True)
-    alternatives = rank_alternatives(product, products, limit=4) if score >= 61 else []
-    if alternatives:
-        st.subheader("Safer alternatives")
-        cols = st.columns(len(alternatives))
-        for col, alternative in zip(cols, alternatives):
-            with col:
-                if alternative.get("img"): st.image(alternative["img"], use_container_width=True)
-                st.markdown(f"**{alternative.get('name', '')[:65]}**")
-                st.caption(f"{money(alternative.get('price'))} · {product_reliability(alternative):.0f}% reliable")
-    elif score >= 61:
-        st.info("No sufficiently analyzed alternative is available in the current dataset.")
+    render_recommendations(product, products, limit=4, key_prefix="product-page")
 
 
 def database_page(products: list[dict[str, Any]]) -> None:

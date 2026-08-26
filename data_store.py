@@ -101,6 +101,23 @@ def database_counts(path: str | Path = DEFAULT_DB) -> dict[str, int]:
         }
 
 
+def load_saved_products(path: str | Path = DEFAULT_DB) -> list[dict[str, Any]]:
+    """Load the latest analyzed product payloads for local recommendations."""
+    with _connect(path) as connection:
+        rows = connection.execute(
+            "SELECT raw_json FROM products ORDER BY updated_at DESC"
+        ).fetchall()
+    products = []
+    for (payload,) in rows:
+        try:
+            product = json.loads(payload)
+        except (TypeError, json.JSONDecodeError):
+            continue
+        if isinstance(product, dict):
+            products.append(product)
+    return products
+
+
 def save_survey_response(frequency: str, sus: list[int], umux: list[int], sus_score: float,
                          umux_score: float, path: str | Path = DEFAULT_DB) -> None:
     payload = json.dumps({"sus": sus, "umux": umux}, ensure_ascii=False)
