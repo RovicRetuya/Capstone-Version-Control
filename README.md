@@ -1,7 +1,7 @@
 # DeFaketive (shadcn version)
 
 A second face for DeFaketive, built with [shadcn-svelte](https://shadcn-svelte.com) (SvelteKit, Tailwind v4,
-Lucide icons, the plain **neutral** look with one brand colour, purple). The original app in
+Lucide icons, the plain **neutral** look with brand colours, deep navy blue and burnt mustard yellow). The original app in
 `../Capstone-Version-Control-Version-1.1` is not touched.
 
 This app only draws the screens. Everything real still happens in the original Flask app: accounts, guest

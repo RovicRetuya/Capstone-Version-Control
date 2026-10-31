@@ -12,12 +12,15 @@
 	--card-foreground: oklch(0.145 0 0);
 	--popover: oklch(1 0 0);
 	--popover-foreground: oklch(0.145 0 0);
-	/* DeFaketive purple, the one brand colour: the logo dot, main buttons, links, switches and scan progress.
-	   It never marks a verdict or a count. Purple was picked with the same script as the verdict colours
-	   (`npm run check:colors`): white on it reads 7:1, and it stays clearly apart from red, orange, teal and grey,
-	   also for protan, deutan and tritan colour blindness. Bright blue was tried and failed that test against teal. */
-	--brand: oklch(0.47 0.22 300);
+	/* DeFaketive deep navy, the brand colour: main buttons, links, switches and scan progress.
+	   It never marks a verdict or a count. Navy is dark, so white on it reads well above AA, and it stays clearly
+	   apart from red, orange, teal and grey (`npm run check:colors` tests this, also for colour blindness). */
+	--brand: oklch(0.3 0.09 260);
 	--brand-foreground: oklch(0.985 0 0);
+	/* Burnt mustard, the second brand colour. Decoration only (logo check mark, small highlights, selected
+	   markers): it sits close to the caution orange, so it never marks a verdict, a count or a warning. */
+	--highlight: oklch(0.7 0.13 82);
+	--highlight-foreground: oklch(0.22 0.05 260);
 	--primary: var(--brand);
 	--primary-foreground: var(--brand-foreground);
 	--secondary: oklch(0.97 0 0);
@@ -30,8 +33,8 @@
 	--destructive: oklch(0.53 0.22 27);
 	--border: oklch(0.922 0 0);
 	--input: oklch(0.922 0 0);
-	/* The focus ring is a lighter purple, so where the keyboard is shows up better than the stock grey. */
-	--ring: oklch(0.58 0.2 300);
+	/* The focus ring is a lighter navy, so where the keyboard is shows up better than the stock grey. */
+	--ring: oklch(0.5 0.15 260);
 	--chart-1: oklch(0.87 0 0);
 	--chart-2: oklch(0.556 0 0);
 	--chart-3: oklch(0.439 0 0);
@@ -70,9 +73,11 @@
 	--card-foreground: oklch(0.985 0 0);
 	--popover: oklch(0.205 0 0);
 	--popover-foreground: oklch(0.985 0 0);
-	/* The same purple, lighter, with dark text on it (7:1). */
-	--brand: oklch(0.73 0.16 300);
+	/* The same navy, lighter, with dark text on it (7:1). */
+	--brand: oklch(0.7 0.18 274);
 	--brand-foreground: oklch(0.205 0 0);
+	--highlight: oklch(0.78 0.13 84);
+	--highlight-foreground: oklch(0.22 0.05 260);
 	--secondary: oklch(0.269 0 0);
 	--secondary-foreground: oklch(0.985 0 0);
 	--muted: oklch(0.269 0 0);
@@ -82,7 +87,7 @@
 	--destructive: oklch(0.66 0.21 22);
 	--border: oklch(1 0 0 / 10%);
 	--input: oklch(1 0 0 / 15%);
-	--ring: oklch(0.66 0.17 300);
+	--ring: oklch(0.66 0.13 255);
 	--chart-1: oklch(0.87 0 0);
 	--chart-2: oklch(0.556 0 0);
 	--chart-3: oklch(0.439 0 0);
@@ -105,6 +110,8 @@
 
 @theme inline {
 	--font-sans: 'Inter Variable', sans-serif;
+	--color-highlight: var(--highlight);
+	--color-highlight-foreground: var(--highlight-foreground);
 	--color-warning: var(--warning);
 	--color-warning-soft: var(--warning-soft);
 	--color-success: var(--success);
