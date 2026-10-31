@@ -41,13 +41,14 @@
 	--chart-4: oklch(0.371 0 0);
 	--chart-5: oklch(0.269 0 0);
 	--radius: 0.625rem;
-	--sidebar: oklch(0.985 0 0);
-	--sidebar-foreground: oklch(0.145 0 0);
-	--sidebar-primary: var(--brand);
-	--sidebar-primary-foreground: var(--brand-foreground);
-	--sidebar-accent: oklch(0.97 0 0);
-	--sidebar-accent-foreground: oklch(0.205 0 0);
-	--sidebar-border: oklch(0.922 0 0);
+	/* The menu is deep navy with mustard markers, so both brand colours show on every screen. */
+	--sidebar: oklch(0.26 0.08 260);
+	--sidebar-foreground: oklch(0.96 0.01 260);
+	--sidebar-primary: var(--highlight);
+	--sidebar-primary-foreground: var(--highlight-foreground);
+	--sidebar-accent: oklch(0.34 0.09 260);
+	--sidebar-accent-foreground: oklch(0.985 0 0);
+	--sidebar-border: oklch(1 0 0 / 12%);
 	--sidebar-ring: var(--ring);
 	/* DeFaketive verdict colours. The same four mean the same thing everywhere (chips, banners, charts):
 	   red = safety reports, orange = caution, teal = no warnings, grey = not enough to judge.
@@ -93,9 +94,11 @@
 	--chart-3: oklch(0.439 0 0);
 	--chart-4: oklch(0.371 0 0);
 	--chart-5: oklch(0.269 0 0);
-	--sidebar: oklch(0.205 0 0);
-	--sidebar-foreground: oklch(0.985 0 0);
-	--sidebar-accent: oklch(0.269 0 0);
+	--sidebar: oklch(0.2 0.06 260);
+	--sidebar-foreground: oklch(0.96 0.01 260);
+	--sidebar-primary: var(--highlight);
+	--sidebar-primary-foreground: var(--highlight-foreground);
+	--sidebar-accent: oklch(0.29 0.08 260);
 	--sidebar-accent-foreground: oklch(0.985 0 0);
 	--sidebar-border: oklch(1 0 0 / 10%);
 	--warning: oklch(0.83 0.16 85);
@@ -170,6 +173,21 @@
 	html {
 		@apply font-sans;
 	}
+}
+
+/* Brand details: a mustard bar beside the current menu item, a mustard line under the top bar, and mustard
+   text selection. The sidebar sets its own muted text, so it stays readable on navy. */
+[data-sidebar='menu-button'][data-active='true'] {
+	box-shadow: inset 3px 0 0 var(--highlight);
+}
+[data-slot='sidebar-inner'] .text-muted-foreground {
+	color: oklch(0.82 0.03 260);
+}
+header.sticky {
+	border-bottom: 2px solid var(--highlight);
+}
+::selection {
+	background: color-mix(in oklch, var(--highlight) 45%, transparent);
 }
 
 /* Cards rise into place, a little later each. Switched off for people who ask for less motion. */
