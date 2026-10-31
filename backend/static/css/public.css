@@ -1020,3 +1020,216 @@ html[data-theme="dark"] :is(.app-scan-thumb, .app-product-image) { background: #
   .app-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .app-filter button, .app-set-button { min-height: 32px; }
 }
+
+/* A selected button (pressed, or switched on) turns deep blue and gives a little jiggle. */
+@keyframes btn-jiggle {
+  0% { transform: rotate(0) scale(.97); }
+  25% { transform: rotate(-3deg) scale(1.03); }
+  50% { transform: rotate(2.5deg) scale(1.03); }
+  75% { transform: rotate(-1.5deg) scale(1.01); }
+  100% { transform: rotate(0) scale(1); }
+}
+:is(button, .pub-button, [role="button"]):not(:disabled, .app-switch, .pub-icon-button, .app-icon-button):is(:active, [aria-pressed="true"], [aria-selected="true"], .active, .selected) {
+  background: oklch(.32 .14 260) !important;
+  border-color: oklch(.32 .14 260) !important;
+  color: #fff !important;
+  animation: btn-jiggle .45s ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  :is(button, .pub-button, [role="button"]):is(:active, [aria-pressed="true"], [aria-selected="true"], .active, .selected) { animation: none; }
+}
+
+/* Buttons spring up a little and grow when hovered. */
+:is(button, .pub-button, [role="button"]):not(:disabled, .app-switch) {
+  transition: transform .25s cubic-bezier(.3, 1.6, .5, 1), box-shadow .2s ease, background-color .15s ease, color .15s ease;
+}
+:is(button, .pub-button, [role="button"]):not(:disabled, .app-switch):hover {
+  transform: translateY(-3px) scale(1.05);
+  box-shadow: 0 10px 20px -8px rgba(0, 0, 0, .35), inset 0 -3px 0 var(--color-highlight);
+}
+:is(button, .pub-button, [role="button"]):not(:disabled, .app-switch):active { transform: translateY(1px) scale(.97); }
+@media (prefers-reduced-motion: reduce) {
+  :is(button, .pub-button, [role="button"]):hover { transform: none; box-shadow: none; }
+}
+
+/* Mustard yellow accents next to the deep blue. */
+::selection { background: color-mix(in oklch, var(--color-highlight) 55%, transparent); }
+.pub-nav .nav-link:hover, .pub-nav .nav-link.active { text-decoration-color: var(--color-highlight); text-decoration-thickness: 3px; }
+.pub-button:hover, .primary-button:hover { box-shadow: inset 0 -3px 0 var(--color-highlight); }
+.rep-filters button.active, .app-rail a.active .app-rail-icon { box-shadow: inset 0 -3px 0 var(--color-highlight); }
+
+/* The DeFaketive logo mark (the D-shaped loupe with the mustard check) replaces the plain dot. */
+.pub-logo-mark { width: 36px; height: 36px; border-radius: 0; background: url("/static/assets/logo.png") center / contain no-repeat; }
+.pub-logo-mark::after { content: none; }
+.pub-footer .pub-logo-mark { width: 30px; height: 30px; }
+
+/* The first screen: logo, name and tagline over the navy and mustard corners, once per visit. */
+.splash { --navy: #0b1f4d; --mustard: #f5b014; position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; overflow: hidden; background: radial-gradient(ellipse at 50% 40%, #fffdf8, #f3f0e8 70%); color: var(--navy); transition: opacity .5s ease, transform .5s ease; }
+.splash[hidden] { display: none; }
+.splash.leaving { opacity: 0; transform: scale(1.04); pointer-events: none; }
+.splash-stack { display: grid; justify-items: center; gap: 1.1rem; padding: 1.5rem; text-align: center; }
+.splash-mark { width: clamp(7rem, 22vw, 11rem); animation: splash-pop .9s cubic-bezier(.2, .9, .3, 1.25) .15s both; }
+.splash-name { font: italic 900 clamp(2.6rem, 9vw, 5rem)/1 "Archivo Black", "Arial Black", Impact, sans-serif; letter-spacing: -.02em; animation: splash-up .8s cubic-bezier(.2, .7, .2, 1) .7s both; }
+.splash-name .f { color: var(--mustard); }
+.splash-tag { display: flex; align-items: center; gap: 1rem; font: 600 clamp(.8rem, 2.4vw, 1.1rem)/1 Inter, system-ui, sans-serif; letter-spacing: .5em; animation: splash-up .8s cubic-bezier(.2, .7, .2, 1) 1.1s both; }
+.splash-tag i { display: block; width: clamp(2rem, 9vw, 5rem); height: 3px; border-radius: 2px; background: var(--navy); animation: splash-grow .7s ease-out 1.4s both; }
+.splash-go { margin-top: 1.2rem; padding: .7rem 2.2rem; border: 0; border-radius: 999px; background: var(--navy); color: #fff; font: 600 .95rem Inter, system-ui, sans-serif; cursor: pointer; animation: splash-up .7s ease-out 1.8s both; }
+.splash-swoosh { position: absolute; width: 70vmax; height: 70vmax; border-radius: 50%; background: var(--navy); box-shadow: 0 0 0 .9vmax var(--mustard); }
+.splash-swoosh.tl { left: -52vmax; top: -52vmax; animation: splash-tl 1.1s cubic-bezier(.2, .7, .2, 1) both; }
+.splash-swoosh.br { right: -52vmax; bottom: -52vmax; animation: splash-br 1.1s cubic-bezier(.2, .7, .2, 1) .15s both; }
+@keyframes splash-pop { from { opacity: 0; transform: scale(.3) rotate(-12deg); } }
+@keyframes splash-up { from { opacity: 0; transform: translateY(26px); } }
+@keyframes splash-grow { from { transform: scaleX(0); } }
+@keyframes splash-tl { from { transform: translate(-30vmax, -30vmax); } }
+@keyframes splash-br { from { transform: translate(30vmax, 30vmax); } }
+@media (prefers-reduced-motion: reduce) { .splash *, .splash-swoosh { animation: none !important; } }
+
+/* Boxes get a mustard top edge and a deep blue edge on hover, so they stand out from the page. */
+.app-card, .rep-card, .pub-scan-card, .app-box { border-top: 4px solid var(--color-highlight); transition: border-color .2s ease, box-shadow .2s ease, transform .25s ease; }
+.rep-tile { border-left: 4px solid var(--color-highlight); }
+.app-stats > div { box-shadow: inset 0 -3px 0 transparent; transition: box-shadow .2s ease; }
+.app-stats > div:hover { box-shadow: inset 0 -3px 0 var(--color-highlight); }
+.app-card:hover, .rep-card:hover, .rep-tile:hover { border-color: var(--color-accent); border-top-color: var(--color-highlight); box-shadow: 0 8px 22px -10px color-mix(in oklch, var(--color-accent) 55%, transparent); }
+.pub-steps > li { padding-top: 16px; border-top: 4px solid var(--color-accent); }
+.pub-steps > li:nth-child(even) { border-top-color: var(--color-highlight); }
+
+/* The same logo mark in the signed-in header and on the sign-in screens. */
+.app-brand-mark { width: 38px; height: 38px; border-radius: 0; background: url("/static/assets/logo.png") center / contain no-repeat; }
+.app-brand-mark::after { content: none; }
+.auth-mark { width: 36px; height: 36px; padding: 3px; border-radius: 8px; background: #f0ede6 url("/static/assets/logo.png") center / 80% no-repeat; }
+.auth-mark::after { content: none; }
+.auth-mark.small { width: 28px; height: 28px; padding: 0; border-radius: 0; background: url("/static/assets/logo.png") center / contain no-repeat; }
+.auth-mark.small::after { content: none; }
+
+/* The soft grey shapes behind the boxes. A see-through layer of the box's own colour sits on top, so the colour
+   and the text contrast stay as they were; dark mode washes the picture out almost completely. */
+:root { --box-wash: rgba(255, 253, 248, .86); --box-wash-fallback: #fffdf8; }
+html[data-theme="dark"] { --box-wash: rgba(32, 31, 28, .95); --box-wash-fallback: #201f1c; }
+.app-card, .app-box, .pub-scan-card, .rep-card {
+  background: linear-gradient(var(--box-wash), var(--box-wash)), url("/static/assets/box-bg.jpg") center / cover no-repeat, var(--box-wash-fallback);
+}
+
+/* The signed-in About and FAQ pages. */
+.app-about-block { margin-top: 16px; }
+.app-about-block > p:not(.pub-team-meta) { margin-top: 12px; color: var(--pub-ink-2); font: 400 14px/22px var(--pub-body); max-width: 70ch; }
+.app-about-steps { display: grid; gap: 14px; margin: 16px 0 0; padding: 0; list-style: none; counter-reset: step; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); }
+.app-about-steps li { counter-increment: step; padding-top: 12px; border-top: 4px solid var(--color-accent); }
+.app-about-steps li:nth-child(even) { border-top-color: var(--color-highlight); }
+.app-about-steps li::before { content: "0" counter(step); display: block; color: var(--pub-muted-2); font: 400 11px/16px var(--pub-mono); letter-spacing: 1px; }
+.app-about-steps b { display: block; margin-top: 4px; font: 600 14px/21px var(--pub-body); }
+.app-about-steps span { display: block; margin-top: 4px; color: var(--pub-muted); font: 400 13px/20px var(--pub-body); }
+.app-about-block .pub-team-grid { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+.app-page .pub-faq-list { margin-top: 0; }
+.app-about-block .pub-team-meta { margin-top: 12px; }
+.app-about-block .pub-team-grid { margin-top: 24px; }
+
+/* Landing: the number strip, feature cards and steps are interactive. */
+@media (prefers-reduced-motion: no-preference) {
+  .pub-stats > div, .pub-pick { opacity: 0; transform: translateY(28px); }
+  .pub-stats > div.in-view, .pub-pick.in-view { opacity: 1; transform: none; transition: opacity .6s ease, transform .6s cubic-bezier(.2, .8, .2, 1), background-color .2s ease, box-shadow .25s ease; transition-delay: calc(var(--i, 0) * 110ms), calc(var(--i, 0) * 110ms), 0s, 0s; }
+  .pub-stats > div.in-view:hover, .pub-pick.in-view:hover { transition-delay: 0s; }
+}
+.pub-stats > div { position: relative; cursor: default; }
+.pub-stats > div::after { content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 4px; background: var(--color-highlight); transform: scaleX(0); transform-origin: left; transition: transform .35s ease; }
+.pub-stats > div:hover::after { transform: scaleX(1); }
+.pub-stats > div:hover b { color: var(--color-accent); }
+.pub-stats b { transition: color .2s ease, transform .25s cubic-bezier(.3, 1.6, .5, 1); transform-origin: left; }
+.pub-stats > div:hover b { transform: scale(1.12); }
+
+.pub-pick { cursor: pointer; border-radius: 6px; transition: transform .25s cubic-bezier(.3, 1.6, .5, 1), background-color .2s ease, box-shadow .25s ease; }
+.pub-pick:focus-visible { outline: 3px solid var(--color-highlight); outline-offset: 4px; }
+.pub-feature-grid > .pub-pick { padding: 18px 16px 20px; border-top: 4px solid transparent; }
+.pub-steps > .pub-pick { padding: 16px 14px 18px; }
+.pub-pick:hover { transform: translateY(-6px); box-shadow: 0 14px 28px -14px rgba(0, 0, 0, .45); }
+.pub-feature-grid > .pub-pick:hover { background: rgba(255, 255, 255, .06); border-top-color: var(--color-highlight); }
+.pub-steps > .pub-pick:hover { background: color-mix(in oklch, var(--color-highlight) 14%, transparent); }
+.pub-pick:hover img { opacity: 1; }
+.pub-pick img { transition: opacity .2s ease, transform .3s cubic-bezier(.3, 1.6, .5, 1); }
+.pub-pick:hover img { transform: scale(1.2) rotate(-6deg); }
+/* Chosen: deep blue with a mustard top edge and a little jiggle. */
+.pub-pick[aria-pressed="true"] { background: oklch(.32 .14 260); border-top: 4px solid var(--color-highlight); color: #fff; animation: btn-jiggle .45s ease-out; }
+.pub-pick[aria-pressed="true"] :is(h3, b, span) { color: #fff; }
+.pub-pick[aria-pressed="true"] p { color: #dbe3ff; }
+.pub-pick[aria-pressed="true"] img { opacity: 1; filter: brightness(0) invert(1); }
+.pub-steps > .pub-pick[aria-pressed="true"] { border-top-color: var(--color-highlight); }
+@media (prefers-reduced-motion: reduce) { .pub-pick, .pub-pick:hover { transform: none; animation: none; } }
+
+/* A larger top bar and side rail (desktop). Phones keep the compact bottom tab bar. */
+.app-topbar { height: 64px; gap: 20px; padding: 0 28px; }
+#workspace-pages > [data-view] { scroll-margin-top: 64px; }
+.app-brand { gap: 12px; }
+.app-brand-mark { width: 46px; height: 46px; }
+.app-brand b { font-size: 17px; line-height: 17px; }
+.app-brand small { margin-top: 4px; font-size: 10px; line-height: 10px; }
+.app-topbar-rule { height: 40px; }
+.app-tagline { font-size: 11.5px; line-height: 17px; }
+.app-platforms { gap: 14px; padding-right: 14px !important; }
+.app-platforms li { gap: 6px; font-size: 12px; line-height: 18px; }
+.app-platforms li::before { width: 8px; height: 8px; }
+.app-icon-button { width: 44px; height: 44px; }
+.app-icon-button svg { width: 24px; height: 24px; }
+.app-bell-dot { top: 8px; left: 27px; }
+.app-account { padding-left: 14px; }
+.app-account-button { gap: 10px; }
+.app-avatar { width: 40px; height: 40px; font-size: 12px; }
+.app-account-button b { font-size: 15px; line-height: 18px; max-width: 200px; }
+.app-signin { min-height: 44px; padding: 0 22px; font-size: 15px; }
+.app-menu { width: 270px; }
+.app-menu :is(a, button) { min-height: 46px; font-size: 15px; }
+.app-menu-note { font-size: 13px; line-height: 19px; }
+@media (min-width: 40rem) {
+  .app-rail { top: 84px; width: 84px; gap: 20px; padding: 20px 12px; }
+  .app-rail a { width: 60px; gap: 8px; }
+  .app-rail-icon { width: 48px; height: 48px; }
+  .app-rail-icon::before { width: 22px; height: 22px; }
+  .app-rail a b { font-size: 11px; line-height: 11px; letter-spacing: .7px; }
+  .app-main { padding-left: 116px; }
+  .app-main > .pub-campus, .app-main > .pub-footer { margin: 0 -24px 0 -116px; }
+}
+@media (max-width: 39.99rem) {
+  .app-topbar { height: 56px; padding: 0 12px; gap: 8px; }
+  .app-brand-mark { width: 40px; height: 40px; }
+  .app-signin { min-height: 40px; padding: 0 14px; font-size: 14px; }
+  .app-icon-button { width: 40px; height: 40px; }
+  .app-rail a b { font-size: 10px; line-height: 10px; }
+}
+
+/* The "Report a problem" button and form. */
+.app-report { display: grid; flex: 0 0 auto; width: 44px; height: 44px; place-items: center; padding: 0; border: 0; border-radius: 12px; background: transparent; color: var(--pub-ink); cursor: pointer; }
+.app-report svg { width: 24px; height: 24px; }
+.app-report:hover { background: color-mix(in oklch, var(--color-highlight) 28%, transparent); }
+.pub-actions .app-report { margin-right: 4px; }
+@media (max-width: 39.99rem) { .app-report { width: 40px; height: 40px; } }
+.auth-field select, .auth-field textarea { width: 100%; padding: 10px 14px; border: 1px solid var(--pub-rule); border-radius: 8px; background: var(--pub-white); color: var(--pub-ink); font: 400 14px/21px var(--pub-body); }
+.auth-field select { height: 42px; padding: 0 10px; }
+.auth-field textarea { resize: vertical; min-height: 110px; }
+.auth-field :is(select, textarea):focus { outline: 2px solid var(--color-accent); outline-offset: 0; border-color: transparent; }
+.auth-field textarea[aria-invalid="true"] { border-color: #dc2626; }
+
+/* The first screen sits on the campus photo, with the logo on a frosted cream card so it stays readable. */
+.splash { background: linear-gradient(rgba(11, 31, 77, .18), rgba(11, 31, 77, .18)), url("/static/assets/splash-bg.jpg") center / cover no-repeat, #0b1f4d; }
+.splash-stack { position: relative; padding: clamp(1rem, 3vw, 2rem); gap: .8rem; animation: splash-up .9s cubic-bezier(.2, .7, .2, 1) .1s both; }
+.splash-swoosh { z-index: 0; }
+.splash-stack { z-index: 1; }
+@media (prefers-reduced-motion: reduce) { .splash-stack { animation: none !important; } }
+
+/* Texture for the landing page: the soft grey shapes, mirrored top to bottom so the repeat has no seam. A see-through
+   layer of the page colour sits on top, so the paper colour and the text contrast stay as they were. Sections with
+   their own picture or dark colour sit on top of it. */
+:root { --page-wash: rgba(240, 237, 230, .50); }
+html[data-theme="dark"] { --page-wash: rgba(20, 19, 17, .93); }
+.pub-landing {
+  background-color: var(--pub-paper);
+  background-image: linear-gradient(var(--page-wash), var(--page-wash)), url("/static/assets/page-texture.jpg");
+  background-size: auto, 100% auto;
+  background-repeat: no-repeat, repeat-y;
+}
+
+/* Smaller, and no white card: a soft light glow keeps the navy lettering clear over the photo. */
+.splash-mark { width: clamp(4.5rem, 12vw, 6.5rem); filter: drop-shadow(0 0 10px rgba(255, 255, 255, .9)) drop-shadow(0 0 22px rgba(255, 255, 255, .6)); }
+.splash-name { font-size: clamp(1.8rem, 5.5vw, 3.2rem); text-shadow: 0 0 10px rgba(255, 255, 255, .95), 0 0 24px rgba(255, 255, 255, .7), 0 0 2px #fff; }
+.splash-tag { font-size: clamp(.65rem, 1.8vw, .85rem); letter-spacing: .45em; color: #0b1f4d; text-shadow: 0 0 8px #fff, 0 0 18px rgba(255, 255, 255, .85); }
+.splash-tag i { width: clamp(1.5rem, 6vw, 3.5rem); height: 2px; box-shadow: 0 0 8px rgba(255, 255, 255, .95); }
+.splash-go { margin-top: .6rem; padding: .55rem 1.8rem; font-size: .85rem; box-shadow: 0 6px 18px -6px rgba(0, 0, 0, .55); }
+.splash-stack::before { content: ""; position: absolute; z-index: -1; inset: -34% -46%; pointer-events: none; background: radial-gradient(closest-side, rgba(255, 255, 255, .86) 0%, rgba(255, 255, 255, .62) 45%, rgba(255, 255, 255, 0) 100%); }
+.splash-tag { font-weight: 800; }

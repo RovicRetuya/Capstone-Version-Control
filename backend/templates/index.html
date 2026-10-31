@@ -13,6 +13,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=DM+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='assets/logo.png') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/tokens.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/figma.css') }}">
@@ -20,6 +21,28 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/public.css') }}">
   </head>
   <body data-active-view="landing">
+    <div id="splash" class="splash" role="dialog" aria-label="DeFaketive. A safer you." hidden>
+      <span class="splash-swoosh tl" aria-hidden="true"></span><span class="splash-swoosh br" aria-hidden="true"></span>
+      <div class="splash-stack">
+        <img class="splash-mark" src="{{ url_for('static', filename='assets/logo.png') }}" alt="">
+        <div class="splash-name" aria-hidden="true"><span>De</span><span class="f">F</span><span>aketive</span></div>
+        <div class="splash-tag"><i></i><span>A SAFER YOU</span><i></i></div>
+        <button type="button" class="splash-go" id="splash-go">Enter</button>
+      </div>
+    </div>
+    <script>
+      (function () {
+        var el = document.getElementById("splash"), done = false;
+        // Plays every time the landing page opens, not for a deep link straight into the workspace.
+        if (["", "#", "#landing"].indexOf(location.hash) < 0) return;
+        el.hidden = false;
+        function enter() { if (done) return; done = true; el.classList.add("leaving"); setTimeout(function () { el.remove(); }, 500); }
+        document.getElementById("splash-go").addEventListener("click", enter);
+        // It stays until the person chooses to go in: the Enter button, or the Enter key.
+        document.addEventListener("keydown", function (e) { if (e.key === "Enter") enter(); });
+        document.getElementById("splash-go").focus();
+      })();
+    </script>
     {%- macro eye_button() -%}
     <button class="auth-eye" type="button" data-toggle-password aria-pressed="false" aria-label="Show password"><span class="auth-eye-off" aria-hidden="true"><img class="auth-eye-a" src="{{ url_for('static', filename='assets/auth/eye-part-1.svg') }}" width="18.1889" height="13.5001" alt=""><img class="auth-eye-b" src="{{ url_for('static', filename='assets/auth/eye-part-2.svg') }}" width="17.5607" height="17.5607" alt=""></span><svg class="auth-eye-on" width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="#9CA3AF" stroke-width="1.5" aria-hidden="true"><path d="M.85 9S3.85 3 9.1 3s8.25 6 8.25 6-3 6-8.25 6S.85 9 .85 9Z"/><circle cx="9.1" cy="9" r="2.25"/></svg></button>
     {%- endmacro %}
@@ -36,7 +59,7 @@
               </div>
               <div class="pub-footer-links">
                 <nav aria-label="Product"><span class="pub-footer-label">Product</span><a href="#search-query" data-focus-search>Analyze Reviews</a><a href="#faq" data-scroll="faq">How Verdicts Work</a><a href="#platforms" data-scroll="platforms">Supported Platforms</a></nav>
-                <nav aria-label="About"><span class="pub-footer-label">About</span><a href="#about" data-scroll="about">About the Team</a><a href="#faq" data-scroll="faq">FAQ</a><a href="mailto:bmacalino_20ur2047@psu.edu.ph">Contact</a></nav>
+                <nav aria-label="About"><span class="pub-footer-label">About</span><a href="#about" data-scroll="about">About the Team</a><a href="#faq" data-scroll="faq">FAQ</a><a href="mailto:23ur0560@psu.edu.ph">Contact</a><a href="#report" data-report-open>Report a problem</a></nav>
               </div>
               <div>
                 <span class="pub-footer-label">Follow</span>
@@ -67,6 +90,7 @@
         <button class="nav-link pub-nav-mobile pub-signin" type="button" data-signin data-auth-guest>Sign In</button>
       </nav>
       <div class="pub-actions">
+        <button class="app-report" type="button" data-report-open title="Report a problem" aria-label="Report a problem"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 21V4m0 0h11l-2 4 2 4H5"/></svg></button>
         <button id="theme-toggle" class="pub-icon-button" type="button" aria-pressed="false" aria-label="Switch to dark theme" title="Switch to dark theme">
           <svg class="theme-moon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.8 13A9 9 0 0 1 11 3.2 9 9 0 1 0 20.8 13Z"/></svg>
           <svg class="theme-sun" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M5 19l1.5-1.5m11-11L19 5"/></svg>
@@ -255,6 +279,7 @@
             <li style="--pub-dot: var(--pub-lazada)">Lazada</li>
             <li style="--pub-dot: var(--pub-temu)">Temu PH</li>
           </ul>
+          <button class="app-report" type="button" data-report-open title="Report a problem" aria-label="Report a problem"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 21V4m0 0h11l-2 4 2 4H5"/></svg></button>
           <button id="workspace-theme-toggle" class="app-icon-button" type="button" aria-pressed="false" aria-label="Switch to dark theme">
             <svg class="theme-moon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.8 13A9 9 0 0 1 11 3.2 9 9 0 1 0 20.8 13Z"/></svg>
             <svg class="theme-sun" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M5 19l1.5-1.5m11-11L19 5"/></svg>
@@ -275,8 +300,8 @@
           <a href="#home" data-route="home"><span class="app-rail-icon" style="--icon: url('{{ url_for('static', filename='assets/app/nav-home.svg') }}')" aria-hidden="true"></span><b>Home</b></a>
           <a href="#history" data-route="history"><span class="app-rail-icon" style="--icon: url('{{ url_for('static', filename='assets/app/nav-history.svg') }}')" aria-hidden="true"></span><b>History</b></a>
           <a href="#wishlist" data-route="wishlist"><span class="app-rail-icon" style="--icon: url('{{ url_for('static', filename='assets/app/nav-wishlist.svg') }}')" aria-hidden="true"></span><b>Wishlist</b></a>
-          <a href="#about" data-scroll="about"><span class="app-rail-icon" style="--icon: url('{{ url_for('static', filename='assets/app/nav-about.svg') }}')" aria-hidden="true"></span><b>About</b></a>
-          <a href="#faq" data-scroll="faq"><span class="app-rail-icon" style="--icon: url('{{ url_for('static', filename='assets/app/nav-faq.svg') }}')" aria-hidden="true"></span><b>FAQ</b></a>
+          <a href="#about-app" data-route="about-app"><span class="app-rail-icon" style="--icon: url('{{ url_for('static', filename='assets/app/nav-about.svg') }}')" aria-hidden="true"></span><b>About</b></a>
+          <a href="#faq-app" data-route="faq-app"><span class="app-rail-icon" style="--icon: url('{{ url_for('static', filename='assets/app/nav-faq.svg') }}')" aria-hidden="true"></span><b>FAQ</b></a>
           <a href="#settings" data-route="settings"><span class="app-rail-icon" style="--icon: url('{{ url_for('static', filename='assets/app/nav-settings.svg') }}')" aria-hidden="true"></span><b>Settings</b></a>
         </nav>
         <div class="app-main">
@@ -463,6 +488,49 @@
         </div>
       </section>
 
+      <section id="about-app" class="view workspace-content app-page" data-view="about-app" hidden aria-labelledby="about-app-title">
+        <header class="app-page-head"><h1 id="about-app-title" tabindex="-1">About DeFaketive</h1><p>A safer way to read what shoppers say before you buy.</p></header>
+        <section class="app-card app-box app-about-block" aria-labelledby="about-what-title">
+          <h2 id="about-what-title" class="app-eyebrow quiet">What it does</h2>
+          <p>DeFaketive reads customer reviews from Shopee, Lazada and Temu PH (in English, Filipino or Taglish) and shows what buyers report about fakes, defects and safety problems, quoting their own words.</p>
+          <p>Its warnings summarize what reviewers wrote. They are not proof that a product is fake, defective or unsafe, so decide for yourself before buying.</p>
+        </section>
+        <section class="app-card app-box app-about-block" aria-labelledby="about-how-title">
+          <h2 id="about-how-title" class="app-eyebrow quiet">How it works</h2>
+          <ol class="app-about-steps">
+            <li><b>Paste a link</b><span>Copy a product link from Shopee, Lazada or Temu PH.</span></li>
+            <li><b>We read the reviews</b><span>Safety, fake and defect reports are checked separately.</span></li>
+            <li><b>You see the evidence</b><span>A warning appears only when enough reviewers report the same problem, with their words highlighted.</span></li>
+            <li><b>You decide</b><span>Compare similar products with no warning signs before you buy.</span></li>
+          </ol>
+        </section>
+        <section class="app-card app-box app-about-block pub-team" aria-labelledby="about-team-title">
+          <h2 id="about-team-title" class="app-eyebrow quiet">The team</h2>
+          <p class="pub-team-meta">Pangasinan State University – Urdaneta City Campus · BS Information Technology · May 2026</p>
+          <ul class="pub-team-grid">
+                <li><span class="pub-avatar" style="--pub-avatar:#3b82f6" aria-hidden="true">KD</span><b>Kathleen D. De Guzman, MIT</b><small>Faculty Adviser</small></li>
+                <li><span class="pub-avatar" style="--pub-avatar:#6366f1" aria-hidden="true">MC</span><b>Mark Rhean E. Caballero</b><small>Capstone Leader</small></li>
+                <li><span class="pub-avatar" style="--pub-avatar:#f59e0b" aria-hidden="true">RR</span><b>Ryan Rovic Retuya</b><small>UI / UX</small></li>
+                <li><span class="pub-avatar" style="--pub-avatar:#10b981" aria-hidden="true">PG</span><b>Princethom A. Guyo</b><small>Quality Assurance</small></li>
+                <li><span class="pub-avatar" style="--pub-avatar:#8b5cf6" aria-hidden="true">BM</span><b>Brian P. Macalino</b><small>Programmer</small></li>
+              </ul>
+        </section>
+      </section>
+
+      <section id="faq-app" class="view workspace-content app-page" data-view="faq-app" hidden aria-labelledby="faq-app-title">
+        <header class="app-page-head"><h1 id="faq-app-title" tabindex="-1">Common questions</h1><p>Quick answers about how DeFaketive works.</p></header>
+        <section class="app-card app-box pub-faq" aria-label="Frequently asked questions">
+          <div class="pub-faq-list">
+                <details><summary>Is DeFaketive free to use?</summary><p>Yes. Guests get 3 new scans a day, and a free account gives unlimited scans.</p></details>
+                <details><summary>How does DeFaketive decide on a warning?</summary><p>It checks reviews for safety, fake and defect reports separately. A warning appears when enough reviewers report the same problem, and a single safety report is always shown. Every warning quotes the reviews behind it.</p></details>
+                <details><summary>Which platforms are supported?</summary><p>Product links from Shopee PH, Lazada PH and Temu PH.</p></details>
+                <details><summary>Can it detect Taglish reviews?</summary><p>Yes. The sentiment model was trained on Filipino and English reviews, and the warning word lists include Taglish terms like <i>peke</i>, <i>sira</i> and <i>umusok</i>.</p></details>
+                <details><summary>What happens if reviewers report a problem?</summary><p>You'll see a warning with the reviewers' own words highlighted. Read them, then compare similar products with no warning signs before you buy.</p></details>
+                <details><summary>How accurate is the check?</summary><p>It is not perfect. In our tests against reviews checked by people, it missed about one in five real safety reports, and about half of what it flagged was harmless. That is why every report quotes the reviews themselves. Use it as decision support, not proof.</p></details>
+          </div>
+        </section>
+      </section>
+
       <section id="results" class="view app-view" data-view="results" hidden>
         <div class="view-heading"><div><p class="app-kicker">// Products</p><h2>Analyzed products</h2><p>Browse completed review analyses. Products with the fewest reported problems appear first.</p></div></div>
         <div class="filters" aria-label="Filter analyzed products"><label>Marketplace <select id="filter-platform"><option value="all">All marketplaces</option><option value="Shopee PH">Shopee PH</option><option value="Lazada PH">Lazada PH</option><option value="Temu PH">Temu PH</option></select></label><label>Show <select id="filter-risk"><option value="all">All reports</option><option value="attention">Reviewers reported problems</option><option value="safety">Safety reports</option><option value="clear">No warning signs</option><option value="unknown">Not enough reviews</option></select></label><label>Sort by <select id="filter-sort"><option value="fewest">Fewest reported problems</option><option value="most">Most reported problems</option><option value="reviews">Most reviews analyzed</option></select></label></div>
@@ -529,6 +597,32 @@
       </div>
     </dialog>
 
+    <dialog id="report-dialog" class="auth-dialog" aria-labelledby="report-title">
+      <div class="auth-dialog-card">
+        <div class="auth-dialog-body">
+          <button class="auth-close" type="button" data-dialog-close aria-label="Close report a problem"><img src="{{ url_for('static', filename='assets/auth/close.svg') }}" width="9.17851" height="9.17851" alt=""></button>
+          <p class="auth-dialog-brand"><span class="auth-mark small" aria-hidden="true"></span><b>DeFaketive</b></p>
+          <h2 id="report-title">Report a problem</h2>
+          <p class="auth-sub">Something wrong? Tell us and we'll look into it.</p>
+          <form class="auth-form" id="report-form" novalidate>
+            <div class="auth-field"><label for="report-category">What kind of problem?</label>
+              <select id="report-category" name="category">
+                <option value="wrong-result">A result looks wrong</option>
+                <option value="scan-problem">A scan failed or got stuck</option>
+                <option value="display-bug">Something looks or works broken</option>
+                <option value="account">Sign in or account</option>
+                <option value="other">Something else</option>
+              </select></div>
+            <div class="auth-field"><label for="report-message">What happened?</label><textarea id="report-message" name="message" rows="5" maxlength="2000" placeholder="Tell us what you did and what you expected." required></textarea></div>
+            <p class="auth-error" data-report-error hidden></p>
+            <div class="auth-field"><label for="report-email">Email (optional, so we can reply)</label><input id="report-email" name="email" type="email" autocomplete="email" maxlength="200" placeholder="you@example.com"></div>
+            <p class="auth-form-error" id="report-form-error" role="alert" hidden></p>
+            <button class="auth-submit" type="submit">Send report</button>
+          </form>
+        </div>
+      </div>
+    </dialog>
+
     <dialog id="terms-dialog" class="auth-dialog auth-terms" aria-labelledby="terms-title">
       <div class="auth-dialog-card">
         <div class="auth-dialog-body">
@@ -544,7 +638,7 @@
             <h3 id="privacy-policy-title">Privacy Policy</h3>
             <p>With an account, we keep your name, your email and a scrambled copy of your password. Your password itself is never stored. We also keep your scan history and wishlist so they follow you to any browser.</p>
             <p>For guests, we count scans per day using a browser cookie.</p>
-            <p>We don't sell or share any of this. To delete your account, use Settings → Delete account, or email the team at <a href="mailto:bmacalino_20ur2047@psu.edu.ph">bmacalino_20ur2047@psu.edu.ph</a>.</p>
+            <p>We don't sell or share any of this. To delete your account, use Settings → Delete account, or email the team at <a href="mailto:23ur0560@psu.edu.ph">23ur0560@psu.edu.ph</a>.</p>
           </section>
           <button class="auth-submit" type="button" data-dialog-close>Close</button>
         </div>

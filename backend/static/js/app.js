@@ -190,8 +190,8 @@ function focusProductSearch() {
   });
 }
 
-const WORKSPACE_ROUTES = ["home", "analyze", "history", "wishlist", "settings", "results", "analysis"];
-const ROUTE_LABELS = {home: "Home", analyze: "Analyze product", history: "Scan History", wishlist: "Wishlist", settings: "Settings", results: "Search results", analysis: "Product report"};
+const WORKSPACE_ROUTES = ["home", "analyze", "history", "wishlist", "about-app", "faq-app", "settings", "results", "analysis"];
+const ROUTE_LABELS = {home: "Home", analyze: "Analyze product", history: "Scan History", wishlist: "Wishlist", "about-app": "About", "faq-app": "FAQ", settings: "Settings", results: "Search results", analysis: "Product report"};
 function go(view, replace = false, preserveUrl = false) {
   const previousView = currentView();
   if (view === "dashboard") view = "home";
@@ -1477,3 +1477,93 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
   } catch (_) { /* Storage may be disabled; the rest of the workspace remains usable. */ }
 });
+
+// --- Landing: the number strip, the feature cards and the four steps respond to the pointer and the keyboard ---
+(function () {
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const groups = [".pub-feature-grid > article", ".pub-steps > li"];
+  groups.forEach(selector => {
+    const items = [...document.querySelectorAll(selector)];
+    items.forEach((item, index) => {
+      item.classList.add("pub-pick");
+      item.style.setProperty("--i", index);
+      item.tabIndex = 0;
+      item.setAttribute("role", "button");
+      item.setAttribute("aria-pressed", "false");
+      const choose = () => {
+        const on = item.getAttribute("aria-pressed") !== "true";
+        items.forEach(other => other.setAttribute("aria-pressed", "false"));
+        item.setAttribute("aria-pressed", String(on));
+      };
+      item.addEventListener("click", choose);
+      item.addEventListener("keydown", event => {
+        if (event.key === "Enter" || event.key === " ") { event.preventDefault(); choose(); }
+      });
+    });
+  });
+  const stats = [...document.querySelectorAll(".pub-stats > div")];
+  stats.forEach((box, index) => box.style.setProperty("--i", index));
+  const count = el => {
+    const match = el.textContent.match(/^(\d+)(.*)$/);
+    if (!match || reduce) return;
+    const target = Number(match[1]), suffix = match[2], started = performance.now();
+    const step = now => {
+      const t = Math.min(1, (now - started) / 1100);
+      el.textContent = Math.round(target * (1 - Math.pow(1 - t, 3))) + suffix;
+      if (t < 1) requestAnimationFrame(step);
+    };
+    el.textContent = "0" + suffix;
+    requestAnimationFrame(step);
+  };
+  const targets = [...stats, ...document.querySelectorAll(".pub-pick")];
+  if (!("IntersectionObserver" in window) || reduce) { targets.forEach(node => node.classList.add("in-view")); return; }
+  const seen = new IntersectionObserver(entries => entries.forEach(entry => {
+    if (!entry.isIntersecting) return;
+    entry.target.classList.add("in-view");
+    const number = entry.target.querySelector(".pub-stats b, b");
+    if (entry.target.closest(".pub-stats") && number) count(number);
+    seen.unobserve(entry.target);
+  }), {threshold: 0.25});
+  targets.forEach(node => seen.observe(node));
+})();
+
+// --- Report a problem ---------------------------------------------------------------------------------------------
+(function () {
+  const dialog = $("#report-dialog"), form = $("#report-form");
+  if (!dialog || !form) return;
+  const message = $("#report-message"), email = $("#report-email"), mistake = $("#report-form-error"), hint = form.querySelector("[data-report-error]");
+  const show = (node, text) => { node.textContent = text || ""; node.hidden = !text; };
+  document.querySelectorAll("[data-report-open]").forEach(button => button.addEventListener("click", event => {
+    event.preventDefault();
+    closeDialogs();
+    show(hint, ""); show(mistake, "");
+    if (state.user && !email.value) email.value = state.user.email || "";
+    dialog.showModal();
+    message.focus();
+  }));
+  message.addEventListener("input", () => { message.removeAttribute("aria-invalid"); show(hint, ""); });
+  form.addEventListener("submit", async event => {
+    event.preventDefault();
+    show(hint, ""); show(mistake, "");
+    if (message.value.trim().length < 10) {
+      message.setAttribute("aria-invalid", "true");
+      return show(hint, "Please tell us a little more (at least 10 characters).");
+    }
+    message.removeAttribute("aria-invalid");
+    const submit = form.querySelector(".auth-submit");
+    submit.disabled = true;
+    try {
+      await api("/api/problem-report", jsonRequest("POST", {
+        category: form.elements.category.value, message: message.value, email: email.value,
+        page: window.location.hash.slice(1).split("?")[0] || "landing",
+      }));
+      dialog.close();
+      form.reset();
+      toast("Thanks. Your report was sent.", "success");
+    } catch (error) {
+      show(mistake, error.message || "The report could not be sent. Please try again.");
+    } finally {
+      submit.disabled = false;
+    }
+  });
+})();

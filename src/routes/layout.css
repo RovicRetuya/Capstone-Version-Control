@@ -193,17 +193,17 @@
 @keyframes hero-up {
 	from {
 		opacity: 0;
-		transform: translateY(18px);
+		transform: translateY(40px) scale(0.97);
 	}
 }
 .hero-in > * {
-	animation: hero-up 0.7s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+	animation: hero-up 0.9s cubic-bezier(0.2, 0.7, 0.2, 1) both;
 }
-.hero-in > :nth-child(2) { animation-delay: 0.08s; }
-.hero-in > :nth-child(3) { animation-delay: 0.16s; }
-.hero-in > :nth-child(4) { animation-delay: 0.24s; }
+.hero-in > :nth-child(2) { animation-delay: 0.2s; }
+.hero-in > :nth-child(3) { animation-delay: 0.4s; }
+.hero-in > :nth-child(4) { animation-delay: 0.6s; }
 .hero-card {
-	animation: hero-up 0.8s cubic-bezier(0.2, 0.7, 0.2, 1) 0.3s both;
+	animation: hero-up 1s cubic-bezier(0.2, 0.7, 0.2, 1) 0.7s both;
 }
 
 /* Landing sections fade up as they scroll into view (browsers without scroll timelines just show them). */
@@ -211,8 +211,17 @@
 	[data-reveal] {
 		animation: hero-up linear both;
 		animation-timeline: view();
-		animation-range: entry 0% entry 35%;
+		animation-range: entry 0% entry 45%;
 	}
+	/* Inside a section, its direct children (heading, cards, steps) arrive one after another. */
+	[data-reveal] > * > * {
+		animation: hero-up linear both;
+		animation-timeline: view();
+	}
+	[data-reveal] > * > :nth-child(1) { animation-range: entry 0% entry 40%; }
+	[data-reveal] > * > :nth-child(2) { animation-range: entry 10% entry 50%; }
+	[data-reveal] > * > :nth-child(3) { animation-range: entry 20% entry 60%; }
+	[data-reveal] > * > :nth-child(n + 4) { animation-range: entry 30% entry 70%; }
 }
 
 /* Cards and buttons respond to the pointer: a small lift, a mustard edge, a press. */
@@ -224,16 +233,37 @@
 	box-shadow: 0 10px 24px -10px color-mix(in oklch, var(--brand) 45%, transparent), inset 0 2px 0 var(--highlight);
 }
 [data-slot='button'] {
-	transition: transform 0.15s ease, box-shadow 0.2s ease, background-color 0.2s ease, color 0.2s ease;
+	transition: transform 0.25s cubic-bezier(0.3, 1.6, 0.5, 1), box-shadow 0.2s ease, background-color 0.2s ease, color 0.2s ease;
 }
 [data-slot='button']:not(:disabled):hover {
-	transform: translateY(-1px);
+	transform: translateY(-3px) scale(1.05);
+	box-shadow: 0 10px 20px -8px color-mix(in oklch, var(--brand) 55%, transparent);
 }
 [data-slot='button']:not(:disabled):active {
 	transform: translateY(1px) scale(0.98);
 }
 [data-slot='button'][data-variant='default']:not(:disabled):hover {
 	box-shadow: 0 6px 16px -6px color-mix(in oklch, var(--brand) 70%, transparent), 0 0 0 2px color-mix(in oklch, var(--highlight) 70%, transparent);
+}
+
+/* A selected button (pressed, or switched on) turns deep blue and gives a little jiggle. */
+@keyframes jiggle {
+	0% { transform: rotate(0) scale(0.97); }
+	25% { transform: rotate(-3deg) scale(1.03); }
+	50% { transform: rotate(2.5deg) scale(1.03); }
+	75% { transform: rotate(-1.5deg) scale(1.01); }
+	100% { transform: rotate(0) scale(1); }
+}
+[data-slot='button']:not(:disabled):active,
+[data-slot='button'][aria-pressed='true'],
+[data-slot='button'][data-state='on'],
+[data-slot='button'][aria-selected='true'],
+[data-slot='toggle'][data-state='on'],
+[data-slot='tabs-trigger'][data-state='active'] {
+	background-color: oklch(0.32 0.14 260) !important;
+	color: white !important;
+	border-color: oklch(0.32 0.14 260) !important;
+	animation: jiggle 0.45s ease-out;
 }
 
 /* Menu items slide a little and the mustard marker grows in. */
@@ -277,7 +307,14 @@ header.sticky::after {
 @media (prefers-reduced-motion: reduce) {
 	.hero-in > *,
 	.hero-card,
+	[data-slot='button']:not(:disabled):active,
+	[data-slot='button'][aria-pressed='true'],
+	[data-slot='button'][data-state='on'],
+	[data-slot='button'][aria-selected='true'],
+	[data-slot='toggle'][data-state='on'],
+	[data-slot='tabs-trigger'][data-state='active'],
 	[data-reveal],
+	[data-reveal] > * > *,
 	header.sticky::after,
 	a:hover > svg > .text-highlight {
 		animation: none;
@@ -296,7 +333,7 @@ header.sticky::after {
 @keyframes rise {
 	from {
 		opacity: 0;
-		transform: translateY(8px);
+		transform: translateY(28px) scale(0.96);
 	}
 	to {
 		opacity: 1;
@@ -304,8 +341,8 @@ header.sticky::after {
 	}
 }
 .reveal {
-	animation: rise 0.35s ease-out both;
-	animation-delay: calc(min(var(--i, 0), 8) * 40ms);
+	animation: rise 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+	animation-delay: calc(min(var(--i, 0), 12) * 90ms);
 }
 @media (prefers-reduced-motion: reduce) {
 	.reveal {
@@ -479,7 +516,7 @@ header.sticky::after {
 	content: '';
 	position: absolute;
 	inset: 0;
-	background: linear-gradient(90deg, transparent, color-mix(in oklch, var(--background) 55%, transparent), transparent);
+	background: linear-gradient(90deg, transparent, color-mix(in oklch, var(--background) 62%, transparent), transparent);
 	animation: photo-sweep 1.6s ease-in-out infinite;
 }
 @media (prefers-reduced-motion: reduce) {
@@ -581,4 +618,28 @@ header.sticky::after {
 		opacity: 1 !important;
 		transform: none !important;
 	}
+}
+
+/* Boxes get a mustard top edge, and a deep blue edge on hover, so they stand out from the page. */
+[data-slot='card'] {
+	border-top: 3px solid var(--highlight);
+	transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.25s ease;
+}
+[data-slot='card']:hover {
+	border-color: oklch(0.32 0.14 260);
+	border-top-color: var(--highlight);
+	box-shadow: 0 8px 22px -10px oklch(0.32 0.14 260 / 0.55);
+}
+
+/* Texture for the landing page: the soft grey shapes, mirrored top to bottom so the repeat has no seam. A see-through
+   layer of the page colour sits on top, so the colours and the text contrast stay as they were. */
+.tex-page {
+	--tex-wash: color-mix(in oklch, var(--background) 62%, transparent);
+	background-color: var(--background);
+	background-image: linear-gradient(var(--tex-wash), var(--tex-wash)), var(--tex);
+	background-size: auto, 100% auto;
+	background-repeat: no-repeat, repeat-y;
+}
+.dark .tex-page {
+	--tex-wash: color-mix(in oklch, var(--background) 93%, transparent);
 }

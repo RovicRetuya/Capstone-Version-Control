@@ -7,6 +7,7 @@
 	import GlobeIcon from '@lucide/svelte/icons/globe';
 	import LanguagesIcon from '@lucide/svelte/icons/languages';
 	import { onMount } from 'svelte';
+	import texture from '#lib/assets/page-texture.jpg';
 	import CountUp from '#lib/components/app/count-up.svelte';
 	import FaqList from '#lib/components/app/faq-list.svelte';
 	import ScanStartForm from '#lib/components/app/scan-start-form.svelte';
@@ -42,7 +43,7 @@
 
 <SiteHeader />
 
-<main class="page-view">
+<main class="page-view tex-page" style:--tex="url({texture})">
 	<section class="mx-auto grid w-full max-w-6xl gap-10 px-4 py-16 md:px-6 md:py-24 lg:grid-cols-[1.1fr_0.9fr] lg:items-center" aria-labelledby="landing-title">
 		<div class="hero-in space-y-6">
 			<p class="text-muted-foreground text-sm font-medium">Real reviews · Real buyers · Their own words</p>

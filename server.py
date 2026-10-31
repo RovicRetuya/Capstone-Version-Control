@@ -64,6 +64,7 @@ from flask import Blueprint, jsonify, request  # noqa: E402
 
 import admin_api  # noqa: E402  (beside this file)
 import extension_api  # noqa: E402  (beside this file)
+import problem_reports  # noqa: E402  (beside this file)
 import protections  # noqa: E402  (beside this file)
 from saved_pool import SavedPool  # noqa: E402  (beside this file)
 
@@ -207,6 +208,8 @@ extension_api.saved_report = _saved_report
 # The admin app's accounts and daily limits, open only to admin accounts (admin_api.py, scripts/admin_accounts.py).
 # After protections.install, so the limits an admin saved replace the environment's.
 admin_api.install(webapp)
+# The "Report a problem" form (problem_reports.py).
+problem_reports.install(webapp)
 
 if __name__ == "__main__":
     # Flask's debug mode shows a developer's error page in the browser. That is for changing the code (dev.cmd

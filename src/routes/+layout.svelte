@@ -9,6 +9,7 @@
 	import AuthDialog from '#lib/components/app/auth-dialog.svelte';
 	import OfflineBanner from '#lib/components/app/offline-banner.svelte';
 	import TermsDialog from '#lib/components/app/terms-dialog.svelte';
+	import Splash from '#lib/components/app/splash.svelte';
 	import WelcomeTour from '#lib/components/app/welcome-tour.svelte';
 	import { Toaster } from '#lib/components/ui/sonner/index.js';
 	import { auth } from '#lib/stores/auth.svelte.js';
@@ -75,6 +76,7 @@
 <ModeWatcher />
 <Toaster position="bottom-right" />
 
+<Splash />
 <OfflineBanner />
 {@render children()}
 
