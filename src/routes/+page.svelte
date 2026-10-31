@@ -44,7 +44,7 @@
 
 <main class="page-view">
 	<section class="mx-auto grid w-full max-w-6xl gap-10 px-4 py-16 md:px-6 md:py-24 lg:grid-cols-[1.1fr_0.9fr] lg:items-center" aria-labelledby="landing-title">
-		<div class="space-y-6">
+		<div class="hero-in space-y-6">
 			<p class="text-muted-foreground text-sm font-medium">Real reviews · Real buyers · Their own words</p>
 			<h1 id="landing-title" class="text-4xl font-semibold tracking-tight text-balance md:text-6xl">See what buyers report before you buy</h1>
 			<p class="text-muted-foreground max-w-xl text-lg">
@@ -58,7 +58,7 @@
 				<Button size="lg" variant="ghost" href="#how"><ArrowDownIcon /> How it works</Button>
 			</div>
 		</div>
-		<Card class="p-6">
+		<Card class="hero-card p-6">
 			<div class="flex items-center justify-between">
 				<h2 class="text-sm font-semibold tracking-wide uppercase">Check a product</h2>
 			</div>
@@ -79,11 +79,11 @@
 		</dl>
 	</section>
 
-	<section class="mx-auto w-full max-w-6xl space-y-8 px-4 py-16 md:px-6" aria-labelledby="features-title">
+	<section data-reveal class="mx-auto w-full max-w-6xl space-y-8 px-4 py-16 md:px-6" aria-labelledby="features-title">
 		<h2 id="features-title" class="text-3xl font-semibold tracking-tight">Built for a safer tomorrow</h2>
 		<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
 			{#each features as feature (feature.title)}
-				<Card class="gap-3 p-5">
+				<Card class="lift gap-3 p-5">
 					<feature.icon class="size-6" aria-hidden="true" />
 					<h3 class="font-semibold">{feature.title}</h3>
 					<p class="text-muted-foreground text-sm">{feature.text}</p>
@@ -92,7 +92,7 @@
 		</div>
 	</section>
 
-	<section id="how" class="bg-muted/40 border-y" aria-labelledby="how-title">
+	<section data-reveal id="how" class="bg-muted/40 border-y" aria-labelledby="how-title">
 		<div class="mx-auto w-full max-w-6xl space-y-8 px-4 py-16 md:px-6">
 			<div class="space-y-1">
 				<h2 id="how-title" class="text-3xl font-semibold tracking-tight">How it works</h2>
@@ -101,7 +101,7 @@
 			<ol class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
 				{#each steps as [title, text], index (title)}
 					<li>
-						<Card class="h-full gap-2 p-5">
+						<Card class="lift h-full gap-2 p-5">
 							<span class="text-muted-foreground text-sm font-medium">0{index + 1}</span>
 							<h3 class="font-semibold">{title}</h3>
 							<p class="text-muted-foreground text-sm">{text}</p>
@@ -112,7 +112,7 @@
 		</div>
 	</section>
 
-	<section class="mx-auto w-full max-w-6xl px-4 py-16 md:px-6" aria-labelledby="extension-title">
+	<section data-reveal class="mx-auto w-full max-w-6xl px-4 py-16 md:px-6" aria-labelledby="extension-title">
 		<Card class="grid gap-6 p-6 md:grid-cols-[1fr_auto] md:items-center md:p-8">
 			<div class="space-y-2">
 				<p class="text-muted-foreground flex items-center gap-2 text-sm font-medium"><PuzzleIcon class="size-4" aria-hidden="true" /> For Chrome and Edge on a computer</p>
@@ -126,7 +126,7 @@
 		</Card>
 	</section>
 
-	<section id="faq" class="mx-auto w-full max-w-3xl space-y-6 px-4 py-16 md:px-6" aria-labelledby="faq-title">
+	<section data-reveal id="faq" class="mx-auto w-full max-w-3xl space-y-6 px-4 py-16 md:px-6" aria-labelledby="faq-title">
 		<h2 id="faq-title" class="text-3xl font-semibold tracking-tight">Common questions</h2>
 		<FaqList value="q4" />
 	</section>

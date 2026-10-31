@@ -183,11 +183,113 @@
 [data-slot='sidebar-inner'] .text-muted-foreground {
 	color: oklch(0.82 0.03 260);
 }
-header.sticky {
-	border-bottom: 2px solid var(--highlight);
-}
 ::selection {
 	background: color-mix(in oklch, var(--highlight) 45%, transparent);
+}
+
+/* ---- Presentation polish. All of it is switched off for people who ask for less motion. ---- */
+
+/* The landing hero: text, then the check card, slide up one after the other. */
+@keyframes hero-up {
+	from {
+		opacity: 0;
+		transform: translateY(18px);
+	}
+}
+.hero-in > * {
+	animation: hero-up 0.7s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+.hero-in > :nth-child(2) { animation-delay: 0.08s; }
+.hero-in > :nth-child(3) { animation-delay: 0.16s; }
+.hero-in > :nth-child(4) { animation-delay: 0.24s; }
+.hero-card {
+	animation: hero-up 0.8s cubic-bezier(0.2, 0.7, 0.2, 1) 0.3s both;
+}
+
+/* Landing sections fade up as they scroll into view (browsers without scroll timelines just show them). */
+@supports (animation-timeline: view()) {
+	[data-reveal] {
+		animation: hero-up linear both;
+		animation-timeline: view();
+		animation-range: entry 0% entry 35%;
+	}
+}
+
+/* Cards and buttons respond to the pointer: a small lift, a mustard edge, a press. */
+.lift {
+	transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.lift:hover {
+	transform: translateY(-4px);
+	box-shadow: 0 10px 24px -10px color-mix(in oklch, var(--brand) 45%, transparent), inset 0 2px 0 var(--highlight);
+}
+[data-slot='button'] {
+	transition: transform 0.15s ease, box-shadow 0.2s ease, background-color 0.2s ease, color 0.2s ease;
+}
+[data-slot='button']:not(:disabled):hover {
+	transform: translateY(-1px);
+}
+[data-slot='button']:not(:disabled):active {
+	transform: translateY(1px) scale(0.98);
+}
+[data-slot='button'][data-variant='default']:not(:disabled):hover {
+	box-shadow: 0 6px 16px -6px color-mix(in oklch, var(--brand) 70%, transparent), 0 0 0 2px color-mix(in oklch, var(--highlight) 70%, transparent);
+}
+
+/* Menu items slide a little and the mustard marker grows in. */
+[data-sidebar='menu-button'] {
+	transition: padding-left 0.2s ease, background-color 0.2s ease, box-shadow 0.25s ease;
+}
+[data-sidebar='menu-button']:hover {
+	padding-left: 0.75rem;
+}
+
+/* The logo's mustard check draws a small tick-wiggle on hover. */
+@keyframes tick {
+	50% {
+		transform: rotate(-8deg) scale(1.12);
+	}
+}
+a:hover > svg > .text-highlight {
+	transform-origin: 160px 150px;
+	animation: tick 0.5s ease;
+}
+
+/* A mustard line sweeps under the top bar once when a page opens. */
+@keyframes line-sweep {
+	from {
+		transform: scaleX(0);
+	}
+}
+header.sticky {
+	position: sticky;
+}
+header.sticky::after {
+	content: '';
+	position: absolute;
+	inset: auto 0 -2px 0;
+	height: 2px;
+	background: var(--highlight);
+	transform-origin: left;
+	animation: line-sweep 0.9s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.hero-in > *,
+	.hero-card,
+	[data-reveal],
+	header.sticky::after,
+	a:hover > svg > .text-highlight {
+		animation: none;
+	}
+	.lift,
+	.lift:hover,
+	[data-slot='button']:not(:disabled):hover,
+	[data-slot='button']:not(:disabled):active,
+	[data-sidebar='menu-button']:hover {
+		transform: none;
+		padding-left: 0.5rem;
+	}
 }
 
 /* Cards rise into place, a little later each. Switched off for people who ask for less motion. */
