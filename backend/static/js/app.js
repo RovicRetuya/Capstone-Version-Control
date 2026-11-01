@@ -164,8 +164,11 @@ function setActiveNavigation(view, section = "") {
   }
 }
 
+// Home, History, Wishlist, About and FAQ are one long page: all five are shown together and the menu scrolls between
+// them. Settings, the product report and the rest are still pages of their own.
+const ONE_PAGE = ["home", "history", "wishlist", "about-app", "faq-app"];
 function currentView() {
-  return document.querySelector("[data-view]:not([hidden])")?.dataset.view || "landing";
+  return document.body.dataset.activeView || "landing";
 }
 
 function updateHeaderState() {
@@ -190,6 +193,7 @@ function focusProductSearch() {
   });
 }
 
+let pageSpyLockedUntil = 0;
 const WORKSPACE_ROUTES = ["home", "analyze", "history", "wishlist", "about-app", "faq-app", "settings", "results", "analysis"];
 const ROUTE_LABELS = {home: "Home", analyze: "Analyze product", history: "Scan History", wishlist: "Wishlist", "about-app": "About", "faq-app": "FAQ", settings: "Settings", results: "Search results", analysis: "Product report"};
 function go(view, replace = false, preserveUrl = false) {
@@ -199,10 +203,11 @@ function go(view, replace = false, preserveUrl = false) {
   if (view === "login" && state.user) view = "home";
   if (view !== "landing" && view !== "login" && !WORKSPACE_ROUTES.includes(view)) view = "home";
   document.body.dataset.activeView = view;
+  const onePage = ONE_PAGE.includes(view);
   document.querySelectorAll("[data-view]").forEach(node => {
-    const visible = node.dataset.view === view;
+    const visible = onePage ? ONE_PAGE.includes(node.dataset.view) : node.dataset.view === view;
     node.hidden = !visible;
-    node.classList.toggle("active", visible);
+    node.classList.toggle("active", node.dataset.view === view);
   });
   $("#workspace-shell").hidden = view === "landing" || view === "login";
   let hash = view;
@@ -213,7 +218,7 @@ function go(view, replace = false, preserveUrl = false) {
     window.history[replace ? "replaceState" : "pushState"](null, "", "#" + hash);
   }
   const activeRoute = view === "analysis" ? state.reportFrom : view === "results" ? "analyze" : view;
-  document.querySelectorAll(".app-rail [data-route]").forEach(link => {
+  document.querySelectorAll(".app-rail [data-route], .app-settings-link").forEach(link => {
     const active = link.dataset.route === activeRoute;
     link.classList.toggle("active", active);
     if (active) link.setAttribute("aria-current", "page");
@@ -223,8 +228,10 @@ function go(view, replace = false, preserveUrl = false) {
   closeMainNavigation();
   closeAccountMenu();
   if (view === "results") renderResults();
-  if (view === "home" || view === "history" || view === "wishlist") renderWorkspace();
-  if (view === "wishlist") loadWishlistExtras();
+  if (onePage) {
+    renderWorkspace();
+    loadWishlistExtras();
+  }
   if (view === "settings") syncSettings();
   if (view === "home") fillFromClipboard();
   if (view === "analysis" && !state.currentProduct) {
@@ -233,8 +240,14 @@ function go(view, replace = false, preserveUrl = false) {
   document.title = view === "landing" ? "DeFaketive — Spot fakes and defects before you buy" : view === "login" ? "Sign in · DeFaketive" : ROUTE_LABELS[view] + " · DeFaketive";
   if (view === "login") prepareLoginPage();
   updateLimitNotice();
-  window.scrollTo({top: 0, behavior: "instant"});
-  if (previousView !== view) {
+  if (onePage) {
+    // Stay on the long page: slide to the part asked for (Home is the top). Coming from another page, jump there.
+    const target = view === "home" ? null : document.getElementById(view);
+    pageSpyLockedUntil = Date.now() + 900;
+    const top = target ? Math.max(0, target.getBoundingClientRect().top + window.scrollY - 76) : 0;
+    window.scrollTo({top, behavior: ONE_PAGE.includes(previousView) ? "smooth" : "instant"});
+  } else window.scrollTo({top: 0, behavior: "instant"});
+  if (previousView !== view && !onePage) {
     const heading = document.querySelector(`[data-view="${view}"] h1, [data-view="${view}"] h2`);
     if (heading) { heading.setAttribute("tabindex", "-1"); heading.focus({preventScroll: true}); }
   }
@@ -1400,6 +1413,29 @@ function setup() {
     if (!event.target.closest?.(".app-account")) closeAccountMenu();
   });
   window.addEventListener("scroll", updateHeaderState, {passive: true});
+  // On the long page, the menu follows what is on screen (and so does the address, without adding history entries).
+  let spyQueued = false;
+  window.addEventListener("scroll", () => {
+    if (spyQueued || !ONE_PAGE.includes(currentView()) || Date.now() < pageSpyLockedUntil) return;
+    spyQueued = true;
+    requestAnimationFrame(() => {
+      spyQueued = false;
+      let active = "home";
+      ONE_PAGE.forEach(id => {
+        const node = document.getElementById(id);
+        if (node && !node.hidden && id !== "home" && node.getBoundingClientRect().top <= 160) active = id;
+      });
+      if (active === currentView()) return;
+      document.body.dataset.activeView = active;
+      document.querySelectorAll(".app-rail [data-route]").forEach(link => {
+        const on = link.dataset.route === active;
+        link.classList.toggle("active", on);
+        if (on) link.setAttribute("aria-current", "page"); else link.removeAttribute("aria-current");
+      });
+      window.history.replaceState(null, "", "#" + active);
+      document.title = ROUTE_LABELS[active] + " · DeFaketive";
+    });
+  }, {passive: true});
   const desktopNavigation = window.matchMedia?.("(min-width: 761px)");
   desktopNavigation?.addEventListener("change", event => {
     if (event.matches) closeMainNavigation();

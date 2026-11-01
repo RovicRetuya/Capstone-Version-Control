@@ -1,0 +1,53 @@
+/* A tidier layout for the signed-in Home, in the app's own look: the cream paper, Archivo Black headings, DM Mono
+ * labels, the textured menu and the gold bar on cards all stay. Only the arrangement changes:
+ * a centred welcome on the plain texture, one wider link box, and more room between the parts. Loaded after public.css. */
+
+/* One continuous page: the texture runs under the whole workspace, and the welcome is simply the top of the page
+   (no banner box with its own height), with the link box right under it. */
+#workspace-shell { background-color: var(--pub-paper); background-image: linear-gradient(var(--page-wash), var(--page-wash)), url("/static/assets/page-texture.jpg"); background-size: auto, 100% auto; background-repeat: no-repeat, repeat-y; }
+.app-home .app-welcome { max-width: 1120px; margin: 0 auto; height: auto; padding: 64px 24px 0 90px; background: transparent; overflow: visible; text-align: center; }
+.app-home .app-welcome > img, .app-home .app-welcome::after, .app-home .app-welcome-side { display: none; }
+.app-home .app-welcome-copy { position: static; display: grid; justify-items: center; width: auto; transform: none; }
+.app-home .app-welcome-copy h1 { font-size: clamp(44px, 6vw, 68px); line-height: 1; }
+
+/* A centred column with more air, instead of full-width cards edge to edge. */
+.app-home .app-body { max-width: 1120px; margin: 0 auto; gap: 28px; padding: 28px 24px 56px 90px; }
+
+/* The link box is the one thing to do: wider margins, taller field and button. */
+.app-home .app-scan { max-width: 800px; width: 100%; margin: 0 auto; padding: 18px; }
+.app-home .app-scan-input { height: 56px; }
+.app-home .app-scan .app-button { height: 56px; padding: 0 28px; }
+
+/* The numbers sit under it at the same width. */
+.app-home .app-stats { max-width: 800px; width: 100%; margin: 0 auto; }
+
+/* Each part of the page is told apart by a soft panel, rather than by changing the background. */
+.app-home :is(.app-row, .app-how, .app-tips, .app-two) { padding: 22px; border: 1px solid var(--pub-rule-soft); border-radius: 18px; background: color-mix(in srgb, var(--pub-paper) 62%, transparent); }
+.app-home .app-two { padding: 0; border: 0; background: transparent; }
+
+@media (max-width: 760px) {
+  .app-home .app-welcome { padding: 40px 16px 0; }
+  .app-home .app-body { padding: 20px 16px 40px; }
+}
+
+/* The side menu: no box, just floating round icons. */
+.app-rail { top: 92px; left: 18px; width: 58px; gap: 14px; padding: 0; border: 0; border-radius: 0; background: none; box-shadow: none; }
+.app-rail::before, .app-rail::after { display: none; }
+.app-rail a { width: 58px; gap: 6px; }
+.app-rail-icon { width: 46px; height: 46px; border-radius: 50%; background: var(--pub-white, #fff); box-shadow: 0 8px 18px -8px rgba(11, 31, 77, .45), 0 0 0 1px var(--pub-rule-soft); transition: transform .2s ease, box-shadow .2s ease; }
+.app-rail a:hover .app-rail-icon { background: var(--pub-white, #fff); transform: translateY(-2px); box-shadow: 0 12px 22px -8px rgba(11, 31, 77, .5), 0 0 0 1px var(--pub-rule); }
+.app-rail a.active .app-rail-icon { background: var(--pub-ink); color: var(--pub-paper); box-shadow: 0 10px 20px -8px rgba(0, 0, 0, .6), 0 3px 0 #e0a812; }
+/* Settings now lives in the top bar. */
+.app-settings-link.active { background: var(--pub-ink); color: var(--pub-paper); }
+
+/* Home, History, Wishlist, About and FAQ are one long page: stacked parts, each told apart by a line and room. */
+#workspace-pages > .view { scroll-margin-top: 76px; }
+#workspace-pages > .app-page { max-width: 1120px; margin: 24px auto 0; padding: 48px 24px 24px 90px; border-top: 1px solid var(--pub-rule); }
+#workspace-pages > .app-page::before { content: ""; display: block; width: 56px; height: 4px; margin: -50px 0 36px; border-radius: 2px; background: #f5b014; }
+#workspace-pages > #settings { border-top: 0; margin-top: 0; }
+#workspace-pages > #settings::before { display: none; }
+html { scroll-behavior: auto; }
+
+@media (max-width: 760px) {
+  #workspace-pages > .app-page { padding: 40px 16px 16px; }
+}

@@ -6,7 +6,7 @@
 //                                                is running, 2 = only one of the two ports answers.
 import { spawn } from 'node:child_process';
 
-const APP = 'http://localhost:5173';
+const APP = 'http://localhost:5173/enter';
 const SERVER = 'http://127.0.0.1:5000/api/auth/me';
 const WAIT_SECONDS = 90;
 

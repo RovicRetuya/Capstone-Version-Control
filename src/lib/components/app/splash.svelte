@@ -1,19 +1,39 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { goto } from '$app/navigation';
 	import logo from '#lib/assets/logo.png';
-	import photo from '#lib/assets/splash-bg.jpg';
 
-	// The screen people see first: the logo, the name and the tagline. It stays until the person presses Enter.
+	// The backdrop: a collage of product photos, like the items people check on shopping sites.
+	const photos = Object.values(import.meta.glob('#lib/assets/products/*.webp', { eager: true, import: 'default', query: '?url' })) as string[];
+	// Split into columns that scroll down at different speeds, like scrolling a shopping feed.
+	// Stepping by 7 mixes the gadgets (added last) in among the other items.
+	const mixed = photos.map((_, i) => photos[(i * 7) % photos.length]);
+	const columns = Array.from({ length: 8 }, (_, c) => mixed.filter((_, i) => i % 8 === c));
+
+	// The screen people see first: the logo, the name and the tagline over the product collage. Explore leads to the
+	// sign-in page (/enter). It stays until the person presses Explore,
+	// and is not shown again in that browser tab after that (a reload or a new page does not play it again).
 	let show = $state(false);
 	let leaving = $state(false);
 
 	function enter() {
 		if (leaving) return;
 		leaving = true;
+		try {
+			sessionStorage.setItem('splash-seen', '1');
+		} catch {
+			// Storage can be blocked; the screen then simply shows again next time.
+		}
 		setTimeout(() => (show = false), 500);
+		void goto('/enter');
 	}
 
 	onMount(() => {
+		try {
+			if (sessionStorage.getItem('splash-seen')) return;
+		} catch {
+			// Storage blocked: show the screen.
+		}
 		show = true;
 	});
 </script>
@@ -21,14 +41,25 @@
 <svelte:window onkeydown={(e) => show && e.key === 'Enter' && enter()} />
 
 {#if show}
-	<div class="splash" class:leaving style:--photo="url({photo})" role="dialog" aria-label="DeFaketive. A safer you.">
+	<div class="splash" class:leaving role="dialog" aria-label="DeFaketive. A safer you.">
+		<div class="collage" aria-hidden="true">
+			{#each columns as col, c (c)}
+				<div class="col" style:--dur="{34 + (c % 4) * 9}s" style:--off="{-((c * 37) % 100) / 100}">
+					<div class="track">
+						{#each [...col, ...col] as src, i (i)}
+							<div class="tile"><img {src} alt="" /></div>
+						{/each}
+					</div>
+				</div>
+			{/each}
+		</div>
 		<span class="swoosh tl" aria-hidden="true"></span>
 		<span class="swoosh br" aria-hidden="true"></span>
 		<div class="stack">
 			<img src={logo} alt="" class="mark" />
 			<div class="name" aria-hidden="true"><span>De</span><span class="f">F</span><span>aketive</span></div>
 			<div class="tag"><i></i><span>A SAFER YOU</span><i></i></div>
-			<button type="button" class="go" onclick={enter}>Enter</button>
+			<button type="button" class="go" onclick={enter}>Explore</button>
 		</div>
 	</div>
 {/if}
@@ -43,7 +74,7 @@
 		display: grid;
 		place-items: center;
 		overflow: hidden;
-		background: linear-gradient(rgba(11, 31, 77, 0.18), rgba(11, 31, 77, 0.18)), var(--photo) center / cover no-repeat, #0b1f4d;
+		background: #0b1f4d;
 		color: var(--navy);
 		transition: opacity 0.5s ease, transform 0.5s ease;
 	}
@@ -51,6 +82,55 @@
 		opacity: 0;
 		transform: scale(1.04);
 		pointer-events: none;
+	}
+	.collage {
+		position: absolute;
+		inset: -4%;
+		display: grid;
+		grid-template-columns: repeat(8, minmax(9rem, 1fr));
+		gap: 0.9rem;
+		padding: 0 0.5rem;
+		transform: rotate(-4deg) scale(1.12);
+	}
+	/* Brand wash over the collage: navy at the edges, clearing in the middle where the logo sits. */
+	.collage::after {
+		content: '';
+		position: absolute;
+		inset: 0;
+		background: radial-gradient(ellipse at 50% 50%, rgba(250, 249, 247, 0.3) 0%, rgba(11, 31, 77, 0.28) 70%, rgba(11, 31, 77, 0.55) 100%);
+	}
+	.col {
+		overflow: hidden;
+		min-width: 0;
+	}
+	.track {
+		display: grid;
+		gap: 0.9rem;
+		/* Two identical halves: moving by half a track and looping is seamless. */
+		animation: feed var(--dur) linear infinite;
+		animation-delay: calc(var(--dur) * var(--off));
+	}
+	.tile {
+		aspect-ratio: 1;
+		overflow: hidden;
+		border-radius: 1.1rem;
+		/* The warm off-white of the app's own pages, with a thin mustard edge. */
+		background: #faf9f7;
+		box-shadow: 0 0 0 2px rgba(245, 176, 20, 0.55), 0 10px 22px -10px rgba(5, 14, 40, 0.7);
+	}
+	.tile img {
+		width: 100%;
+		height: 100%;
+		object-fit: contain;
+		padding: 0.4rem;
+	}
+	@keyframes feed {
+		from {
+			transform: translateY(-50%);
+		}
+		to {
+			transform: translateY(0);
+		}
 	}
 	.stack {
 		position: relative;
@@ -126,8 +206,24 @@
 		width: 70vmax;
 		height: 70vmax;
 		border-radius: 50%;
-		background: var(--navy);
-		box-shadow: 0 0 0 0.9vmax var(--mustard);
+		/* Lit from the visible corner, with a fine ring pattern, so the navy is not a flat block. */
+		background: repeating-radial-gradient(circle at 50% 50%, transparent 0 2.2vmax, rgba(255, 255, 255, 0.045) 2.2vmax 2.35vmax), radial-gradient(circle at 78% 78%, #1d3f94 0%, #12306f 28%, var(--navy) 62%, #081638 100%);
+		box-shadow: 0 0 0 0.9vmax var(--mustard), 0 0 3vmax rgba(5, 14, 40, 0.55);
+	}
+	/* Two thin arcs echoing the mustard edge, set in from it. */
+	.swoosh::before,
+	.swoosh::after {
+		content: '';
+		position: absolute;
+		border-radius: 50%;
+	}
+	.swoosh::before {
+		inset: 2.4vmax;
+		border: 2px solid rgba(245, 176, 20, 0.6);
+	}
+	.swoosh::after {
+		inset: 4.6vmax;
+		border: 1px solid rgba(255, 255, 255, 0.22);
 	}
 	.tl {
 		left: -52vmax;
@@ -172,6 +268,7 @@
 		.tag,
 		.tag i,
 		.go,
+		.track,
 		.swoosh {
 			animation: none;
 		}
