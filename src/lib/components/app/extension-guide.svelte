@@ -58,10 +58,10 @@
 	<p class="text-muted-foreground flex items-center gap-2 text-sm font-medium">
 		<PuzzleIcon class="size-4" aria-hidden="true" /> For Chrome and Edge on a computer
 	</p>
-	<h1 class="text-3xl font-semibold tracking-tight text-balance md:text-4xl">Check right on Lazada</h1>
+	<h1 class="text-3xl font-semibold tracking-tight text-balance md:text-4xl">Check right on Lazada and Shopee</h1>
 	<p class="text-muted-foreground max-w-2xl text-lg">
 		The DeFaketive extension adds a <b class="text-foreground font-medium">Check with DeFaketive</b> button to Lazada PH
-		product pages. Press it and your report opens here. No copying links.
+		and Shopee PH product pages. Press it and your report opens here. No copying links.
 	</p>
 </header>
 
@@ -122,7 +122,7 @@
 			<li class="grid grid-cols-[1.75rem_1fr] gap-3">
 				<span class="bg-primary text-primary-foreground grid size-7 place-items-center rounded-full text-sm font-medium" aria-hidden="true">4</span>
 				<div class="space-y-1">
-					<p class="font-medium">Open a Lazada PH product and press Check with DeFaketive</p>
+					<p class="font-medium">Open a Lazada PH or Shopee PH product and press Check with DeFaketive</p>
 					<p class="text-muted-foreground text-sm">
 						The button is at the bottom left of the page. Your report opens in DeFaketive; checking with the extension
 						needs a free account.
@@ -159,10 +159,11 @@
 <section class="space-y-2" aria-labelledby="extension-notes">
 	<h2 id="extension-notes" class="text-lg font-semibold tracking-tight">Good to know</h2>
 	<ul class="text-muted-foreground grid max-w-3xl list-disc gap-1.5 pl-5 text-sm">
-		<li>Keep the Lazada tab open while the button collects the reviews. It tells you when your report is opening.</li>
-		<li>If Lazada shows a "slide to verify" check, that is Lazada asking you. Do it as you normally would, then press the button again.</li>
-		<li>On a phone, or in another browser, paste the product link into <a class="tap text-primary font-medium underline underline-offset-4" href={pasteHref}>Check a product</a> instead.</li>
-		<li>DeFaketive is a student research project, not part of Lazada.</li>
+		<li>Keep the product tab open while the button collects the reviews. It tells you when your report is opening.</li>
+		<li>If Lazada or Shopee shows a "slide to verify" or login check, that is the marketplace asking you. Do it as you normally would, then press the button again.</li>
+		<li>Shopee reviews can only be checked with the extension: pasting a Shopee link into Check a product points you here.</li>
+		<li>On a phone, or in another browser, paste a Lazada product link into <a class="tap text-primary font-medium underline underline-offset-4" href={pasteHref}>Check a product</a> instead.</li>
+		<li>DeFaketive is a student research project, not part of Lazada or Shopee.</li>
 	</ul>
 </section>
 

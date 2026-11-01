@@ -16,13 +16,14 @@
 	import { Label } from '#lib/components/ui/label/index.js';
 	import { Spinner } from '#lib/components/ui/spinner/index.js';
 	import {
-		LAZADA_ONLY,
 		LAZADA_REVIEWS_PER_STAR,
 		linkIdentity,
 		MARKETPLACES,
 		queryContext,
+		refusalFor,
 		scannable,
-		typicalScanTime
+		typicalScanTime,
+		viaExtension
 	} from '#lib/product.js';
 	import { auth } from '#lib/stores/auth.svelte.js';
 	import { catalog } from '#lib/stores/catalog.svelte.js';
@@ -55,7 +56,7 @@
 			? (catalog.lookup(query) ?? library.mine.find((product) => linkIdentity(product.link) === linkIdentity(query)))
 			: null
 	);
-	// A Shopee or Temu link: its saved report still opens, but it is never checked (Lazada PH only).
+	// A Shopee or Temu link: its saved report still opens, but it is never scanned here (Shopee has the extension).
 	const refused = $derived(Boolean(context.platform) && !scannable(context.platform) && !match);
 	const outOfScans = $derived(auth.ready && auth.left === 0);
 	const blocked = $derived(scannable(context.platform) && !match && outOfScans);
@@ -128,7 +129,10 @@
 					</p>
 				{:else if refused}
 					<p class="text-destructive flex items-center gap-1.5 text-sm" aria-live="polite">
-						<CircleAlertIcon class="size-4 shrink-0" /> {LAZADA_ONLY} This {MARKETPLACES[context.platform!]} link can't be checked.
+						<CircleAlertIcon class="size-4 shrink-0" /> {refusalFor(context.platform!)}
+						{#if viaExtension(context.platform)}
+							<a class="tap font-medium underline underline-offset-4" href="/extension">Get the extension</a>
+						{/if}
 					</p>
 				{:else if context.platform}
 					<p class="text-success flex items-center gap-1.5 text-sm" aria-live="polite">

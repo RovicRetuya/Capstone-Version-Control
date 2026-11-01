@@ -16,13 +16,14 @@
 	import ScanProgress from '#lib/components/app/scan-progress.svelte';
 	import { Spinner } from '#lib/components/ui/spinner/index.js';
 	import {
-		LAZADA_ONLY,
 		LAZADA_REVIEWS_PER_STAR,
 		linkIdentity,
 		MARKETPLACES,
 		queryContext,
+		refusalFor,
 		scannable,
-		typicalScanTime
+		typicalScanTime,
+		viaExtension
 	} from '#lib/product.js';
 	import { catalog } from '#lib/stores/catalog.svelte.js';
 	import { library } from '#lib/stores/library.svelte.js';
@@ -52,7 +53,7 @@
 	const isName = $derived(hasQuery && !context.isUrl);
 	const productsSearch = $derived(`/app/products?q=${encodeURIComponent(query.trim())}`);
 	const unsupported = $derived(context.isUrl && !context.platform);
-	// A Shopee or Temu link: a report saved from it still opens, but it is never checked (Lazada PH only).
+	// A Shopee or Temu link: a report saved from it still opens, but it is never scanned here (Shopee has the extension).
 	const otherMarket = $derived(Boolean(context.platform) && !scannable(context.platform));
 	const chosen = $derived<Marketplace>(context.platform ?? 'lazada');
 	const match = $derived(
@@ -154,8 +155,10 @@
 							<CircleAlertIcon class="size-4" /> This website is not supported. Paste a Lazada PH product link.
 						{:else if otherMarket}
 							<CircleAlertIcon class="size-4 shrink-0" />
-							{LAZADA_ONLY}
-							{match ? 'Its saved report can still be opened.' : `This ${MARKETPLACES[context.platform!]} link can't be checked.`}
+							{match ? 'Its saved report can still be opened.' : refusalFor(context.platform!)}
+							{#if !match && viaExtension(context.platform)}
+								<a class="tap text-primary font-medium underline underline-offset-4" href="/app/extension">Get the extension</a>
+							{/if}
 						{:else}
 							<CheckIcon class="size-4" /> {MARKETPLACES[context.platform!]} product link detected.
 						{/if}

@@ -5,7 +5,7 @@
 	const features = [
 		['Taglish-aware sentiment', 'A language model trained on Filipino and English reviews sorts each review as positive, negative, or mixed or unclear.'],
 		['Separate warnings', 'Safety, fake and defect reports are checked one by one, so good reviews never average away a fire report.'],
-		['Built for Lazada PH', 'Reads public reviews straight from Lazada PH product pages, up to 60 from each star level.'],
+		['Lazada PH and Shopee PH', 'Reads public reviews from Lazada PH product pages and, with the extension, from Shopee PH product pages, up to 60 from each star level.'],
 		['Similar products', 'When reviewers report problems, see similar products whose reviews raised no warnings.']
 	];
 </script>
@@ -15,7 +15,7 @@
 <header class="space-y-1">
 	<h1 class="text-3xl font-semibold tracking-tight">About DeFaketive</h1>
 	<p class="text-muted-foreground max-w-2xl">
-		DeFaketive reads customer reviews from Lazada PH, in English, Filipino or Taglish, and shows you
+		DeFaketive reads customer reviews from Lazada PH and Shopee PH, in English, Filipino or Taglish, and shows you
 		what buyers report about fakes, defects and safety problems, in their own words.
 	</p>
 </header>

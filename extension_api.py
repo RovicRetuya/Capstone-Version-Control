@@ -52,7 +52,11 @@ FEED_DEPTH = 300
 COLLECTION_ORDER = (3, 2, 4, 1, 5)
 STOP_REASONS = {"target_reached", "feed_ended", "feed_limit", "none_listed"}
 LINK = re.compile(r"^https://www\.lazada\.com\.ph/products/[^?#\s]{1,400}?-i(\d{5,})(?:-s\d+)?\.html$")
+# A Shopee PH product page: /<name>-i.<shop>.<item>, or /product/<shop>/<item>.
+SHOPEE_LINK = re.compile(r"^https://shopee\.ph/(?:[^?#\s/]{1,400}-i\.\d+\.\d+|product/\d+/\d+)$")
 IMAGE_HOSTS = ("lazcdn.com", "alicdn.com", "slatic.net", "lazada.com.ph")
+SHOPEE_IMAGE_HOSTS = ("susercontent.com", "shopee.ph", "shopee.com")
+ISO_DAY = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 SOURCE = "defaketive-extension"
 
 RECHECK_DAYS = 30
@@ -63,7 +67,7 @@ saved_report: Callable[[str], dict[str, str] | None] = lambda link: None
 SIGN_IN_MESSAGE = "Sign in to check products with the DeFaketive extension."
 INVALID_MESSAGE = (
     "The reviews the extension sent didn't add up, so nothing was checked. "
-    "Reload the Lazada page and press Check again."
+    "Reload the product page and press Check again."
 )
 
 
@@ -125,14 +129,23 @@ def _feed_date(text: str) -> str:
         return text
 
 
-def _image(value: Any) -> str:
+def _image(value: Any, hosts: tuple[str, ...] = IMAGE_HOSTS) -> str:
     link = _clean(value, 600, "img")
     if not link:
         return ""
     match = re.match(r"^https://([^/?#]+)/", link)
-    if not match or not match.group(1).casefold().endswith(IMAGE_HOSTS):
-        raise Invalid("img is not a Lazada image")
+    if not match or not match.group(1).casefold().endswith(hosts):
+        raise Invalid("img is not an image of the marketplace")
     return link
+
+
+def _review_day(text: str, marketplace: str) -> str:
+    """Lazada's feed writes '31 May 2026'; the Shopee collector sends the day as 2026-05-31 (or nothing)."""
+    if marketplace == "lazada":
+        return _feed_date(text)
+    if text and not ISO_DAY.match(text):
+        raise Invalid("a review's time is not a day")
+    return text
 
 
 def product_from_extension(sent: Any) -> dict[str, Any]:
@@ -140,14 +153,18 @@ def product_from_extension(sent: Any) -> dict[str, Any]:
     if not isinstance(sent, dict):
         raise Invalid("product is not an object")
     link = _clean(sent.get("link"), 600, "link", required=True)
-    if not LINK.match(link):
-        raise Invalid("link is not a Lazada PH product page")
+    if LINK.match(link):
+        marketplace = "lazada"
+    elif SHOPEE_LINK.match(link):
+        marketplace = "shopee"
+    else:
+        raise Invalid("link is not a Lazada PH or Shopee PH product page")
 
     ratings = sent.get("ratings")
     if not isinstance(ratings, dict) or not isinstance(ratings.get("scores"), list) or len(ratings["scores"]) != 5:
         raise Invalid("ratings.scores must list five star counts")
     scores = [_whole(value, "ratings.scores", 0, 50_000_000) for value in ratings["scores"]]
-    # The feed lists 5 stars first.
+    # The extension sends 5 stars first, from either marketplace.
     listed = {star: scores[5 - star] for star in range(1, 6)}
     total = sum(scores)
     if total <= 0:
@@ -183,7 +200,7 @@ def product_from_extension(sent: Any) -> dict[str, Any]:
         comments.append({
             "comment_id": comment_id,
             "rating": rating,
-            "time": _feed_date(_clean(review.get("time"), 40, "time")),
+            "time": _review_day(_clean(review.get("time"), 40, "time"), marketplace),
             "content": _clean(review.get("content"), 5000, "content", required=True),
             "variation": _clean(review.get("variation"), 300, "variation"),
             "seller_respond": "",
@@ -206,9 +223,9 @@ def product_from_extension(sent: Any) -> dict[str, Any]:
             raise Invalid(f"{star}-star level: 'none_listed' must mean the level lists none")
         if stop == "target_reached" and collected != QUOTA:
             raise Invalid(f"{star}-star level reached its target without {QUOTA} reviews")
-        # The list is cut at 300 entries; a level listing fewer cannot reach that cut. The 2-star list also holds
-        # the 1-star reviews, so there the two together count.
-        in_list = listed[1] + listed[2] if star == 2 else listed[star]
+        # The list is cut at 300 entries; a level listing fewer cannot reach that cut. Lazada's 2-star list also
+        # holds the 1-star reviews, so there the two together count.
+        in_list = listed[1] + listed[2] if star == 2 and marketplace == "lazada" else listed[star]
         if stop == "feed_limit" and in_list <= FEED_DEPTH:
             raise Invalid(f"{star}-star level stopped at the list's depth but its list is shorter than {FEED_DEPTH}")
         if stop == "none_listed":
@@ -233,9 +250,9 @@ def product_from_extension(sent: Any) -> dict[str, Any]:
         "price": _clean(sent.get("price"), 40, "price"),
         "rating": rating,
         "sold_count": 0,
-        "img": _image(sent.get("img")),
+        "img": _image(sent.get("img"), IMAGE_HOSTS if marketplace == "lazada" else SHOPEE_IMAGE_HOSTS),
         "location": "",
-        "platform": "lazada",
+        "platform": marketplace,
         "market": "PH",
         "currency": "PHP",
         "brand": _clean(sent.get("brand"), 120, "brand"),
@@ -243,7 +260,7 @@ def product_from_extension(sent: Any) -> dict[str, Any]:
         "description": "",
         "total_rating": total,
         "review_star_distribution": {str(star): listed[star] for star in range(1, 6)},
-        "review_star_distribution_source": "lazada_review_feed",
+        "review_star_distribution_source": f"{marketplace}_review_feed",
         "reported_review_count": total,
         "written_reviews_collected": len(comments),
         "qualification": {
@@ -251,7 +268,7 @@ def product_from_extension(sent: Any) -> dict[str, Any]:
             "min_rating": 0.0, "min_reviews": 0, "reasons": [],
         },
         "review_status": "complete",
-        "review_source": "lazada_review_feed",
+        "review_source": f"{marketplace}_review_feed",
         "comments": comments,
         "applied_rating_filters": list(COLLECTION_ORDER),
         "star_collection": star_collection,
@@ -281,7 +298,7 @@ def install(webapp: Any, app: Any = None) -> protections.ScanQueue:
             "progress": 68,
             "message": "Analyzing English, Filipino, and Taglish review sentiment…",
             "needs_you": False,
-            "platform": "lazada",
+            "platform": product["platform"],
             "query": product["link"],
             "product_limit": 1,
             "review_limit": len(product["comments"]),

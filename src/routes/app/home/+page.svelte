@@ -75,7 +75,7 @@
 <header class="space-y-1">
 	<p class="text-muted-foreground text-sm">{auth.user ? 'Welcome back,' : 'Welcome,'}</p>
 	<h1 class="text-3xl font-semibold tracking-tight">{auth.user ? `${firstName(auth.user.name)}.` : 'shopper.'}</h1>
-	<p class="text-muted-foreground">Check what reviewers report before you buy from Lazada PH.</p>
+	<p class="text-muted-foreground">Check what reviewers report before you buy from Lazada PH or Shopee PH.</p>
 </header>
 
 <Card class="p-4 md:p-6" aria-label="Check a product">

@@ -43,6 +43,7 @@
 		sentimentLabel,
 		sentimentPercentages,
 		view,
+		viaExtension,
 		warningWords,
 		type EvidenceFilter
 	} from '#lib/product.js';
@@ -418,7 +419,11 @@
 						<a class="tap text-primary font-medium underline underline-offset-4" href={checkHref}>Check it again</a>
 						to bring it up to date.
 					{:else}
-						It can't be checked again: DeFaketive now checks Lazada PH products only.
+						{#if viaExtension(queryContext(link).platform)}
+							It can't be checked again from here: open the product on Shopee and press Check with DeFaketive.
+						{:else}
+							It can't be checked again: DeFaketive now checks Lazada PH products only.
+						{/if}
 					{/if}
 				</p>
 			{/if}

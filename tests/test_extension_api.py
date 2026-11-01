@@ -157,6 +157,98 @@ class ProductFromExtensionTest(unittest.TestCase):
         self.assertEqual(coverage["reviews_scraped"], 90)
 
 
+SHOPEE_LINK = "https://shopee.ph/Crocs-Kids'-Baya-Clog-in-Navy-i.159408769.58117695286"
+
+
+def sent_shopee_product() -> dict:
+    """The Lazada product's numbers, as the Shopee collector sends them: the day as 2026-05-31, a Shopee link and photo."""
+    sent = sent_product()
+    sent["link"] = SHOPEE_LINK
+    sent["img"] = "https://down-ph.img.susercontent.com/file/test"
+    for n, review in enumerate(sent["reviews"]):
+        review["time"] = "2026-05-31" if n % 2 else ""
+    return sent
+
+
+class ShopeeProductFromExtensionTest(unittest.TestCase):
+    def test_builds_the_same_record_for_shopee(self) -> None:
+        product = extension_api.product_from_extension(sent_shopee_product())
+        self.assertEqual(product["link"], SHOPEE_LINK)
+        self.assertEqual(product["platform"], "shopee")
+        self.assertEqual(product["review_source"], "shopee_review_feed")
+        self.assertEqual(product["review_star_distribution_source"], "shopee_review_feed")
+        self.assertEqual(product["review_star_distribution"], {"1": 3, "2": 5, "3": 10, "4": 20, "5": 100})
+        self.assertEqual(product["written_reviews_collected"], 90)
+        self.assertEqual(product["collected_via"], "defaketive-extension")
+        self.assertIn("2026-05-31", {review["time"] for review in product["comments"]})
+        self.assertEqual(product["img"], "https://down-ph.img.susercontent.com/file/test")
+
+    def test_the_other_product_address_is_accepted(self) -> None:
+        sent = sent_shopee_product()
+        sent["link"] = "https://shopee.ph/product/159408769/58117695286"
+        self.assertEqual(extension_api.product_from_extension(sent)["platform"], "shopee")
+
+    def test_lazada_still_reads_as_lazada(self) -> None:
+        product = extension_api.product_from_extension(sent_product())
+        self.assertEqual(product["platform"], "lazada")
+        self.assertEqual(product["review_source"], "lazada_review_feed")
+
+    def test_a_shopee_level_that_stops_at_the_depth_counts_only_its_own_list(self) -> None:
+        # Lazada's 2-star list also holds the 1-star reviews; Shopee's does not, so 40 + 3 reviews cannot reach the cut.
+        sent = sent_shopee_product()
+        sent["levels"]["2"] = {"stop_reason": "feed_limit"}
+        with self.assertRaises(extension_api.Invalid):
+            extension_api.product_from_extension(sent)
+
+    def test_refuses_what_does_not_add_up(self) -> None:
+        cases = {
+            "another shop site": lambda s: s.update(link="https://shopee.com.my/x-i.1.2"),
+            "a search page": lambda s: s.update(link="https://shopee.ph/search?keyword=crocs"),
+            "a link with extras": lambda s: s.update(link=SHOPEE_LINK + "?sp_atk=abc"),
+            "a Lazada photo": lambda s: s.update(img="https://img.lazcdn.com/g/p/test.jpg"),
+            "a photo from elsewhere": lambda s: s.update(img="https://evil.example/x.jpg"),
+            "a day written the Lazada way": lambda s: s["reviews"][1].update(time="31 May 2026"),
+            "a repeated review": lambda s: s["reviews"][1].update(comment_id=s["reviews"][0]["comment_id"]),
+            "an average the counts do not give": lambda s: s["ratings"].update(average=3.2),
+        }
+        for name, change in cases.items():
+            with self.subTest(name):
+                sent = sent_shopee_product()
+                change(sent)
+                with self.assertRaises(extension_api.Invalid):
+                    extension_api.product_from_extension(sent)
+
+    def test_a_lazada_link_cannot_carry_a_shopee_photo(self) -> None:
+        sent = sent_product()
+        sent["img"] = "https://down-ph.img.susercontent.com/file/test"
+        with self.assertRaises(extension_api.Invalid):
+            extension_api.product_from_extension(sent)
+
+    def test_the_real_checker_reads_it_as_a_complete_sample(self) -> None:
+        analyzed = webapp.analyze_products([extension_api.product_from_extension(sent_shopee_product())])[0]
+        self.assertNotEqual(webapp.badge_view(analyzed)["state"], "not_analyzed")
+        coverage = find(analyzed, "scrape_completeness")
+        self.assertEqual(coverage["scrape_completeness"], "stratified", coverage.get("completeness_reason"))
+        self.assertEqual(coverage["reviews_scraped"], 90)
+
+
+class PastedShopeeLinkTest(unittest.TestCase):
+    """A Shopee link pasted into the site is not scanned: it is answered with how to use the extension."""
+
+    def test_a_live_scan_of_a_shopee_link_points_to_the_extension(self) -> None:
+        answer = app.test_client().post("/api/search", json={"query": SHOPEE_LINK, "live": True})
+        self.assertEqual(answer.status_code, 400)
+        body = answer.get_json()
+        self.assertTrue(body.get("use_extension"))
+        self.assertIn("DeFaketive extension", body["error"])
+        self.assertNotIn("lazada_only", body)
+
+    def test_temu_still_says_lazada_only(self) -> None:
+        answer = app.test_client().post("/api/search", json={"query": "https://www.temu.com/goods.html?goods_id=123456789", "live": True})
+        self.assertEqual(answer.status_code, 400)
+        self.assertTrue(answer.get_json().get("lazada_only"))
+
+
 NODE = shutil.which("node") or next(
     (str(path) for path in (Path("C:/Program Files/nodejs/node.exe"),) if path.is_file()), None
 )

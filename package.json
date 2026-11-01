@@ -15,7 +15,7 @@
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
 		"check:colors": "node scripts/check-colors.mjs",
 		"test:e2e": "node tests/e2e/run.mjs",
-		"test:extension": "node --test tests/extension/collect.test.mjs"
+		"test:extension": "node --test tests/extension/collect.test.mjs tests/extension/shopee-collect.test.mjs"
 	},
 	"devDependencies": {
 		"@fontsource-variable/inter": "^5.3.0",

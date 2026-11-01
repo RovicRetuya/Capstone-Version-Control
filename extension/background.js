@@ -1,14 +1,15 @@
 // Holds collected reviews for a moment and opens the DeFaketive site to read them.
 //
-// lazada.js sends {type: 'collected', product}. The reviews are kept in this browser's session storage under a
+// lazada.js and shopee.js send {type: 'collected', product}. The reviews are kept in this browser's session storage under a
 // random id, and the site opens at /check-from-extension?handoff=<id>: in the DeFaketive tab the shopper already
 // has open (the one used last), or in a new tab beside the Lazada page when there is none. Finding that tab is
 // what the extension's one site permission (host_permissions, the DeFaketive site only) is for. There, site.js asks for them by that id
-// ('take-handoff') on the page's behalf, and says 'handoff-used' once the site has them. Only a Lazada product
+// ('take-handoff') on the page's behalf, and says 'handoff-used' once the site has them. Only a Lazada or Shopee product
 // page may hand reviews over, and only the DeFaketive site may take them. Nothing is sent anywhere by this file.
 importScripts('config.js');
 
 const SITE = new URL(self.DEFAKETIVE_SITE);
+const MARKETPLACES = ['https://www.lazada.com.ph', 'https://shopee.ph'];
 const KEEP_MS = 60 * 60 * 1000;
 const ID = /^[0-9a-f-]{36}$/;
 
@@ -19,7 +20,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
 async function handle(message, sender) {
 	const from = sender.url ? new URL(sender.url) : null;
-	if (message?.type === 'collected' && from?.origin === 'https://www.lazada.com.ph' && sender.tab) {
+	if (message?.type === 'collected' && MARKETPLACES.includes(from?.origin) && sender.tab) {
 		await forgetOld();
 		const id = crypto.randomUUID();
 		await chrome.storage.session.set({ [`handoff:${id}`]: { product: message.product, at: Date.now() } });

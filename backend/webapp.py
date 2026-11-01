@@ -105,6 +105,11 @@ MARKETPLACE_NAMES = ("Shopee PH", "Lazada PH", "Temu PH")
 # stay in the project, unused; reports saved from them can still be opened.
 SCAN_PLATFORMS = ("lazada",)
 LAZADA_ONLY_MESSAGE = "DeFaketive checks Lazada PH products only. Paste a link to a Lazada PH product."
+# Shopee PH is checked only by the browser extension (extension/shopee*.js, extension_api.py): no server scan.
+SHOPEE_EXTENSION_MESSAGE = (
+    "Shopee PH products are checked with the DeFaketive extension. "
+    "Open the product on Shopee and press Check with DeFaketive."
+)
 
 _catalogs: dict[str, list[dict[str, Any]]] = {}
 _jobs: dict[str, dict[str, Any]] = {}
@@ -653,6 +658,8 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
         except ValueError as exc:
             return jsonify({"error": str(exc)}), 400
         if bool(payload.get("live")):
+            if platform == "shopee":
+                return jsonify({"error": SHOPEE_EXTENSION_MESSAGE, "use_extension": True}), 400
             if platform not in SCAN_PLATFORMS:
                 # Saved reports of other marketplaces can still be looked up; only new scans are refused.
                 return jsonify({"error": LAZADA_ONLY_MESSAGE, "lazada_only": True}), 400

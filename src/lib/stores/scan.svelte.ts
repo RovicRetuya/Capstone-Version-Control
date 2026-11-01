@@ -3,7 +3,7 @@ import { page } from '$app/state';
 import { toast } from 'svelte-sonner';
 import { api, ApiError, json } from '#lib/api.js';
 import { reportHrefFor } from '#lib/nav.js';
-import { LAZADA_ONLY, linkIdentity, MARKETPLACES, queryContext, safeLink, scannable, searchProducts, view } from '#lib/product.js';
+import { LAZADA_ONLY, linkIdentity, queryContext, refusalFor, safeLink, scannable, searchProducts, view, viaExtension } from '#lib/product.js';
 import type { Job, Marketplace } from '#lib/types.js';
 import { auth } from './auth.svelte.js';
 import { catalog } from './catalog.svelte.js';
@@ -137,11 +137,11 @@ class Scan {
 			const saved = catalog.lookup(query) ?? library.mine.find((p) => linkIdentity(p.link) === linkIdentity(query));
 			if (saved) return goto(reportHref(saved.link));
 		}
-		// A Shopee or Temu link opens a report saved from it (above), but is never scanned.
+		// A Shopee or Temu link opens a report saved from it (above), but is never scanned here. Shopee has the extension.
 		if (context.platform && !scannable(context.platform)) {
 			this.feedback = {
-				title: 'Lazada PH only',
-				message: `${LAZADA_ONLY} This ${MARKETPLACES[context.platform]} link can't be checked.`,
+				title: viaExtension(context.platform) ? 'Check Shopee PH with the extension' : 'Lazada PH only',
+				message: refusalFor(context.platform),
 				kind: 'warning'
 			};
 			return;

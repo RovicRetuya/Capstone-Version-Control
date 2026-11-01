@@ -17,7 +17,7 @@
 	import { scan } from '#lib/stores/scan.svelte.js';
 	import { ui } from '#lib/stores/ui.svelte.js';
 
-	// The DeFaketive browser extension opens this page after it collected a Lazada product's reviews in the
+	// The DeFaketive browser extension opens this page after it collected a Lazada or Shopee product's reviews in the
 	// shopper's own browser. The reviews wait in the extension under the id in the address (?handoff=); this page
 	// asks the extension's site script for them, and sends them to the server once the person is signed in.
 	// The extension and this page only talk through window.postMessage, on this site's own origin.
@@ -147,7 +147,7 @@
 						<PuzzleIcon />
 						<AlertTitle>The DeFaketive extension didn't answer</AlertTitle>
 						<AlertDescription>
-							Make sure the extension is installed and switched on in this browser, then go back to the Lazada product page and
+							Make sure the extension is installed and switched on in this browser, then go back to the product page and
 							press Check with DeFaketive again.
 							<a class="tap text-primary font-medium underline underline-offset-4" href="/extension">How to install the extension</a>
 						</AlertDescription>
@@ -157,7 +157,7 @@
 						<CircleAlertIcon />
 						<AlertTitle>These reviews are no longer here</AlertTitle>
 						<AlertDescription>
-							They were already sent, or they expired after an hour. Go back to the Lazada product page and press Check with
+							They were already sent, or they expired after an hour. Go back to the product page and press Check with
 							DeFaketive again.
 						</AlertDescription>
 					</Alert>

@@ -17,13 +17,24 @@ export const MARKETPLACES: Record<Marketplace, string> = {
 };
 
 /**
- * The marketplaces DeFaketive checks: Lazada PH only, the owner's decision of 14 Oct 2026 (webapp.SCAN_PLATFORMS).
- * Shopee and Temu links are still recognised, so a report saved from them still opens from its link, but they are
- * never scanned.
+ * The marketplaces DeFaketive scans from a pasted link: Lazada PH only (webapp.SCAN_PLATFORMS). Shopee PH is
+ * checked through the extension instead (EXTENSION_MARKETPLACES). Shopee and Temu links are still recognised, so a
+ * report saved from them still opens from its link, but a pasted link is never scanned.
  */
 export const SCAN_MARKETPLACES: readonly Marketplace[] = ['lazada'];
 export const scannable = (platform?: Marketplace | null): boolean => Boolean(platform) && SCAN_MARKETPLACES.includes(platform!);
 export const LAZADA_ONLY = 'DeFaketive checks Lazada PH products only.';
+
+/**
+ * Shopee PH is checked only through the browser extension (extension/shopee*.js), in the shopper's own browser:
+ * the site has no scanner for it. A link pasted here is answered with how to use the extension instead.
+ */
+export const EXTENSION_MARKETPLACES: readonly Marketplace[] = ['shopee'];
+export const viaExtension = (platform?: Marketplace | null): boolean => Boolean(platform) && EXTENSION_MARKETPLACES.includes(platform!);
+export const EXTENSION_ONLY = 'Shopee PH products are checked with the DeFaketive extension. Open the product on Shopee and press Check with DeFaketive.';
+/** Why a pasted link of this marketplace is not scanned here. */
+export const refusalFor = (platform: Marketplace): string =>
+	viaExtension(platform) ? EXTENSION_ONLY : `${LAZADA_ONLY} This ${MARKETPLACES[platform]} link can't be checked.`;
 
 /** Lazada scans read this many written reviews from each star level (webapp.LAZADA_REVIEWS_PER_STAR). */
 export const LAZADA_REVIEWS_PER_STAR = 60;

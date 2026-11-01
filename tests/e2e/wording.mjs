@@ -258,7 +258,7 @@ async function reportFacts(page) {
 	await page.locator('#search-query').fill('https://www.lazada.com.ph/products/brand-new-thing-i123456789.html');
 	check(await page.getByRole('button', { name: 'Check this Lazada PH product' }).isVisible(), 'a new link offers "Check this Lazada PH product"');
 	await page.locator('#search-query').fill('https://shopee.ph/brand-new-thing-i.1.2');
-	check(await page.getByText(/checks Lazada PH products only/).first().isVisible(), 'a Shopee link is not checked: Lazada PH only');
+	check(await page.getByText(/Shopee PH products are checked with the DeFaketive extension/).first().isVisible(), 'a Shopee link is not scanned here: it points to the extension');
 	await page.keyboard.press('Control+k');
 	await page.getByRole('dialog').getByRole('option', { name: 'Check a product' }).waitFor({ timeout: 5000 });
 	check(true, 'Ctrl+K lists "Check a product"');

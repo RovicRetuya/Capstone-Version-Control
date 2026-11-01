@@ -27,7 +27,7 @@
 	const features = [
 		{ icon: LanguagesIcon, title: 'Taglish-aware sentiment', text: 'A language model trained on Filipino and English reviews sorts each review as positive, negative, or mixed or unclear.' },
 		{ icon: FileSearchIcon, title: 'Separate warnings', text: 'Safety, fake and defect reports are checked one by one, so good reviews never average away a fire report.' },
-		{ icon: GlobeIcon, title: 'Built for Lazada PH', text: 'Reads public reviews straight from Lazada PH product pages, up to 60 from each star level.' },
+		{ icon: GlobeIcon, title: 'Lazada PH and Shopee PH', text: 'Reads public reviews from Lazada PH product pages and, with the extension, from Shopee PH product pages, up to 60 from each star level.' },
 		{ icon: BoxesIcon, title: 'Similar products', text: 'When reviewers report problems, see similar products whose reviews raised no warnings.' }
 	];
 	const steps = [
@@ -49,7 +49,7 @@
 			<p class="text-muted-foreground text-sm font-medium">Real reviews · Real buyers · Their own words</p>
 			<h1 id="landing-title" class="text-4xl font-semibold tracking-tight text-balance md:text-6xl">See what buyers report before you buy</h1>
 			<p class="text-muted-foreground max-w-xl text-lg">
-				DeFaketive reads customer reviews from Lazada PH (in English, Filipino or Taglish) and shows you
+				DeFaketive reads customer reviews from Lazada PH and Shopee PH (in English, Filipino or Taglish) and shows you
 				what buyers report about fakes, defects and safety problems, in their own words.
 			</p>
 			<!-- The box beside this text is the way to check; these lead to the other way, and to how it works. -->
@@ -117,9 +117,9 @@
 		<Card class="grid gap-6 p-6 md:grid-cols-[1fr_auto] md:items-center md:p-8">
 			<div class="space-y-2">
 				<p class="text-muted-foreground flex items-center gap-2 text-sm font-medium"><PuzzleIcon class="size-4" aria-hidden="true" /> For Chrome and Edge on a computer</p>
-				<h2 id="extension-title" class="text-2xl font-semibold tracking-tight">Check right on Lazada</h2>
+				<h2 id="extension-title" class="text-2xl font-semibold tracking-tight">Check right on Lazada and Shopee</h2>
 				<p class="text-muted-foreground max-w-2xl">
-					Add the DeFaketive extension and a Check with DeFaketive button appears on Lazada PH product pages. No copying
+					Add the DeFaketive extension and a Check with DeFaketive button appears on Lazada PH and Shopee PH product pages. No copying
 					links.
 				</p>
 			</div>
