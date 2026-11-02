@@ -402,11 +402,16 @@ def analyze_product_json(
             )
             weights = {index: weight for index, _comment, weight in selected}
         else:
-            unique, usable_count = deduplicate_reviews(comments, model)
-            # Every distinct review is analyzed, so each one carries its own
-            # weight of 1. The legacy summarize path multiplies by this, and 1
-            # is the identity, which keeps the baseline comparison valid.
-            weights = {index: 1.0 for index, _comment in unique}
+            # Every review with text is analyzed, repeats included: a review
+            # posted again still counts toward the score. Each one carries its
+            # own weight of 1. The legacy summarize path multiplies by this, and
+            # 1 is the identity, which keeps the baseline comparison valid.
+            weights = {
+                index: 1.0
+                for index, comment in enumerate(comments)
+                if isinstance(comment, dict) and model.fingerprint(_review_text(comment))
+            }
+            usable_count = len(weights)
 
         seen: dict[str, int] = {}
         pending: list[tuple[int, dict[str, Any], str]] = []
@@ -419,9 +424,11 @@ def analyze_product_json(
             if fingerprint and duplicate_of is None:
                 seen[fingerprint] = index
 
-            included = index in weights and duplicate_of is None
+            # Only the legacy capped sample drops repeats; a full analysis keeps them.
+            capped = bool(review_limit and review_limit > 0)
+            included = index in weights and (duplicate_of is None or not capped)
             comment["included_in_analysis"] = included
-            comment["is_duplicate"] = duplicate_of is not None
+            comment["is_duplicate"] = duplicate_of is not None and capped
             comment["duplicate_of"] = duplicate_of
             if included:
                 pending.append((index, comment, text))

@@ -45,7 +45,7 @@ from .extra_labels import (
     not_as_described_spans,
     quality_spans,
 )
-from .fault_rules import F11_REVISION, S2_REVISION, f11_match, s2_removes
+from .fault_rules import F11_REVISION, F12_REVISION, S2_REVISION, f11_match, s2_removes
 from .safety_lookalikes import S3_REVISION, S4_REVISION, s3_adds, s3_removes
 from .listing_context import LC2_REVISION, LC2F_REVISION, LC3_REVISION, LISTING_CONTEXT_REVISION, lc2_rules, lc2f_rules, lc3_rules
 from .listing_context import review_rules as listing_review_rules
@@ -141,6 +141,12 @@ NEGATION_D_04_REVISION = "f9"
 # "amoy" (smells of electricity) stands in the two words before it.
 POWER_SUPPLY_WORD = "kuryente"
 POWER_SUPPLY_REVISION = "f10"
+# o1 (2 Nov 2026): "the battery lasts so long that I do not charge it for 2 days" is the reviewer's own habit, not a
+# charging fault. A "not charge" term right after a first-person "I/we do/did", with "it/them" after it, is left out.
+OWN_ACTION_REVISION = "o1"
+QUALITY_PRAISE_REVISION = "q1"
+OWN_ACTION_BEFORE = re.compile(r"(?<!\w)(?:i|we|you|ako)\s+(?:do|did|would|will|can|could|never|just)\s+$", re.IGNORECASE)
+OWN_ACTION_AFTER = re.compile(r"^\s*(?:it|them|this|that|my\s+\w+|the\s+\w+)(?!\w)", re.IGNORECASE)
 # Safety in full, tagging guide 1.6 (Rule 11; owner's decisions of 17 Oct 2026),
 # judged once on held-out round 14 (research/PREREGISTRATION_round14.md). Five
 # parts, each checked on and off over every labelled sentence
@@ -322,7 +328,7 @@ AFTER_YEARS_OF_USE = re.compile(
     re.IGNORECASE,
 )
 DENIED_REASONS = frozenset(
-    {"mistaken_belief", "hypothetical", "packaging_only", "after_years_of_use", "durability_praise"}
+    {"mistaken_belief", "hypothetical", "packaging_only", "after_years_of_use", "durability_praise", "own_action"}
 )
 # "mabigat...matagal masira. hoping na sana tumagal" (13 Oct 2026, found
 # scanning fresh reviews): "matagal/tumagal masira" (takes a while to break)
@@ -380,7 +386,7 @@ class _BatteryDurabilityPraise:
     pattern = "battery durability praise f8"
     _LOW = r"(?:ma\s*)?(?:lowbat|lobat|low\s*bat+)\w*"
     _GAP = r"(?:(?!\w*(?:charg|karga|full|puno))\w+\s+){0,2}?"
-    _PRAISE = re.compile(rf"\b(?:napaka|sobrang?\s*)?(?:ma)?ta?gal\w*\s+{_GAP}{_LOW}|\bdugay\s+{_LOW}", re.IGNORECASE)
+    _PRAISE = re.compile(rf"\b(?:napaka|an|ang\s+|sobrang?\s*)?(?:ma)?ta?gal\w*\s+{_GAP}{_LOW}|\bdugay\s+{_LOW}", re.IGNORECASE)
     _NOT_QUICK = re.compile(rf"\b(?:hindi|hinde|di|d|ndi|nde)\s+(?:\w+\s+)?(?:ma)?(?:dali|bilis)\w*\s+{_LOW}", re.IGNORECASE)
     _NEGATORS = frozenset({"hindi", "hinde", "di", "d", "ndi", "nde", "wala", "walang", "not", "never", "pa"})
 
@@ -392,7 +398,8 @@ class _BatteryDurabilityPraise:
 
 
 BATTERY_DURABILITY_PRAISE = _BatteryDurabilityPraise()
-BATTERY_DURABILITY_PRAISE_REVISION_2 = "f8"
+# f8a (2 Nov 2026): "Antagal malowbat" (very long battery) is read as praise too.
+BATTERY_DURABILITY_PRAISE_REVISION_2 = "f8a"
 
 # "Gumagana naman" (it works) - same mechanism as the battery guard above, a
 # different fragment: a bare, isolated "it works" statement, no complaint of
@@ -976,6 +983,14 @@ class LexiconHazardTagger:
                     if (
                         reason is None
                         and self.rules == "0.4"
+                        and re.match(r"^(?:not|no)\s+charg", term)
+                        and OWN_ACTION_BEFORE.search(normalized[: match.start()])
+                        and OWN_ACTION_AFTER.match(normalized[match.end():])
+                    ):
+                        reason = "own_action"
+                    if (
+                        reason is None
+                        and self.rules == "0.4"
                         and category == SAFETY
                         and term == POWER_SUPPLY_WORD
                         and raw_span
@@ -1432,6 +1447,11 @@ class LexiconHazardTagger:
         if addon is not None and extra_kw is not None:
             for category, (on, probability) in addon.decide(normalized, extra_kw, None).items():
                 if on and category not in present:
+                    # q1 (2 Nov 2026): the model adds "poor quality" to praise headed "Sound Quality:" (the word
+                    # "quality" alone). It may not add it to a sentence the sentiment reader calls positive; keyword
+                    # patterns above are not affected, and the complaints it found in a 1,500-review sample are not positive.
+                    if self.rules == "0.4" and category == QUALITY and self.sentiment_label(raw) == "positive":
+                        continue
                     present.add(category)
                     added[category] = round(probability, 4)
         return {
@@ -1627,6 +1647,9 @@ class HazardBadgeModel:
                 + POWER_SUPPLY_REVISION
                 + SAFETY_GUIDE16_REVISION
                 + ("" if F11_OFF else F11_REVISION)
+                + ("" if F11_OFF else F12_REVISION)
+                + OWN_ACTION_REVISION
+                + QUALITY_PRAISE_REVISION
                 + ("" if S2_OFF else S2_REVISION)
                 + ("" if S3_RULES_OFF else S3_REVISION)
                 + ("" if S3_RULES_OFF or S4_RULES_OFF else S4_REVISION)

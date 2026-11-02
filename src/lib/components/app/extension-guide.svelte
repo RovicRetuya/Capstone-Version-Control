@@ -133,7 +133,7 @@
 	</CardContent>
 </Card>
 
-<div class="grid gap-4 md:grid-cols-2">
+<div class="grid grid-cols-1 gap-4 md:grid-cols-2">
 	<Card>
 		<CardHeader><CardTitle>What it reads</CardTitle></CardHeader>
 		<CardContent>

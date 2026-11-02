@@ -27,7 +27,7 @@ const API = 'http://127.0.0.1:5000';
 const ALL = [
 	'links', 'flow', 'scan-flow', 'accounts', 'database', 'features', 'guest', 'lock', 'wording', 'errors',
 	'targets', 'report-flow', 'round10', 'brand', 'a11y', 'a11y-new', 'a11y-dialogs', 'gallery', 'extension', 'extension-browser',
-	'uiux', 'admin', 'tweaks'
+	'uiux', 'admin', 'tweaks', 'responsive'
 ];
 const args = process.argv.slice(2);
 const dev = args.includes('--dev');
@@ -143,6 +143,12 @@ function judge(name, { code, lines }) {
 		const clean = lines.some((line) => line.includes('No accessibility problems found by axe.'));
 		const problems = lines.filter((line) => /problem\(s\)|^\s+- \[/.test(line));
 		return { passed: lines.filter((line) => /\sok$/.test(line)).length, failed: clean ? 0 : Math.max(1, problems.length), detail: clean ? [] : problems };
+	}
+	if (name === 'responsive') {
+		// One "!!" line per page and width that overflows or spills; the lines under it say what.
+		const problems = lines.filter((line) => /^\s+\d+\s+!!/.test(line) || /\[pageerror\]/.test(line));
+		const clean = lines.some((line) => line.includes('No layout problems found.'));
+		return { passed: lines.filter((line) => /^\s+\d+\s+ok/.test(line)).length, failed: clean ? 0 : Math.max(1, problems.length), detail: clean ? [] : problems };
 	}
 	if (name === 'gallery') {
 		const problems = lines.filter((line) => /!!|\[pageerror\]/.test(line));

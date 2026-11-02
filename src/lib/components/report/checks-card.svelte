@@ -71,7 +71,7 @@
 			<section class="grid gap-4" aria-labelledby="checks-deciding">
 				<h3 id="checks-deciding" class="text-sm font-semibold">Can change the result</h3>
 				<!-- Side by side on a wide screen, so the card is not one long strip. -->
-				<div class="grid content-start gap-x-10 gap-y-6 lg:grid-cols-2 xl:grid-cols-3">
+				<div class="grid grid-cols-1 content-start gap-x-10 gap-y-6 lg:grid-cols-2 xl:grid-cols-3">
 					{#each deciding as badge, index (badge.category)}{@render block(badge, index)}{/each}
 				</div>
 			</section>
@@ -83,7 +83,7 @@
 					<h3 id="checks-informing" class="text-sm font-semibold">Doesn't change the result</h3>
 					<p class="text-muted-foreground text-xs">Still worth knowing before you buy.</p>
 				</div>
-				<div class="grid content-start gap-x-10 gap-y-6 lg:grid-cols-2 xl:grid-cols-3">
+				<div class="grid grid-cols-1 content-start gap-x-10 gap-y-6 lg:grid-cols-2 xl:grid-cols-3">
 					{#each informing as badge, index (badge.category)}{@render block(badge, deciding.length + index)}{/each}
 				</div>
 			</section>

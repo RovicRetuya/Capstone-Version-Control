@@ -30,7 +30,7 @@
 		</div>
 	</Card>
 	<div class="flex gap-2"><Skeleton class="h-9 w-24" /><Skeleton class="h-9 w-36" /><Skeleton class="h-9 w-40" /></div>
-	<div class="grid gap-6 lg:grid-cols-2">
+	<div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
 		<Card class="gap-4 p-6">
 			<Skeleton class="h-5 w-40" />
 			<div class="flex items-center gap-6"><Skeleton class="size-36 rounded-full" /><div class="flex-1 space-y-3"><Skeleton class="h-4 w-full" /><Skeleton class="h-4 w-full" /><Skeleton class="h-4 w-full" /></div></div>

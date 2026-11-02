@@ -23,7 +23,7 @@
 		{/if}
 	</div>
 	{#if !library.ready}
-		<div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4" role="status" aria-label="Loading your wishlist">
+		<div class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4" role="status" aria-label="Loading your wishlist">
 			{#each [1, 2, 3] as n (n)}<ProductCardSkeleton />{/each}
 		</div>
 	{:else if library.error}

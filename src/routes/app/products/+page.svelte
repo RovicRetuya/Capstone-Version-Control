@@ -160,7 +160,7 @@
 </p>
 
 {#if catalog.browseLoading && !source.length}
-	<div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4" role="status" aria-label="Loading products">
+	<div class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4" role="status" aria-label="Loading products">
 		{#each [1, 2, 3, 4] as n (n)}<ProductCardSkeleton />{/each}
 	</div>
 {:else if filtered.length}

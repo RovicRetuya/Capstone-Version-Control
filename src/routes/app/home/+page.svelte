@@ -72,9 +72,9 @@
 
 <svelte:head><title>Home · DeFaketive</title></svelte:head>
 
-<header class="mx-auto max-w-3xl space-y-2 pt-4 text-center md:pt-8">
+<header class="mx-auto w-full max-w-3xl min-w-0 space-y-2 pt-4 text-center md:pt-8">
 	<p class="text-sm">{auth.user ? 'Welcome back,' : 'Welcome,'}</p>
-	<h1 class="text-5xl leading-none tracking-tight break-words sm:text-7xl" style="font-family: 'Archivo Black', 'Arial Black', Impact, sans-serif">
+	<h1 class="text-4xl leading-none tracking-tight [overflow-wrap:anywhere] min-[380px]:text-5xl sm:text-7xl" style="font-family: 'Archivo Black', 'Arial Black', Impact, sans-serif">
 		{auth.user ? `${firstName(auth.user.name)}.` : 'shopper.'}
 	</h1>
 	<p class="text-muted-foreground mx-auto max-w-md pt-2">Check what reviewers report before you buy from Lazada PH or Shopee PH.</p>
@@ -142,7 +142,7 @@
 	{/if}
 
 	<!-- What to look at first, beside the overall picture. On a phone they stack, this one on top. -->
-	<div class="grid gap-4 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+	<div class="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
 		<Card class="gap-0 pb-0" aria-labelledby="attention-title">
 			<CardHeader class="pb-4">
 				<h2 id="attention-title" class="flex items-center gap-2 text-base leading-snug font-semibold">
@@ -204,7 +204,7 @@
 {#if firstVisit}
 	<section class="space-y-3" aria-labelledby="how-title">
 		<h2 id="how-title" class="text-lg font-semibold tracking-tight">How it works</h2>
-		<ol class="grid gap-4 md:grid-cols-3">
+		<ol class="grid grid-cols-1 gap-4 md:grid-cols-3">
 			{#each steps as [title, text], index (title)}
 				<li class="reveal" style="--i:{index}">
 					<Card class="h-full gap-2 p-5">
@@ -219,7 +219,7 @@
 
 	<section class="space-y-3" aria-labelledby="tips-title">
 		<h2 id="tips-title" class="text-lg font-semibold tracking-tight">Shopping safety tips</h2>
-		<dl class="grid gap-4 sm:grid-cols-2">
+		<dl class="grid grid-cols-1 gap-4 sm:grid-cols-2">
 			{#each tips as [term, detail], index (term)}
 				<Card class="reveal gap-1 p-5" style="--i:{index}">
 					<dt class="font-medium">{term}</dt>

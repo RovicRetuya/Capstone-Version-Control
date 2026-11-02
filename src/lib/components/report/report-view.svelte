@@ -138,7 +138,7 @@
 	const listedCount = $derived(Number(coverage.reviews_listed || coverage.reviews_available || 0) || 0);
 	const sampleNote = $derived(
 		coverage.sampling === 'stratified_by_star'
-			? `We read ${uniqueCount.toLocaleString()} reviews, up to ${Number(coverage.star_quota || LAZADA_REVIEWS_PER_STAR)} from each star level.${coverage.weighted ? ` The percentages are adjusted to reflect the listing's ${availableCount.toLocaleString()} ratings.` : ''}`
+			? `We read ${uniqueCount.toLocaleString()} reviews, ${Number(coverage.star_quota || 0) > LAZADA_REVIEWS_PER_STAR ? 'every written review the listing shows' : `up to ${Number(coverage.star_quota || LAZADA_REVIEWS_PER_STAR)} from each star level`}.${coverage.weighted ? ` The percentages are adjusted to reflect the listing's ${availableCount.toLocaleString()} ratings.` : ''}`
 			: listedCount > uniqueCount
 				? `We read ${uniqueCount.toLocaleString()} of this listing's ${listedCount.toLocaleString()} reviews.`
 				: listedCount
@@ -487,7 +487,7 @@
 		</TabsList>
 		<TabsContent value="overview" class="animate-in fade-in-0 slide-in-from-bottom-1 grid gap-6 duration-200">
 			<!-- The chart and what the four labels mean, side by side (stacked on a phone); the reviewers' own words follow. -->
-			<div class="grid gap-6 lg:grid-cols-2">
+			<div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
 				<SentimentCard {product} {uniqueCount} />
 				<!-- The link under the result jumps here. -->
 				<VerdictGuide {product} />

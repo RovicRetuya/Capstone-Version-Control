@@ -18,23 +18,23 @@
 </script>
 
 <header class="bg-background/80 sticky top-0 z-40 border-b backdrop-blur">
-	<div class="mx-auto flex h-14 w-full max-w-6xl items-center gap-4 px-4 md:px-6">
-		<Logo href="/" />
+	<div class="mx-auto flex h-14 w-full max-w-6xl items-center gap-2 px-3 sm:gap-4 sm:px-4 md:px-6">
+		<Logo href="/" class="shrink-0 max-[380px]:[&>span]:hidden" />
 		<nav class="ml-4 hidden items-center gap-1 text-sm md:flex" aria-label="Main navigation">
 			<!-- Every link stays on the public site, in the order the landing page shows the sections. -->
 			<Button variant="ghost" size="sm" href="/#how">How it works</Button>
 			<Button variant="ghost" size="sm" href="/#faq">FAQ</Button>
 			<Button variant="ghost" size="sm" href="/#about">About</Button>
 		</nav>
-		<div class="ml-auto flex items-center gap-1">
-			<ThemeToggle />
+		<div class="ml-auto flex min-w-0 items-center gap-1">
+			<span class="max-[360px]:hidden"><ThemeToggle /></span>
 			{#if adminSession.me}
 				<span class="text-muted-foreground mx-2 hidden text-sm sm:inline">Hi, {firstName(adminSession.me.name)}</span>
-				<Button variant="ghost" size="sm" onclick={adminSignOut}>Sign out</Button>
+				<Button variant="ghost" size="sm" class="max-[420px]:hidden" onclick={adminSignOut}>Sign out</Button>
 				<Button size="sm" href="/admin"><ShieldCheckIcon /> Admin</Button>
 			{:else if auth.user}
 				<span class="text-muted-foreground mx-2 hidden text-sm sm:inline">Hi, {firstName(auth.user.name)}</span>
-				<Button variant="ghost" size="sm" onclick={signOut}>Sign out</Button>
+				<Button variant="ghost" size="sm" class="max-[420px]:hidden" onclick={signOut}>Sign out</Button>
 				<Button size="sm" href="/app/home">Open app</Button>
 			{:else}
 				<Button variant="ghost" size="sm" onclick={() => ui.openAuth('signin')}>Sign in</Button>
