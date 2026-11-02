@@ -47,7 +47,8 @@ npm run build
 echo "== Service =="
 sed -e "s#__REPO__#$REPO#g" -e "s#__USER__#$(id -un)#g" deploy/defaketive.service | sudo tee /etc/systemd/system/defaketive.service >/dev/null
 sudo systemctl daemon-reload
-sudo systemctl enable --now defaketive
+sudo systemctl enable defaketive
+sudo systemctl restart defaketive  # restart, not just start: a running service keeps the old code in memory
 sleep 5
 curl -fsS http://127.0.0.1:8080/ >/dev/null && echo "DeFaketive is answering on port 8080." || echo "Not answering yet: sudo journalctl -u defaketive -n 50"
 echo "Next: set up the public address, see deploy/SETUP.md step 5."
