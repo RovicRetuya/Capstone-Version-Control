@@ -3,8 +3,8 @@
 // The same shape of collection as collect.js (Lazada), from the review list Shopee's own product page loads
 // (shopee.ph/api/v4/item/get_ratings), asked from inside the product page with the shopper's own session:
 //   - the star counts from the first page (rating_count, 1 star first; sent on as 5 stars first, as collect.js does);
-//   - then up to 60 written reviews (filter=1) from each star level (type=1..5), in the order 3, 2, 4, 1, 5;
-//     59 per request, which is the most the list gives; at most its first 300 entries, as collect.js reads;
+//   - then every written review (filter=1) of each star level (type=1..5), in the order 3, 2, 4, 1, 5;
+//     59 per request, which is the most the list gives, until the list runs out (no quota, no depth limit);
 //   - a review is kept only when its stars are the level asked for and it has text;
 //   - one request at a time, a second apart.
 // If Shopee answers with a check or verification instead of reviews, collection stops and the shopper is told;
@@ -15,26 +15,30 @@
 globalThis.DefaketiveShopeeCollect = (() => {
 	const FEED = 'https://shopee.ph/api/v4/item/get_ratings';
 	const ORDER = [3, 2, 4, 1, 5];
-	const QUOTA = 60;
 	const PAGE_SIZE = 59;
 	const FIRST_PAGE_SIZE = 6;
-	const DEPTH = 300;
 	const PAUSE_MS = 1000;
 	const MANILA_HOURS = 8;
 	// What Shopee sends in place of reviews when it wants a check: its anti-bot error code, or a verification page.
 	const CHECK_ERROR = 90309999;
 	const CHECK_MARKERS = ['90309999', '/verify/', 'captcha', 'is_customer_verification_required'];
 
-	/** {shopId, itemId} from -i.<shop>.<item> or /product/<shop>/<item>, or null. */
+	/**
+	 * {shopId, itemId} from -i.<shop>.<item> or /product/<shop>/<item>, or null. When the address also carries
+	 * vShopId and vItemId (Shopee Mall pages opened from a search), those name the listing whose ratings the page shows.
+	 */
 	function productIds(url) {
-		let path;
+		let parsed;
 		try {
-			path = new URL(url).pathname;
+			parsed = new URL(url);
 		} catch {
 			return null;
 		}
-		const found = path.match(/-i\.(\d+)\.(\d+)$/) || path.match(/^\/product\/(\d+)\/(\d+)$/);
-		return found ? { shopId: found[1], itemId: found[2] } : null;
+		const found = parsed.pathname.match(/-i\.(\d+)\.(\d+)$/) || parsed.pathname.match(/^\/product\/(\d+)\/(\d+)$/);
+		if (!found) return null;
+		const shown = { shopId: parsed.searchParams.get('vShopId'), itemId: parsed.searchParams.get('vItemId') };
+		if (/^\d+$/.test(shown.shopId || '') && /^\d+$/.test(shown.itemId || '')) return shown;
+		return { shopId: found[1], itemId: found[2] };
 	}
 	const clean = (text) =>
 		String(text ?? '')
@@ -99,10 +103,12 @@ globalThis.DefaketiveShopeeCollect = (() => {
 		};
 	}
 
-	/** Up to 60 written reviews of one star level, and why collection of that level stopped. */
+	/** Every written review of one star level, and why collection of that level stopped (always 'feed_ended'). */
 	async function collectLevel({ fetchText, sleep, ids, star, listed, onCount }) {
 		const collected = [];
-		const seen = new Set();
+		const seen = new Map();
+		const skipped = { no_text: 0, other_star: 0, bad_id: 0, repeat_id: 0 };
+		let returned = 0;
 		let stop = '';
 		let offset = 0;
 		while (!stop) {
@@ -113,22 +119,27 @@ globalThis.DefaketiveShopeeCollect = (() => {
 			for (const item of items) {
 				if (!item || typeof item !== 'object') continue;
 				const entry = review(item, star);
+				if (entry.rating !== star) skipped.other_star += 1;
+				else if (!entry.content) skipped.no_text += 1;
+				else if (!/^\d+$/.test(entry.comment_id)) skipped.bad_id += 1;
 				if (entry.rating !== star || !entry.content || !/^\d+$/.test(entry.comment_id)) continue;
-				if (seen.has(entry.comment_id)) continue;
-				seen.add(entry.comment_id);
-				collected.push(entry);
-				if (collected.length >= QUOTA) {
-					stop = 'target_reached';
-					break;
+				// Shopee lists some reviews more than once, and each listing counts toward the score. A repeat gets
+				// its own number (the id and a two-digit count) so the server can tell the copies apart.
+				const times = seen.get(entry.comment_id) || 0;
+				seen.set(entry.comment_id, times + 1);
+				if (times) {
+					skipped.repeat_id += 1;
+					entry.comment_id = `${entry.comment_id}${String(times).padStart(2, '0')}`;
+					if (seen.has(entry.comment_id)) continue;
 				}
+				collected.push(entry);
 			}
+			returned += items.length;
 			onCount?.(collected.length);
 			offset += items.length;
-			if (stop) break;
 			if (!items.length || offset >= listed) stop = 'feed_ended';
-			else if (offset >= DEPTH) stop = 'feed_limit';
 		}
-		return { reviews: collected, stop };
+		return { reviews: collected, stop, skipped, returned };
 	}
 
 	/**
@@ -152,6 +163,7 @@ globalThis.DefaketiveShopeeCollect = (() => {
 
 		const levels = {};
 		const reviews = [];
+		const skipped = { returned: 0, no_text: 0, other_star: 0, bad_id: 0, repeat_id: 0 };
 		let done = 0;
 		for (const star of ORDER) {
 			if (!listed[star]) {
@@ -172,6 +184,8 @@ globalThis.DefaketiveShopeeCollect = (() => {
 			if (result.problem) return { status: result.problem };
 			levels[star] = { stop_reason: result.stop };
 			reviews.push(...result.reviews);
+			skipped.returned += result.returned;
+			for (const reason of Object.keys(result.skipped)) skipped[reason] += result.skipped[reason];
 			done += 1;
 		}
 		if (!reviews.length) return { status: 'no_written_reviews' };
@@ -182,9 +196,10 @@ globalThis.DefaketiveShopeeCollect = (() => {
 			status: 'ok',
 			ratings: { scores: counts, average: Math.round(average * 100) / 100 },
 			levels,
-			reviews
+			reviews,
+			skipped
 		};
 	}
 
-	return { collect, productIds, clean, feedUrl, day, ORDER, QUOTA, PAGE_SIZE, DEPTH, PAUSE_MS };
+	return { collect, productIds, clean, feedUrl, day, ORDER, PAGE_SIZE, PAUSE_MS };
 })();

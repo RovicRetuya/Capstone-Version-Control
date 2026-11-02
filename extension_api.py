@@ -49,6 +49,7 @@ blueprint = Blueprint("extension", __name__, url_prefix="/api/extension")
 
 QUOTA = 60  # written reviews per star level, as LAZADA_REVIEWS_PER_STAR in the original app
 FEED_DEPTH = 300
+SHOPEE_MAX_REVIEWS = 30_000  # the Shopee collector reads every written review; this only bounds what a browser may send
 COLLECTION_ORDER = (3, 2, 4, 1, 5)
 STOP_REASONS = {"target_reached", "feed_ended", "feed_limit", "none_listed"}
 LINK = re.compile(r"^https://www\.lazada\.com\.ph/products/[^?#\s]{1,400}?-i(\d{5,})(?:-s\d+)?\.html$")
@@ -180,8 +181,9 @@ def product_from_extension(sent: Any) -> dict[str, Any]:
     if not isinstance(levels, dict) or set(levels) != {str(star) for star in range(1, 6)}:
         raise Invalid("levels must describe the five star levels")
     reviews = sent.get("reviews")
-    if not isinstance(reviews, list) or len(reviews) > QUOTA * 5:
-        raise Invalid("reviews is not a list of at most 300")
+    cap = SHOPEE_MAX_REVIEWS if marketplace == "shopee" else QUOTA * 5
+    if not isinstance(reviews, list) or len(reviews) > cap:
+        raise Invalid(f"reviews is not a list of at most {cap}")
 
     comments: list[dict[str, Any]] = []
     seen: set[str] = set()
@@ -217,11 +219,11 @@ def product_from_extension(sent: Any) -> dict[str, Any]:
         if stop not in STOP_REASONS:
             raise Invalid(f"{star}-star stop reason is not one a finished collection gives")
         collected = per_star[star]
-        if collected > min(QUOTA, listed[star]):
+        if collected > (listed[star] if marketplace == "shopee" else min(QUOTA, listed[star])):
             raise Invalid(f"more {star}-star reviews than the level lists or the quota allows")
         if (listed[star] == 0) != (stop == "none_listed"):
             raise Invalid(f"{star}-star level: 'none_listed' must mean the level lists none")
-        if stop == "target_reached" and collected != QUOTA:
+        if stop == "target_reached" and marketplace != "shopee" and collected != QUOTA:
             raise Invalid(f"{star}-star level reached its target without {QUOTA} reviews")
         # The list is cut at 300 entries; a level listing fewer cannot reach that cut. Lazada's 2-star list also
         # holds the 1-star reviews, so there the two together count.
@@ -273,7 +275,7 @@ def product_from_extension(sent: Any) -> dict[str, Any]:
         "applied_rating_filters": list(COLLECTION_ORDER),
         "star_collection": star_collection,
         "sampling_method": "stratified_by_star",
-        "star_quota": QUOTA,
+        "star_quota": max(listed.values()) if marketplace == "shopee" else QUOTA,
         "review_order": "review_feed_default_within_star",
         "collected_via": SOURCE,
     }

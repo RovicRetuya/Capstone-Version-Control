@@ -144,7 +144,7 @@
 			if (!answer?.ok) throw new Error('not handed over');
 			show(
 				answer.reused ? 'Report opened in your DeFaketive tab' : 'Report opened in a new tab',
-				`${result.reviews.length} reviews collected. DeFaketive is reading them now.`,
+				`${result.reviews.length} reviews collected (Shopee lists ${result.ratings.scores.join('/')} ratings, 5 to 1 stars; read ${[5, 4, 3, 2, 1].map((star) => result.reviews.filter((r) => r.rating === star).length).join('/')}).${result.skipped ? ` Shopee sent ${result.skipped.returned} entries; ${result.skipped.no_text} without text skipped, ${result.skipped.repeat_id} repeats kept, ${result.skipped.other_star} other-star and ${result.skipped.bad_id} bad ids skipped.` : ''} DeFaketive is reading them now.`,
 				100
 			);
 		} catch {
