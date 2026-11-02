@@ -171,6 +171,56 @@ export function listingLabel(product?: Product | null): string {
 	return key === 'other' ? 'View the listing' : `View on ${MARKETPLACES[key].replace(' PH', '')}`;
 }
 
+/** Short links the Lazada app hands out: they redirect to the product page and name nothing themselves. */
+const SHORT_HOSTS = ['s.lazada.com.ph', 'lzd.co'];
+
+export function isShortLink(value: unknown): boolean {
+	try {
+		return SHORT_HOSTS.includes(new URL(linkFrom(String(value ?? ''))).hostname.toLowerCase());
+	} catch {
+		return false;
+	}
+}
+
+/**
+ * The product link inside whatever was pasted. The Lazada and Shopee apps copy a title plus a link ("M10 TWS
+ * Headphone https://s.lazada.com.ph/s.AbCd"), not a bare address, and a phone's browser adds tracking after "?".
+ * A product page is cut back to host and path (m.lazada.com.ph is www.lazada.com.ph); anything else is returned as it was.
+ */
+export function linkFrom(value: string): string {
+	const text = String(value ?? '').trim();
+	const found = (text.match(/https?:\/\/[^\s<>"']+/gi) ?? []).map((link) => link.replace(/[.,;:!?)\]]+$/, ''));
+	const link = found.find((candidate) => {
+		try {
+			const host = new URL(candidate).hostname.toLowerCase();
+			return /(^|\.)(lazada\.com\.ph|shopee\.ph|temu\.com)$/.test(host) || SHORT_HOSTS.includes(host);
+		} catch {
+			return false;
+		}
+	});
+	if (!link) return text;
+	try {
+		const url = new URL(link);
+		const host = url.hostname.toLowerCase();
+		if (host.endsWith('lazada.com.ph') && url.pathname.startsWith('/products/')) {
+			return `https://www.lazada.com.ph${url.pathname}`;
+		}
+	} catch {
+		// Not a link after all; fall through.
+	}
+	return link;
+}
+
+/** The marketplace's own number for a listing (Lazada's "-i123", Shopee's "i.shop.item"), or '' when it has none. */
+export function listingId(value: unknown): string {
+	const text = String(value ?? '');
+	const lazada = text.match(/-i(\d{5,})(?:-s\d+)?\.html/i);
+	if (lazada) return `lazada:${lazada[1]}`;
+	const shopee = text.match(/-i\.(\d+)\.(\d+)|\/product\/(\d+)\/(\d+)/i);
+	if (shopee) return `shopee:${shopee[1] ?? shopee[3]}.${shopee[2] ?? shopee[4]}`;
+	return '';
+}
+
 /**
  * A listing address reduced to what names the product, so two copies of one link compare equal.
  * Host and path are enough for Shopee and Lazada (the rest is tracking). Temu gives every product the same
@@ -178,7 +228,7 @@ export function listingLabel(product?: Product | null): string {
  */
 export function linkIdentity(value: unknown): string {
 	try {
-		const url = new URL(String(value ?? '').trim());
+		const url = new URL(linkFrom(String(value ?? '')));
 		const host = url.hostname.toLowerCase().replace(/^www\./, '');
 		const id = `${host}${url.pathname.replace(/\/+$/, '').toLowerCase()}`;
 		const goods = host.endsWith('temu.com') ? url.searchParams.get('goods_id') : null;
@@ -209,14 +259,14 @@ export function searchProducts(products: Product[], query: string, limit = 30): 
 export function queryContext(value: string): { isUrl: boolean; platform: Marketplace | null } {
 	let parsed: URL;
 	try {
-		parsed = new URL(String(value ?? '').trim());
+		parsed = new URL(linkFrom(String(value ?? '')));
 	} catch {
 		return { isUrl: false, platform: null };
 	}
 	if (!/^https?:$/.test(parsed.protocol)) return { isUrl: false, platform: null };
 	const host = parsed.hostname.toLowerCase();
 	if (host === 'shopee.ph' || host.endsWith('.shopee.ph')) return { isUrl: true, platform: 'shopee' };
-	if (host === 'lazada.com.ph' || host.endsWith('.lazada.com.ph')) return { isUrl: true, platform: 'lazada' };
+	if (host === 'lazada.com.ph' || host.endsWith('.lazada.com.ph') || host === 'lzd.co') return { isUrl: true, platform: 'lazada' };
 	if (host === 'temu.com' || host.endsWith('.temu.com')) return { isUrl: true, platform: 'temu' };
 	return { isUrl: true, platform: null };
 }
