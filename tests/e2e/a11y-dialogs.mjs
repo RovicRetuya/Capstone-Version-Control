@@ -67,7 +67,6 @@ context.on('console', __warn);
 		await signUp(context, base);
 		const page = await context.newPage();
 		await page.goto(base + '/app/home', { waitUntil: 'networkidle' });
-		await page.getByRole('button', { name: /Toggle Sidebar/i }).first().click();
 		await scan(page, `${scheme}: phone menu`);
 		await page.screenshot({ path: `tests/e2e/shots/phone_menu_${scheme}.png` });
 		await context.close();

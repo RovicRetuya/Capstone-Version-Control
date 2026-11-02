@@ -15,9 +15,8 @@ How it differs from start.cmd, which stays the way to use the app on this PC:
   Cloudflare's header (only on requests that come from this computer, which is where cloudflared runs).
 - Both databases are backed up a minute after start and then once a day (scripts/backup_databases.py).
 - A few safety headers on every answer, and /api answers are never cached.
-- The admin app (admin/build/, made by `npm run admin:build`) has an address of its own: --admin-port (8081),
-  on --admin-host (127.0.0.1: only this computer, so the public tunnel never reaches it). /api/admin/* then
-  answers only there (admin_api.door_only); the public address says 404. --admin-port 0 serves no admin app.
+- The admin side is a page of the app itself (/admin), signed in on the same sign-in as everyone else; only the one
+  admin account (admin_api.py) gets past it.
 
 Everything in protections.py (closed old routes, daily limits, one Chrome at a time, no reviewer names) is part of
 server.py, so it is on here too.
@@ -36,7 +35,6 @@ from typing import Any
 
 HERE = Path(__file__).resolve().parent
 BUILD = HERE / "build"
-ADMIN_BUILD = HERE / "admin" / "build"
 # The built app's file names change with their content, so these can be kept for a year.
 IMMUTABLE = "_app/immutable/"
 BACKUP_EVERY = 24 * 60 * 60
@@ -53,10 +51,6 @@ def _arguments(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--proxy", choices=("none", "cloudflare"), default=os.environ.get("DEFAKETIVE_PROXY", "none"),
                         help="what stands between the visitor and the app (default none)")
     parser.add_argument("--no-backups", action="store_true", help="do not back up the databases")
-    parser.add_argument("--admin-host", default="127.0.0.1", help="address the admin app listens on (default "
-                        "127.0.0.1: this computer only)")
-    parser.add_argument("--admin-port", type=int, default=int(os.environ.get("ADMIN_PORT", "8081")),
-                        help="port of the admin app (default 8081; 0: no admin app)")
     return parser.parse_args(argv)
 
 
@@ -112,43 +106,6 @@ def _safety_headers(response: Any) -> Any:
     return response
 
 
-def create_admin_app(app: Any) -> Any:
-    """The admin app's own address: its screens (admin/build/), and /api passed to the app, marked as come in here."""
-    if not (ADMIN_BUILD / "index.html").is_file():
-        sys.exit(f"The admin app was not found in {ADMIN_BUILD}. Run `npm run admin:build` first (public.cmd does this).")
-
-    import admin_api
-    from flask import Flask, send_from_directory
-
-    screens = Flask("defaketive-admin-screens")
-    build = ADMIN_BUILD.resolve()
-
-    @screens.get("/", defaults={"path": ""})
-    @screens.get("/<path:path>")
-    def admin_screens(path: str) -> Any:
-        candidate = (build / path).resolve() if path else build
-        if path and candidate.is_relative_to(build) and candidate.is_file():
-            if path.startswith("assets/"):  # names that change with their content
-                response = send_from_directory(build, path, max_age=365 * 24 * 60 * 60)
-                response.cache_control.immutable = True
-                return response
-            response = send_from_directory(build, path, max_age=0)
-        else:
-            response = send_from_directory(build, "index.html", max_age=0)
-        response.cache_control.no_cache = True
-        return response
-
-    screens.after_request(_safety_headers)
-
-    def door(environ: dict[str, Any], start_response: Any) -> Any:
-        if environ.get("PATH_INFO", "").startswith("/api/"):
-            environ[admin_api.DOOR] = True
-            return app(environ, start_response)
-        return screens(environ, start_response)
-
-    return door
-
-
 def _backup_script() -> Any:
     spec = importlib.util.spec_from_file_location("backup_databases", HERE / "scripts" / "backup_databases.py")
     module = importlib.util.module_from_spec(spec)
@@ -182,15 +139,6 @@ def main(argv: list[str] | None = None) -> None:
         threading.Thread(target=_daily_backups, daemon=True, name="defaketive-backups").start()
     print(f"DeFaketive is running on http://{args.host}:{args.port} (https: {'yes' if args.https else 'no'}, "
           f"proxy: {args.proxy}). Keep this window open; close it to stop.", flush=True)
-    if args.admin_port:
-        import admin_api
-
-        admin_app = create_admin_app(app)
-        admin_api.door_only = True
-        threading.Thread(target=serve, args=(admin_app,), kwargs={
-            "host": args.admin_host, "port": args.admin_port, "threads": 4, "ident": "DeFaketive admin",
-        }, daemon=True, name="defaketive-admin").start()
-        print(f"The admin app is on http://{args.admin_host}:{args.admin_port}", flush=True)
     serve(app, host=args.host, port=args.port, threads=args.threads, ident="DeFaketive",
           max_request_body_size=11 * 1024 * 1024)
 

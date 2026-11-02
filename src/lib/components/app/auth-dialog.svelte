@@ -17,6 +17,7 @@
 	import { Separator } from '#lib/components/ui/separator/index.js';
 	import { Spinner } from '#lib/components/ui/spinner/index.js';
 	import { firstName } from '#lib/product.js';
+	import { tryAdminSignIn } from '#lib/stores/admin.svelte.js';
 	import { auth } from '#lib/stores/auth.svelte.js';
 	import { library } from '#lib/stores/library.svelte.js';
 	import { ui } from '#lib/stores/ui.svelte.js';
@@ -51,6 +52,14 @@
 		reset();
 		busy = true;
 		try {
+			// The admin account signs in to the admin side; every other account goes on to the shopping app.
+			if (!signup && (await tryAdminSignIn(email.trim(), password))) {
+				email = password = '';
+				ui.authOpen = false;
+				ui.afterAuth = '';
+				await goto('/admin');
+				return;
+			}
 			const me = signup
 				? await auth.signUp({ full_name: fullName, email, password, confirm, agree })
 				: await auth.signIn(email, password);

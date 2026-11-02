@@ -168,9 +168,7 @@ async function audit(page, scene) {
 
 	await page.goto(base + '/app/home', { waitUntil: 'networkidle' });
 	await settle(page);
-	await page.getByRole('button', { name: /Toggle Sidebar/i }).first().click();
-	await settle(page, 700);
-	await audit(page, 'side menu open');
+	await audit(page, 'icon menu');
 	await page.screenshot({ path: 'tests/e2e/shots/targets_menu.png' });
 	await page.getByRole('button', { name: /Test Shopper/ }).click();
 	await settle(page, 500);

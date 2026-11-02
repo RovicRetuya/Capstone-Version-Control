@@ -4,8 +4,7 @@ cd /d "%~dp0"
 
 rem Starts DeFaketive for use or for a demo:
 rem   server.py (the original DeFaketive app plus a few read-only database routes) on port 5000,
-rem   the finished build of this shadcn version on port 5173,
-rem   and the admin app (admin\, for the DTI staff who run the site) on port 5175.
+rem   and the finished build of this shadcn version on port 5173 (its admin side is at /admin).
 rem To change the code and see it update as you type, use dev.cmd instead.
 rem The original app: DEFAKETIVE_ORIGINAL, else its own folder beside this one (the developer's PC, with the real
 rem database), else backend\, the copy this repo carries so it runs on any PC (set up by setup.cmd).
@@ -52,7 +51,6 @@ node scripts\needs-build.mjs
 if errorlevel 1 (
     echo Preparing the app, this takes about half a minute...
     call npm run build
-    if not errorlevel 1 call npm run admin:build
     if errorlevel 1 (
         echo The app could not be prepared. Nothing was started.
         pause
@@ -62,9 +60,6 @@ if errorlevel 1 (
 
 echo Starting DeFaketive (the original app plus the database routes) on http://127.0.0.1:5000 ...
 start "DeFaketive server (keep open)" /d "%OLD%" "%PY%" "%~dp0server.py"
-
-echo Starting the admin app on http://localhost:5175 ...
-start "" /b cmd /c npm run admin:preview
 
 echo Starting the app on http://localhost:5173 ...
 echo The browser opens by itself when both are ready. Keep this window open.

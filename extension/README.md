@@ -1,6 +1,6 @@
 # DeFaketive browser extension
 
-Adds a **Check with DeFaketive** button to Lazada PH product pages. Pressing it reads the product's reviews in the
+Adds a **Check with DeFaketive** button to Lazada PH and Shopee PH product pages (shopper guide: `GUIDE.md`). Pressing it reads the product's reviews in the
 shopper's own browser and opens the DeFaketive report (in the DeFaketive tab already open, or a new one). Chrome and Edge on a computer; phone browsers
 have no extensions.
 

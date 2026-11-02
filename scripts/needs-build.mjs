@@ -15,11 +15,10 @@ function lastChanged(target) {
 	return Math.max(0, ...fs.readdirSync(target).map((name) => lastChanged(path.join(target, name))));
 }
 
-// Everything each build is made from. The admin app also uses the shopping app's components, in src/lib.
+// Everything the build is made from.
 const shared = ['package.json', 'package-lock.json', 'components.json'];
 const builds = [
-	{ output: 'build/index.html', sources: ['src', 'static', 'vite.config.ts', 'tsconfig.json', ...shared] },
-	{ output: 'admin/build/index.html', sources: ['admin/src', 'admin/index.html', 'admin/vite.config.ts', 'src/lib', 'src/routes/layout.css', ...shared] }
+	{ output: 'build/index.html', sources: ['src', 'static', 'vite.config.ts', 'tsconfig.json', ...shared] }
 ];
 const current = builds.every(({ output, sources }) => {
 	const changed = Math.max(...sources.map((name) => lastChanged(path.join(root, name))));

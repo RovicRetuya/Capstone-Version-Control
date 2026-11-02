@@ -1,5 +1,5 @@
 import { api, ApiError, json } from '#lib/api.js';
-import type { AdminMe } from './types.js';
+import type { AdminMe } from '#lib/admin-types.js';
 
 /**
  * Who is signed in to the admin app. Its sign-in is its own (admin_api.py keeps it apart from the shopping app's),
@@ -49,6 +49,21 @@ export async function adminApi<T = unknown>(url: string, options: RequestInit = 
 			session.me = null;
 			session.notice = error.message;
 		}
+		throw error;
+	}
+}
+
+/**
+ * Sign in as the admin with these credentials. True when it worked; false when the account is not the admin (403) or
+ * this address offers no admin sign-in (404), so the caller goes on to the shopping app's sign-in. Anything else
+ * (a wrong password, too many tries) is thrown, to be shown as it is.
+ */
+export async function tryAdminSignIn(email: string, password: string): Promise<boolean> {
+	try {
+		await session.signIn(email, password);
+		return true;
+	} catch (error) {
+		if (error instanceof ApiError && (error.status === 403 || error.status === 404)) return false;
 		throw error;
 	}
 }

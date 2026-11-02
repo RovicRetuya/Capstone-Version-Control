@@ -1,5 +1,0 @@
-/* The shopping app's colours, type and components, so both look like one product. */
-@import '../../src/routes/layout.css';
-
-@source './';
-@source '../../src/lib/components';

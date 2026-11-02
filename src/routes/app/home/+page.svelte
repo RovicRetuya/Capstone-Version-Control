@@ -72,13 +72,15 @@
 
 <svelte:head><title>Home · DeFaketive</title></svelte:head>
 
-<header class="space-y-1">
-	<p class="text-muted-foreground text-sm">{auth.user ? 'Welcome back,' : 'Welcome,'}</p>
-	<h1 class="text-3xl font-semibold tracking-tight">{auth.user ? `${firstName(auth.user.name)}.` : 'shopper.'}</h1>
-	<p class="text-muted-foreground">Check what reviewers report before you buy from Lazada PH or Shopee PH.</p>
+<header class="mx-auto max-w-3xl space-y-2 pt-4 text-center md:pt-8">
+	<p class="text-sm">{auth.user ? 'Welcome back,' : 'Welcome,'}</p>
+	<h1 class="text-5xl leading-none tracking-tight break-words sm:text-7xl" style="font-family: 'Archivo Black', 'Arial Black', Impact, sans-serif">
+		{auth.user ? `${firstName(auth.user.name)}.` : 'shopper.'}
+	</h1>
+	<p class="text-muted-foreground mx-auto max-w-md pt-2">Check what reviewers report before you buy from Lazada PH or Shopee PH.</p>
 </header>
 
-<Card class="p-4 md:p-6" aria-label="Check a product">
+<Card class="mx-auto w-full max-w-3xl p-4 md:p-6" aria-label="Check a product">
 	<ScanStartForm autofill />
 </Card>
 
@@ -94,14 +96,49 @@
 	{#if !library.ready}
 		<StatsSkeleton />
 	{:else}
-		<dl class="grid grid-cols-2 gap-4 lg:grid-cols-4" aria-label="Your activity in numbers">
-			{#each stats as stat, index (stat.label)}
-				<Card class="reveal gap-1 p-4" style="--i:{index}">
-					<dd class="text-3xl font-semibold tabular-nums"><CountUp value={stat.value} /></dd>
-					<dt class="text-muted-foreground text-sm">{stat.label}</dt>
-				</Card>
-			{/each}
-		</dl>
+		<Card class="mx-auto w-full max-w-3xl gap-0 p-0">
+			<dl class="grid grid-cols-2 lg:grid-cols-4" aria-label="Your activity in numbers">
+				{#each stats as stat, index (stat.label)}
+					<div class="reveal flex flex-col gap-1 p-5 {index % 2 ? 'border-l' : ''} {index > 1 ? 'max-lg:border-t' : ''} {index > 0 ? 'lg:border-l' : ''}" style="--i:{index}">
+						<dd class="text-3xl font-extrabold tabular-nums"><CountUp value={stat.value} /></dd>
+						<dt class="text-muted-foreground font-mono text-[10px] tracking-widest uppercase">{stat.label}</dt>
+					</div>
+				{/each}
+			</dl>
+		</Card>
+	{/if}
+
+	{#if library.ready && (safety.length || caution.length)}
+		<section class="mx-auto flex w-full max-w-4xl flex-wrap items-end justify-between gap-3 pt-2" aria-label="What needs a look">
+			<div class="space-y-1">
+				{#if safety.length}
+					<h2 class="text-destructive text-sm font-bold">{safety.length} product{safety.length === 1 ? ' has' : 's have'} safety reports</h2>
+					<p class="text-muted-foreground text-sm">Reviewers described fire, smoke, shocks or overheating.</p>
+				{:else}
+					<h2 class="text-sm font-bold">{caution.length} product{caution.length === 1 ? ' needs' : 's need'} caution</h2>
+					<p class="text-muted-foreground text-sm">Reviewers reported problems worth a look before you buy.</p>
+				{/if}
+			</div>
+			<a href="/app/history?filter={safety.length ? 'safety' : 'caution'}" class="text-destructive hover:underline text-sm font-semibold {safety.length ? '' : 'text-foreground'}">View them →</a>
+		</section>
+	{/if}
+
+	<!-- Then everything recent. -->
+	{#if !library.ready}
+		<section class="space-y-3" aria-label="Loading recently checked products">
+			<Skeleton class="h-6 w-48" />
+			<div class="flex gap-4 overflow-hidden">{#each [1, 2, 3, 4] as n (n)}<ProductCardSkeleton class="w-64 shrink-0" />{/each}</div>
+		</section>
+	{:else}
+		<ProductRow id="recent" title="Recently checked" href="/app/history" products={products.slice(0, 10)}>
+			{#snippet empty()}
+				<EmptyState art="search" title={emptyTitle} description={emptyCopy}>
+					{#snippet actions()}
+						<Button href="/app/analyze">Check a product</Button>
+					{/snippet}
+				</EmptyState>
+			{/snippet}
+		</ProductRow>
 	{/if}
 
 	<!-- What to look at first, beside the overall picture. On a phone they stack, this one on top. -->
@@ -162,24 +199,6 @@
 			</CardContent>
 		</Card>
 	</div>
-
-	<!-- Then everything recent. -->
-	{#if !library.ready}
-		<section class="space-y-3" aria-label="Loading recently checked products">
-			<Skeleton class="h-6 w-48" />
-			<div class="flex gap-4 overflow-hidden">{#each [1, 2, 3, 4] as n (n)}<ProductCardSkeleton class="w-64 shrink-0" />{/each}</div>
-		</section>
-	{:else}
-		<ProductRow id="recent" title="Recently checked" href="/app/history" products={products.slice(0, 10)}>
-			{#snippet empty()}
-				<EmptyState art="search" title={emptyTitle} description={emptyCopy}>
-					{#snippet actions()}
-						<Button href="/app/analyze">Check a product</Button>
-					{/snippet}
-				</EmptyState>
-			{/snippet}
-		</ProductRow>
-	{/if}
 {/if}
 
 {#if firstVisit}

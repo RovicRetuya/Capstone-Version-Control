@@ -93,8 +93,7 @@ browser  ->  Vite (localhost:5173)  --/api-->  server.py (127.0.0.1:5000)  ->  d
 **To use it or show it: double-click `start.cmd`.** It
 
 1. prepares the app (a build, about half a minute) only when the code changed since the last time;
-2. starts `server.py` in its own window (port 5000), serves the finished build (port 5173) and the admin app
-   (<http://localhost:5175>, see below);
+2. starts `server.py` in its own window (port 5000), serves the finished build (port 5173), whose admin side is the `/admin` page (see below);
 3. opens <http://localhost:5173> by itself once both answer. If the app is already running, it just opens it.
 
 Keep both windows open while you use the app. Close them to stop it.
@@ -104,8 +103,7 @@ you type. It is slower on first load, and it shows developer error pages (also F
 `DEFAKETIVE_DEBUG=1`), which is why it is not what `start.cmd` uses.
 
 By hand, the same thing is: `npm install` (first time only), then `npm run build` and `npm run preview -- --port 5173`
-(or `npm run dev -- --port 5173`), `npm run admin:build` and `npm run admin:preview` (or `npm run admin:dev`), and in
-another window
+(or `npm run dev -- --port 5173`), and in another window
 `..\Capstone-Version-Control-Version-1.1\.venv\Scripts\python.exe server.py`.
 
 If the server runs somewhere else, set `DEFAKETIVE_API` first, for example
@@ -116,9 +114,8 @@ to its folder.
 
 **For the public: `public.cmd`** (not `start.cmd`). It builds the app when needed and starts `serve.py` on
 <http://127.0.0.1:8080>: one proper web server (Waitress) that serves the screens and `/api` from the same address.
-Keep its window open. The admin app gets an address of its own, <http://127.0.0.1:8081>, for this PC only: point no
-tunnel at it (`--admin-port`, `--admin-host` change that; `--admin-port 0` serves none). With it on, `/api/admin/*`
-answers only on that address. Cloudflare Tunnel then points the public web address at port 8080:
+Keep its window open. The admin side (`/admin`) is on the same address as everything else, so it is on the public
+internet too; only the one admin account gets in, so **change its password first** (see "The admin side"). Cloudflare Tunnel then points the public web address at port 8080:
 
 1. Make a free Cloudflare account and add the project's domain to it (Cloudflare must answer for the domain).
 2. Install `cloudflared` on this PC and create a tunnel that sends the domain to `http://127.0.0.1:8080`
@@ -141,7 +138,7 @@ app must stay ONE process: the progress of running scans lives in its memory.
 - **Daily limits on new checks** (looking up a saved report is never counted). Guests: 3 per browser, as before,
   and 10 per internet connection (`DEFAKETIVE_NETWORK_DAILY_SCANS`; phone networks put many people behind one
   address). Accounts: 10 each (`DEFAKETIVE_ACCOUNT_DAILY_SCANS`). The whole site: 100
-  (`DEFAKETIVE_SITE_DAILY_SCANS`). Admins can change the last three in the admin app. Counts live in the accounts database; a connection is stored only as a scrambled
+  (`DEFAKETIVE_SITE_DAILY_SCANS`). The admin can change the last three on the admin page. Counts live in the accounts database; a connection is stored only as a scrambled
   code, and counts older than a week are deleted.
 - **One Chrome at a time.** Checks wait their turn and say how many are ahead. With 6 running or waiting
   (`DEFAKETIVE_MAX_ACTIVE_SCANS`), a new one is told to try again in a few minutes.
@@ -221,51 +218,43 @@ server, which only ever returns an account's history and wishlist to that accoun
 (`/api/saved/...`) are open on purpose: they hold no personal data, and the guest screen needs them to recognise a
 product that was already checked and to show its report.
 
-### The admin app: for the DTI staff who run the site
+### The admin side: for the one admin who runs the site
 
-A separate app in `admin/` (Svelte and Vite, no SvelteKit), on its own address: <http://localhost:5175> with
-`start.cmd` and `dev.cmd`, <http://127.0.0.1:8081> with `public.cmd`. It shares the shopping app's buttons, cards and
-colours (`#lib/...` from `src/lib`) but none of its pages, and the two never link to each other. It replaced the DTI
-agency view on 26 Oct 2026 (that view's watch list, charts, evidence sheets and guide are gone; their tables stay in
-`accounts.db`, untouched). DeFaketive is run with the **DTI** (Department of Trade and Industry), and its staff are
-the admins.
+The `/admin` page of the app itself (`src/routes/admin`, `src/lib/components/admin`). There is no separate app and no
+extra address: the admin signs in on the same sign-in page as everyone (the landing page's *Sign in* pop-up or
+`/enter`) and lands on `/admin`. It replaced the DTI agency view on 26 Oct 2026 (that view's watch list, charts,
+evidence sheets and guide are gone; their tables stay in `accounts.db`, untouched).
 
-**Its own sign-in, admin accounts only** (`admin_api.py`, `/api/admin/*`). It is kept in the session as `admin_id`,
-never as the shopping app's `user_id`, so signing in to one never signs in to the other (on one PC both addresses
-share the cookie; signing in to the shopping app keeps an admin signed in). A shopper account can't sign in to the
-admin app. **Admin accounts are admin-only:** the shopping app's sign-in refuses one (only with the right password),
-and a shopping-app session ends as soon as its account is made an admin. An admin who loses the role is sent back to
-the admin sign-in with a note saying why. Admins change their own password in the admin app ("Change password"),
-since they can't reach the shopping app's Settings.
+**Its own sign-in, the admin account only** (`admin_api.py`, `/api/admin/*`). It is kept in the session as `admin_id`,
+never as the shopping app's `user_id`, so the admin is not signed in to the shopping app. Any other account that signs
+in goes to the shopping app, and `/admin` sends anyone who is not the admin to the sign-in page. **The admin account
+is admin-only:** the shopping app's own sign-in route refuses it, and a shopping-app session of it ends on its next
+request. **The main admin is `Admin@defake.com`** (password `Admin@defake.com` until the admin
+changes it). **Only an admin can make another admin**, by adding an account with *Make this account an admin* ticked;
+nobody becomes an admin by signing up, and no existing account is promoted. While the admin is signed in, the landing
+page's header shows an **Admin** button. The admin changes their own password on the admin page ("Change
+password").
 
 **Accounts.** Every account, newest first, with its name, email, when it joined, how many products are in its History
 and Wishlist, and how many checks it started today; a search by name or email. Never a password, and never which
 products. Each account is labelled **Admin** or **Shopper**:
 
-- *Make admin* / *Remove admin*: not on your own account, so the page can never remove the last admin.
-- *Delete*: the account with its History and Wishlist (saved reports stay: they are everyone's). Not your own and
-  not an admin's (remove the role first).
+- *Add account*: the admin types a name, email and password and picks shopper or admin (the same rules as
+  signing up: a real-looking email, 8+ characters). The admin hands the password over.
+- *Delete*: the account with its History and Wishlist (saved reports stay: they are everyone's), shopper or admin.
+  Never your own, and never the main admin.
 
-Every change asks first, naming the account.
+Deleting asks first, naming the account.
 
 **Daily limits.** Today's use of the site limit, and the three limits `protections.py` counts: the whole site, each
 account and each internet connection guests use (0 to 10,000; 0 stops new checks). A change counts at once and is kept
 in `site_settings` in `accounts.db`, so it outlives a restart; until one is saved, the numbers come from the
 environment (`DEFAKETIVE_*_DAILY_SCANS`). The 3 free checks per guest browser are the original app's and stay fixed.
 
-**The first admin** is made on the server PC (the role is kept in `agency_members`, the old view's table, so the
-accounts that could open the DTI view are admins now):
-
-```
-..\Capstone-Version-Control-Version-1.1\.venv\Scripts\python.exe scripts\admin_accounts.py add --email name@dti.gov.ph --name "Full Name"
-..\Capstone-Version-Control-Version-1.1\.venv\Scripts\python.exe scripts\admin_accounts.py add --email someone@example.com
-..\Capstone-Version-Control-Version-1.1\.venv\Scripts\python.exe scripts\admin_accounts.py list
-..\Capstone-Version-Control-Version-1.1\.venv\Scripts\python.exe scripts\admin_accounts.py remove --email name@dti.gov.ph
-```
-
-`add` with a new email makes the account and prints a one-time password; hand it over separately and ask them to
-change it in Settings. **Privacy:** the privacy notice says DTI admins can see account names and emails; the adviser
-should confirm that wording.
+**The admin account** is made by the server when it starts (`admin_api.ensure_admin`): `Admin@defake.com` with the
+password `Admin@defake.com`, kept in `agency_members` (the old view's table). A password the admin changed is kept across restarts. The password is in the source, so **change it in
+"Change password" before the site is opened to the public.** **Privacy:** the privacy notice says DTI admins can
+see account names and emails; the adviser should confirm that wording.
 
 ## Wording rules (kept from the original)
 
@@ -513,8 +502,7 @@ folder, never the real one:
 `tests/e2e/` holds 22 test files, over 500 checks (two of them for the browser extension, see `extension/README.md`). They drive the Chrome that is already installed and walk the
 app the way a person would: signing up and in, a pretend live scan, the guest screen, the lock on the app, every
 result group and its colour, the brand colour, the wording, error screens, tap targets on a phone, the report, the
-admin app (`admin.mjs` makes a test admin with `scripts/admin_accounts.py` on the scratch accounts
-database), and accessibility (axe, WCAG 2.1 AA, light and dark).
+admin app (`admin.mjs` signs in as `Admin@defake.com` on the scratch accounts database and uses the `/admin` page), and accessibility (axe, WCAG 2.1 AA, light and dark).
 
 ```
 npm run test:e2e                     every file, against a fresh build
@@ -522,7 +510,7 @@ npm run test:e2e -- wording errors   only those files
 npm run test:e2e -- --dev            against the developer server instead of the build
 ```
 
-Close the app first: the command starts its own servers and refuses to run if ports 5000, 5173 or 5175 are busy, so
+Close the app first: the command starts its own servers and refuses to run if ports 5000 or 5173 are busy, so
 it can never stop an app you are using. It prints passed and failed for each file, then stops its servers. Logs and
 the scratch accounts database are in `tests/.tmp/`, screenshots in `tests/e2e/shots/` (neither is kept in git).
 
@@ -536,7 +524,7 @@ What the tests touch:
 - **Marketplaces:** none is contacted. Live scans are pretended inside the test browser.
 
 The server's own tests (`tests/test_*.py`: the saved-products pool, `protections.py`, `serve.py`, the backups, the
-extension route and the admin app)
+extension route and the admin API)
 run with the original app's Python, from this folder:
 
 ```

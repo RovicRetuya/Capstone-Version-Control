@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+- The admin side is a page of the app itself (`/admin`), reached by signing in on the normal sign-in page. The
+  separate admin app on its own address (port 5175 / 8081) is gone.
+- The main admin account is `Admin@defake.com`, made when the server starts. Only an admin can make another admin
+  (by adding an account as an admin); *Make admin* / *Remove admin* and `scripts/admin_accounts.py` are gone.
+
+### Added
+- The admin can add an account (name, email, password, shopper or admin) from the Manage accounts tab.
+- The landing page's header shows an Admin button while the admin is signed in.
+
 ## 1.4.0 - 2026-11-01
 
 ### Added

@@ -67,6 +67,10 @@ LAZADA_REVIEWS_PER_STAR = 60
 # ("page") gives rates that baseline does not fit.
 LAZADA_WINDOW_MODE = os.environ.get("DEFAKETIVE_LAZADA_WINDOW") or "headless"
 LAZADA_REVIEWS_FROM = os.environ.get("DEFAKETIVE_LAZADA_REVIEWS") or "feed"
+# Chrome stays off screen even when Lazada asks for a login or verification; the scan then
+# fails instead of opening a window. Set DEFAKETIVE_LAZADA_NEVER_SHOW=0 to let the window
+# open, which is how the saved Lazada login is made the first time.
+LAZADA_NEVER_SHOW = os.environ.get("DEFAKETIVE_LAZADA_NEVER_SHOW") != "0"
 # What the progress panel says when the Lazada scraper has put its Chrome
 # window on screen (_scan_progress). The scraper never answers either itself.
 LAZADA_LOGIN_MESSAGE = (
@@ -366,7 +370,7 @@ def _command_for_scrape(keyword: str, platform: str, product_count: int, review_
         command = [sys.executable, str(ROOT / "src" / "retriv.py"), "-n", str(product_count), "-r", str(review_count), "--output", str(target), "--no-prompt", "--verification-timeout", str(MANUAL_VERIFICATION_TIMEOUT)]
         command.extend(["--product-url", keyword] if direct_url else ["-k", keyword])
     elif platform == "lazada":
-        command = [sys.executable, str(ROOT / "lazada-scraper" / "src" / "lazada_scraper.py"), "-n", str(product_count), "-r", str(review_count), "--all-star-types", "--star-limit-per-type", str(LAZADA_REVIEWS_PER_STAR), "--output", str(target), "--no-verification-pause", "--verification-timeout", "600", "--window", LAZADA_WINDOW_MODE, "--reviews-from", LAZADA_REVIEWS_FROM]
+        command = [sys.executable, str(ROOT / "lazada-scraper" / "src" / "lazada_scraper.py"), "-n", str(product_count), "-r", str(review_count), "--all-star-types", "--star-limit-per-type", str(LAZADA_REVIEWS_PER_STAR), "--output", str(target), "--no-verification-pause", "--verification-timeout", "600", "--window", LAZADA_WINDOW_MODE, "--reviews-from", LAZADA_REVIEWS_FROM] + (["--never-show-window"] if LAZADA_NEVER_SHOW else [])
         command.extend(["--product-url", keyword] if direct_url else [keyword])
     else:
         profile = ROOT / ".browser_profiles" / platform
@@ -387,6 +391,8 @@ def _user_facing_failure(output: Any) -> str:
         return "Chrome closed or disconnected before collection completed. Start a fresh scan and keep the scraper window open through login and collection."
     if "SHOPEE_COLLECTION_FAILED" in output:
         return "Shopee did not return usable product data. Complete login or verification in the scraper window and try again."
+    if "the window is set to stay hidden" in output:
+        return "Lazada could not be checked right now. Please try again in a little while."
     if "Temu verification was not completed within the timeout" in output:
         return TEMU_CHECK_TIMEOUT_MESSAGE
     if "No Temu product pages were extracted" in output:
@@ -406,6 +412,8 @@ def _scan_progress(line: str) -> dict[str, Any] | None:
     `needs_you` marks the moments a Chrome window has opened for the user to
     log in or complete a check; the next ordinary step clears it.
     """
+    if LAZADA_NEVER_SHOW and ("signed out" in line or "for Lazada" in line):
+        return None
     if "Lazada is signed out" in line or "for Lazada login" in line:
         return {"needs_you": True, "message": LAZADA_LOGIN_MESSAGE}
     if "for Lazada verification" in line:

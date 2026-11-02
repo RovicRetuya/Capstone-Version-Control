@@ -3,7 +3,7 @@
 /** The signed-in admin, or null. */
 export interface AdminMe {
 	admin: { id: number; name: string; email: string } | null;
-	/** Why this admin was just signed out (the role was removed, the account deleted). */
+	/** Why this admin was just signed out (the session ended, the account is gone). */
 	notice?: string;
 }
 
@@ -17,6 +17,8 @@ export interface AdminAccount {
 	admin: boolean;
 	/** The signed-in admin's own account. */
 	you: boolean;
+	/** The main admin, Admin@defake.com: it can't be deleted. */
+	main: boolean;
 	/** Products in its History, items in its Wishlist, and new checks it started today. */
 	history: number;
 	wishlist: number;

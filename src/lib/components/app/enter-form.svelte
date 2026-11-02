@@ -1,18 +1,17 @@
 <script lang="ts">
-	import { ApiError, api, json } from '#lib/api.js';
+	import { goto } from '$app/navigation';
+	import { ApiError } from '#lib/api.js';
 	import PasswordInput from '#lib/components/app/password-input.svelte';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Field, FieldError, FieldGroup, FieldLabel } from '#lib/components/ui/field/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { Spinner } from '#lib/components/ui/spinner/index.js';
+	import { tryAdminSignIn } from '#lib/stores/admin.svelte.js';
 	import { auth } from '#lib/stores/auth.svelte.js';
 	import { library } from '#lib/stores/library.svelte.js';
 
-	// `onshopper` runs once a shopper account is signed in (an admin account leaves for the admin app instead).
+	// `onshopper` runs once a shopper account is signed in (the admin account goes to the admin side instead).
 	let { onshopper, idPrefix = 'enter' }: { onshopper: () => void; idPrefix?: string } = $props();
-
-	// Where the admin app lives (it is a separate app). Set VITE_ADMIN_URL when it is not on this PC's port 5175.
-	const adminUrl: string = import.meta.env.VITE_ADMIN_URL ?? 'http://localhost:5175/';
 
 	let email = $state('');
 	let password = $state('');
@@ -37,16 +36,11 @@
 		error = '';
 		try {
 			const credentials = { email: email.trim(), password };
-			// One form for everyone: an admin account signs in to the admin side, any other account to the shopping app.
-			try {
-				await api('/api/admin/login', json('POST', credentials));
+			// One form for everyone: the admin account signs in to the admin side, any other account to the shopping app.
+			if (await tryAdminSignIn(credentials.email, credentials.password)) {
 				markSplashSeen();
-				location.href = adminUrl;
+				await goto('/admin');
 				return;
-			} catch (problem) {
-				// 403: right password, but not an admin. 404: the admin sign-in is not offered at this address.
-				// Anything else (wrong password, too many tries) is final, and is shown as it is.
-				if (!(problem instanceof ApiError) || (problem.status !== 403 && problem.status !== 404)) throw problem;
 			}
 			await auth.signIn(credentials.email, credentials.password);
 			await library.loadAccount();

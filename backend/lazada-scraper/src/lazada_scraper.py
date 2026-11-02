@@ -234,6 +234,7 @@ class LazadaScraper:
         self.cookies_file = "cookies_lazada_ph.dat"
         self._cookies_loaded = False
         self.window_mode = window_mode
+        self.never_show_window = False
         # A hidden scan reads the feed unless told otherwise.
         self.reviews_from = reviews_from or ("page" if window_mode == "visible" else "feed")
         self._browser_started = False
@@ -386,6 +387,8 @@ class LazadaScraper:
         """Put a hidden scan on screen so the user can act; it stays there."""
         if self.window_mode == "visible":
             return
+        if getattr(self, "never_show_window", False):
+            raise RuntimeError(f"Lazada needs you to act ({reason}) but the window is set to stay hidden.")
         hidden_mode = self.window_mode
         self.window_mode = "visible"
         logging.info("Step: showing the Chrome window (%s)", reason)
@@ -2308,7 +2311,7 @@ class LazadaScraper:
             self._record_no_reviews(product)
 
     def execute(self):
-        if self.window_mode != "visible" and not self._has_saved_session():
+        if self.window_mode != "visible" and not self._has_saved_session() and not self.never_show_window:
             logging.info(
                 "No saved Lazada session yet: this scan uses a visible window so you can log in."
             )
@@ -2425,6 +2428,7 @@ def build_parser():
     parser.add_argument("--min-collected-reviews", type=int, default=0, help="Minimum usable written reviews required after collection")
     parser.add_argument("--collection-report", help="Research collection-quality JSON report")
     parser.add_argument("--window", choices=LazadaScraper.WINDOW_MODES, default="visible", help="Chrome window: visible, offscreen (parked outside the screen) or headless (no window)")
+    parser.add_argument("--never-show-window", action="store_true", help="Never put a Chrome window on screen; fail instead when Lazada asks for a login or verification")
     parser.add_argument("--reviews-from", choices=LazadaScraper.REVIEW_SOURCES, help="Read reviews from the page or from Lazada's review feed (default: page when visible, feed when hidden)")
     return parser
 
@@ -2459,6 +2463,7 @@ def main():
         window_mode=args.window,
         reviews_from=args.reviews_from,
     )
+    scraper.never_show_window = args.never_show_window
     scraper.execute()
 
 

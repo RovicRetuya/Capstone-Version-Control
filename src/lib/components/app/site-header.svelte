@@ -1,11 +1,19 @@
 <script lang="ts">
+	import ShieldCheckIcon from '@lucide/svelte/icons/shield-check';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { firstName } from '#lib/product.js';
+	import { session as adminSession } from '#lib/stores/admin.svelte.js';
 	import { auth } from '#lib/stores/auth.svelte.js';
 	import { signOut } from '#lib/session.js';
 	import { ui } from '#lib/stores/ui.svelte.js';
 	import Logo from './logo.svelte';
 	import ThemeToggle from './theme-toggle.svelte';
+
+	// The admin signs in apart from shoppers, so ask whether they are here: if so, the header offers the admin page.
+	if (!adminSession.ready) void adminSession.load();
+	async function adminSignOut() {
+		await adminSession.signOut();
+	}
 
 </script>
 
@@ -20,7 +28,11 @@
 		</nav>
 		<div class="ml-auto flex items-center gap-1">
 			<ThemeToggle />
-			{#if auth.user}
+			{#if adminSession.me}
+				<span class="text-muted-foreground mx-2 hidden text-sm sm:inline">Hi, {firstName(adminSession.me.name)}</span>
+				<Button variant="ghost" size="sm" onclick={adminSignOut}>Sign out</Button>
+				<Button size="sm" href="/admin"><ShieldCheckIcon /> Admin</Button>
+			{:else if auth.user}
 				<span class="text-muted-foreground mx-2 hidden text-sm sm:inline">Hi, {firstName(auth.user.name)}</span>
 				<Button variant="ghost" size="sm" onclick={signOut}>Sign out</Button>
 				<Button size="sm" href="/app/home">Open app</Button>

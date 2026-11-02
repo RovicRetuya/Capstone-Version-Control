@@ -6,7 +6,7 @@
 	import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '#lib/components/ui/dialog/index.js';
 	import { Field, FieldError, FieldGroup, FieldLabel } from '#lib/components/ui/field/index.js';
 	import { Spinner } from '#lib/components/ui/spinner/index.js';
-	import { adminApi } from '../session.svelte.js';
+	import { adminApi } from '#lib/stores/admin.svelte.js';
 
 	// An admin account is admin-only, so its password is changed here (the shopping app's Settings can't be reached).
 	let { open = $bindable(false) }: { open?: boolean } = $props();
@@ -49,7 +49,7 @@
 	<DialogContent class="sm:max-w-md">
 		<DialogHeader>
 			<DialogTitle>Change your password</DialogTitle>
-			<DialogDescription>Do this first if the team gave you a one-time password.</DialogDescription>
+			<DialogDescription>Choose a password only you know.</DialogDescription>
 		</DialogHeader>
 		<form onsubmit={submit} novalidate class="grid gap-4">
 			<FieldGroup>

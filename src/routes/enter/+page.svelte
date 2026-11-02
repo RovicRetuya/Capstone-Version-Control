@@ -34,10 +34,11 @@
 		void goto('/app/home');
 	}
 	// Without signing in, people use the original DeFaketive app that the server itself serves.
-	const originalAppUrl = 'http://127.0.0.1:5000/#landing';
+	// The same address you are already on (localhost or 127.0.0.1), so the two never look like different sites.
+	const originalAppUrl = () => `${location.protocol}//${location.hostname}:5000/#landing`;
 	function guest() {
 		markSplashSeen();
-		location.href = originalAppUrl;
+		location.href = originalAppUrl();
 	}
 </script>
 

@@ -9,8 +9,8 @@
 	import { Progress } from '#lib/components/ui/progress/index.js';
 	import { Skeleton } from '#lib/components/ui/skeleton/index.js';
 	import { Spinner } from '#lib/components/ui/spinner/index.js';
-	import { adminApi } from '../session.svelte.js';
-	import type { AdminLimits, DailyLimits } from '../types.js';
+	import { adminApi } from '#lib/stores/admin.svelte.js';
+	import type { AdminLimits, DailyLimits } from '#lib/admin-types.js';
 
 	// The three daily limits protections.py counts. A change counts at once, and the server keeps it (admin_api.py).
 	const FIELDS: { name: keyof DailyLimits; label: string; help: string }[] = [

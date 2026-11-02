@@ -35,9 +35,6 @@ set "DEFAKETIVE_DEBUG=1"
 echo Starting DeFaketive (the original app plus the database routes) on http://127.0.0.1:5000 ...
 start "DeFaketive server (keep open)" /d "%OLD%" "%PY%" "%~dp0server.py"
 
-echo Starting the admin app's developer server on http://localhost:5175 ...
-start "" /b cmd /c npm run admin:dev
-
 echo Starting the developer server on http://localhost:5173 ...
 start "" /b node scripts\wait-and-open.mjs
 call npm run dev -- --port 5173 --strictPort

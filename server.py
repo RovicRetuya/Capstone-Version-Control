@@ -60,7 +60,7 @@ import accounts  # noqa: E402  (the original accounts module)
 import webapp  # noqa: E402  (the original app; importing it creates `webapp.app`)
 from dashboard_utils import analysis_is_current, merge_product_catalogs, rank_recommendations, with_badge_view  # noqa: E402
 from data_store import DEFAULT_DB  # noqa: E402
-from flask import Blueprint, jsonify, request  # noqa: E402
+from flask import Blueprint, jsonify, redirect, request  # noqa: E402
 
 import admin_api  # noqa: E402  (beside this file)
 import extension_api  # noqa: E402  (beside this file)
@@ -205,7 +205,18 @@ def _saved_report(link: str) -> dict[str, str] | None:
 extension_api.saved_report = _saved_report
 
 
-# The admin app's accounts and daily limits, open only to admin accounts (admin_api.py, scripts/admin_accounts.py).
+@webapp.app.before_request
+def one_address():
+    """A page opened at http://127.0.0.1:5000 goes to http://localhost:5000: the same computer, but the browser keeps
+    separate sign-ins for the two names, so people were seeing two apps. Only pages are moved, never /api calls."""
+    if request.method == "GET" and request.host == "127.0.0.1:5000" and not request.path.startswith("/api/"):
+        if "text/html" in request.headers.get("Accept", ""):
+            return redirect(request.url.replace("127.0.0.1", "localhost", 1), 307)
+    return None
+
+
+# The admin side's accounts and daily limits, open only to admin accounts (admin_api.py: Admin@defake.com and the
+# admins it makes).
 # After protections.install, so the limits an admin saved replace the environment's.
 admin_api.install(webapp)
 # The "Report a problem" form (problem_reports.py).

@@ -9,6 +9,7 @@
 	import ScanStatus from '#lib/components/app/scan-status.svelte';
 	import { Alert, AlertDescription, AlertTitle } from '#lib/components/ui/alert/index.js';
 	import { Badge } from '#lib/components/ui/badge/index.js';
+	import ShopeeSteps from '#lib/components/app/shopee-steps.svelte';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '#lib/components/ui/card/index.js';
 	import { InputGroup, InputGroupAddon, InputGroupInput } from '#lib/components/ui/input-group/index.js';
@@ -21,6 +22,7 @@
 		MARKETPLACES,
 		queryContext,
 		refusalFor,
+		safeLink,
 		scannable,
 		typicalScanTime,
 		viaExtension
@@ -149,6 +151,10 @@
 					</p>
 				{/if}
 			</div>
+
+			{#if refused && viaExtension(context.platform)}
+				<ShopeeSteps link={safeLink(query.trim())} />
+			{/if}
 
 			{#if blocked}
 				<Alert class="tone-caution border-(--tone)/50 bg-(--tone-soft) *:[svg]:text-(--tone)">

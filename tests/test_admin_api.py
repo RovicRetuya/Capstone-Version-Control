@@ -10,8 +10,6 @@ Accounts go to the temporary database server_under_test sets up. The limits are 
 
 from __future__ import annotations
 
-import contextlib
-import io
 import sys
 import time
 import unittest
@@ -23,20 +21,35 @@ from server_under_test import accounts, app, clear_counts, webapp  # noqa: E402
 import admin_api  # noqa: E402
 import protections  # noqa: E402
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
-import admin_accounts  # noqa: E402
-
 DATABASE = lambda: app.config["ACCOUNTS_DB"]  # noqa: E731
 LAZADA = "https://www.lazada.com.ph/products/pdp-i1234-s1.html"
 PASSWORD = "long enough 1"
 
 
-def new_account(prefix: str = "person", admin: bool = False) -> dict:
+def new_account(prefix: str = "person") -> dict:
     email = f"{prefix}{time.time_ns()}@example.com"
-    user = accounts.create_user(DATABASE(), "Test Person", email, PASSWORD)
-    if admin:
-        admin_api.add_admin(DATABASE(), user["id"])
-    return user
+    return accounts.create_user(DATABASE(), "Test Person", email, PASSWORD)
+
+
+def the_admin() -> dict:
+    """The one admin account, which the server makes when it starts."""
+    return admin_api.user_by_email(DATABASE(), admin_api.ADMIN_EMAIL)
+
+
+def reset_admin() -> None:
+    """Put the admin back as the server makes it: its own password, counted tries forgotten, the only admin."""
+    from werkzeug.security import generate_password_hash
+
+    with admin_api._connect(DATABASE()) as connection:
+        connection.execute(
+            "UPDATE users SET password_hash = ? WHERE email = ?",
+            (generate_password_hash(admin_api.ADMIN_PASSWORD), admin_api.ADMIN_EMAIL),
+        )
+        # Admins an admin made in a test are shoppers again.
+        connection.execute("DELETE FROM agency_members WHERE user_id != (SELECT id FROM users WHERE email = ?)", (admin_api.ADMIN_EMAIL,))
+    admin_api.ensure_admin(DATABASE())
+    with webapp._lock:
+        webapp._login_failures.clear()
 
 
 def shopper_client():
@@ -48,10 +61,10 @@ def shopper_client():
 
 
 def admin_client():
-    """A client signed in to the admin app with a new admin account, and that account."""
-    user = new_account("admin", admin=True)
+    """A client signed in to the admin app as the one admin, and that account."""
+    user = the_admin()
     client = app.test_client()
-    answer = client.post("/api/admin/login", json={"email": user["email"], "password": PASSWORD})
+    answer = client.post("/api/admin/login", json={"email": "Admin@defake.com", "password": "Admin@defake.com"})
     assert answer.status_code == 200, answer.get_json()
     return client, user
 
@@ -67,6 +80,7 @@ class AdminTestCase(unittest.TestCase):
                 connection.execute("DELETE FROM site_settings")
 
         self.addCleanup(put_back)
+        self.addCleanup(reset_admin)
 
     def row_of(self, client, user_id: int) -> dict:
         rows = client.get("/api/admin/accounts").get_json()["accounts"]
@@ -75,7 +89,7 @@ class AdminTestCase(unittest.TestCase):
 
 class SignInTest(AdminTestCase):
     ROUTES = (
-        ("get", "/api/admin/accounts", None), ("put", "/api/admin/accounts/1/role", {"admin": True}),
+        ("get", "/api/admin/accounts", None), ("post", "/api/admin/accounts", {"name": "A", "email": "a@b.co", "password": "long enough 1"}),
         ("delete", "/api/admin/accounts/1", None), ("get", "/api/admin/limits", None),
         ("put", "/api/admin/limits", {"site": 1, "account": 1, "network": 1}),
         ("put", "/api/admin/password", {"current_password": PASSWORD, "new_password": "another long one"}),
@@ -105,12 +119,12 @@ class SignInTest(AdminTestCase):
         self.assertEqual(answer.get_json()["error"], admin_api.NOT_ADMIN_MESSAGE)
 
     def test_a_wrong_password_is_refused_and_counted(self) -> None:
-        user = new_account("admin", admin=True)
+        user = the_admin()
         client = app.test_client()
         for _ in range(webapp.LOGIN_FAILURE_LIMIT):
             answer = client.post("/api/admin/login", json={"email": user["email"], "password": "not it at all"})
             self.assertEqual(answer.status_code, 401)
-        answer = client.post("/api/admin/login", json={"email": user["email"], "password": PASSWORD})
+        answer = client.post("/api/admin/login", json={"email": user["email"], "password": admin_api.ADMIN_PASSWORD})
         self.assertEqual(answer.status_code, 429)
 
     def test_an_admin_signs_in_and_out_apart_from_the_shopping_app(self) -> None:
@@ -128,46 +142,12 @@ class SignInTest(AdminTestCase):
             with self.subTest(path=path):
                 self.assertEqual(client.get(path).status_code, 404)
 
-    def test_with_a_door_of_its_own_the_admin_routes_answer_only_there(self) -> None:
-        client, _user = admin_client()
-        admin_api.door_only = True
-        self.addCleanup(setattr, admin_api, "door_only", False)
-        self.assertEqual(client.get("/api/admin/me").status_code, 404)
-        self.assertEqual(client.get("/api/admin/me", environ_overrides={admin_api.DOOR: True}).status_code, 200)
-        self.assertEqual(client.get("/api/auth/me").status_code, 200)
-
-
-@unittest.skipUnless((Path(__file__).resolve().parent.parent / "admin" / "build" / "index.html").is_file(),
-                     "the admin app is not built (npm run admin:build)")
-class AdminAddressTest(AdminTestCase):
-    """serve.py's admin address: the admin app's screens, and /api marked as come in through it."""
-
-    def test_serves_the_admin_screens_and_lets_the_admin_routes_through(self) -> None:
-        import serve
-        from werkzeug.test import Client
-
-        user = new_account("admin", admin=True)
-        door = Client(serve.create_admin_app(app))
-        admin_api.door_only = True
-        self.addCleanup(setattr, admin_api, "door_only", False)
-        for address in ("/", "/some/other/address"):
-            with self.subTest(address=address):
-                page = door.get(address)
-                self.addCleanup(page.close)
-                self.assertEqual(page.status_code, 200)
-                self.assertIn(b"DeFaketive Admin", page.data)
-                self.assertEqual(page.headers["X-Frame-Options"], "DENY")
-        self.assertEqual(door.post("/api/admin/login", json={"email": user["email"], "password": PASSWORD}).status_code, 200)
-        self.assertEqual(door.get("/api/admin/me").get_json()["admin"]["id"], user["id"])
-        # The public address does not answer for the admin routes.
-        self.assertEqual(app.test_client().post("/api/admin/login", json={"email": user["email"], "password": PASSWORD}).status_code, 404)
-
 
 class AdminOnlyTest(AdminTestCase):
     def test_the_shopping_app_refuses_an_admin_account(self) -> None:
-        user = new_account("admin", admin=True)
+        user = the_admin()
         client = app.test_client()
-        answer = client.post("/api/auth/login", json={"email": user["email"], "password": PASSWORD})
+        answer = client.post("/api/auth/login", json={"email": user["email"], "password": admin_api.ADMIN_PASSWORD})
         self.assertEqual(answer.status_code, 403)
         self.assertEqual(answer.get_json()["error"], admin_api.ADMIN_ONLY_MESSAGE)
         self.assertIsNone(client.get("/api/auth/me").get_json().get("user"))
@@ -175,12 +155,37 @@ class AdminOnlyTest(AdminTestCase):
         wrong = client.post("/api/auth/login", json={"email": user["email"], "password": "not it at all"})
         self.assertEqual(wrong.status_code, 401)
 
-    def test_a_shopper_made_admin_is_signed_out_of_the_shopping_app(self) -> None:
-        shopper, user = shopper_client()
-        self.assertEqual(shopper.get("/api/auth/me").get_json()["user"]["email"], user["email"])
-        admin, _me = admin_client()
-        admin.put(f"/api/admin/accounts/{user['id']}/role", json={"admin": True})
-        self.assertIsNone(shopper.get("/api/auth/me").get_json().get("user"))
+    def test_only_an_admin_can_make_another_admin(self) -> None:
+        client, me = admin_client()
+        self.assertEqual((me["email"], admin_api.is_admin(DATABASE(), me["id"])), ("admin@defake.com", True))
+        # Nobody else can: not signed in, a shopper, or by promoting an account that exists.
+        body = {"name": "Sneaky", "email": f"sneaky{time.time_ns()}@example.com", "password": PASSWORD, "admin": True}
+        self.assertEqual(app.test_client().post("/api/admin/accounts", json=body).status_code, 401)
+        shopper, _user = shopper_client()
+        self.assertEqual(shopper.post("/api/admin/accounts", json=body).status_code, 401)
+        other = new_account("shopper")
+        self.assertIn(client.put(f"/api/admin/accounts/{other['id']}/role", json={"admin": True}).status_code, (404, 405))
+        self.assertFalse(admin_api.is_admin(DATABASE(), other["id"]))
+        # The admin can: the new admin signs in to the admin side, and the shopping app refuses them.
+        email = f"second{time.time_ns()}@example.com"
+        made = client.post("/api/admin/accounts", json={"name": "Second Admin", "email": email, "password": PASSWORD, "admin": True})
+        self.assertEqual((made.status_code, made.get_json()["admin"]), (201, True))
+        self.assertTrue(admin_api.is_admin(DATABASE(), made.get_json()["id"]))
+        self.assertTrue(self.row_of(client, made.get_json()["id"])["admin"])
+        second = app.test_client()
+        self.assertEqual(second.post("/api/admin/login", json={"email": email, "password": PASSWORD}).status_code, 200)
+        self.assertEqual(second.get("/api/admin/accounts").status_code, 200)
+        self.assertEqual(app.test_client().post("/api/auth/login", json={"email": email, "password": PASSWORD}).status_code, 403)
+        # A server start keeps them.
+        admin_api.ensure_admin(DATABASE())
+        self.assertTrue(admin_api.is_admin(DATABASE(), made.get_json()["id"]))
+
+    def test_the_admin_keeps_a_password_they_changed_after_a_restart(self) -> None:
+        client, _me = admin_client()
+        client.put("/api/admin/password", json={"current_password": "Admin@defake.com", "new_password": "something else 9"})
+        admin_api.ensure_admin(DATABASE())
+        self.assertIsNotNone(accounts.authenticate(DATABASE(), "admin@defake.com", "something else 9"))
+        self.assertIsNone(accounts.authenticate(DATABASE(), "admin@defake.com", "Admin@defake.com"))
 
     def test_signing_in_to_the_shopping_app_keeps_an_admin_signed_in_on_the_same_computer(self) -> None:
         client, _admin = admin_client()
@@ -189,23 +194,20 @@ class AdminOnlyTest(AdminTestCase):
         self.assertEqual(client.get("/api/auth/me").get_json()["user"]["email"], shopper["email"])
         self.assertIsNotNone(client.get("/api/admin/me").get_json()["admin"])
 
-    def test_an_admin_whose_role_is_removed_is_signed_out(self) -> None:
-        client, user = admin_client()
-        admin_api.remove_admin(DATABASE(), user["id"])
+    def test_an_admin_session_without_the_role_is_signed_out(self) -> None:
+        client, _user = admin_client()
+        with admin_api._connect(DATABASE()) as connection:
+            connection.execute("DELETE FROM agency_members")
         answer = client.get("/api/admin/accounts")
         self.assertEqual(answer.status_code, 401)
         self.assertEqual(answer.get_json()["error"], admin_api.ROLE_REMOVED_MESSAGE)
         self.assertEqual(client.get("/api/admin/me").get_json(), {"admin": None})
-        # Asked "who is signed in" first, the answer says why.
-        other, someone = admin_client()
-        admin_api.remove_admin(DATABASE(), someone["id"])
-        self.assertEqual(other.get("/api/admin/me").get_json(), {"admin": None, "notice": admin_api.ROLE_REMOVED_MESSAGE})
-        self.assertEqual(other.get("/api/admin/me").get_json(), {"admin": None})
 
 
 class PasswordTest(AdminTestCase):
     def test_change_own_password(self) -> None:
         client, user = admin_client()
+        PASSWORD = admin_api.ADMIN_PASSWORD
         wrong = client.put("/api/admin/password", json={"current_password": "nope nope", "new_password": "a new one 22"})
         self.assertEqual(wrong.status_code, 403)
         self.assertIn("current_password", wrong.get_json()["fields"])
@@ -244,25 +246,31 @@ class AccountsTest(AdminTestCase):
         self.assertEqual([row["id"] for row in found], [other["id"]])
         self.assertEqual(client.get("/api/admin/accounts", query_string={"q": "%"}).get_json()["accounts"], [])
 
-    def test_make_and_remove_an_admin(self) -> None:
+    def test_the_admin_adds_a_shopper_account_who_can_then_sign_in_to_the_shopping_app(self) -> None:
         client, _me = admin_client()
-        other = new_account("shopper")
-        self.assertEqual(client.put(f"/api/admin/accounts/{other['id']}/role", json={"admin": True}).status_code, 200)
-        self.assertTrue(self.row_of(client, other["id"])["admin"])
-        self.assertTrue(admin_api.is_admin(DATABASE(), other["id"]))
-        self.assertEqual(client.put(f"/api/admin/accounts/{other['id']}/role", json={"admin": False}).status_code, 200)
-        self.assertFalse(self.row_of(client, other["id"])["admin"])
+        email = f"added{time.time_ns()}@example.com"
+        answer = client.post("/api/admin/accounts", json={"name": "  Added  Person ", "email": email.upper(), "password": PASSWORD})
+        self.assertEqual(answer.status_code, 201)
+        made = answer.get_json()
+        self.assertEqual((made["name"], made["email"]), ("Added Person", email))
+        row = self.row_of(client, made["id"])
+        self.assertEqual((row["admin"], row["email"]), (False, email))
+        shop = app.test_client()
+        self.assertEqual(shop.post("/api/auth/login", json={"email": email, "password": PASSWORD}).status_code, 200)
 
-    def test_role_needs_a_yes_or_no_and_a_real_account(self) -> None:
+    def test_adding_an_account_checks_every_field_and_refuses_a_taken_email(self) -> None:
         client, _me = admin_client()
-        self.assertEqual(client.put("/api/admin/accounts/1/role", json={"admin": "yes"}).status_code, 400)
-        self.assertEqual(client.put("/api/admin/accounts/999999/role", json={"admin": True}).status_code, 404)
-
-    def test_an_admin_cannot_remove_their_own_role(self) -> None:
-        client, me = admin_client()
-        answer = client.put(f"/api/admin/accounts/{me['id']}/role", json={"admin": False})
-        self.assertEqual((answer.status_code, answer.get_json()["error"]), (409, admin_api.OWN_ROLE_MESSAGE))
-        self.assertTrue(admin_api.is_admin(DATABASE(), me["id"]))
+        answer = client.post("/api/admin/accounts", json={"name": "", "email": "nope", "password": "short"})
+        self.assertEqual(answer.status_code, 400)
+        self.assertEqual(set(answer.get_json()["fields"]), {"name", "email", "password"})
+        self.assertEqual(client.post("/api/admin/accounts", json=["x"]).status_code, 400)
+        taken = new_account("taken")
+        again = client.post("/api/admin/accounts", json={"name": "Same", "email": taken["email"], "password": PASSWORD})
+        self.assertEqual(again.status_code, 409)
+        self.assertIn("email", again.get_json()["fields"])
+        admin_again = client.post("/api/admin/accounts", json={"name": "Same", "email": "Admin@defake.com", "password": PASSWORD})
+        self.assertIn(admin_again.status_code, (400, 409))
+        self.assertEqual([row["email"] for row in admin_api.admins(DATABASE())], ["admin@defake.com"])
 
     def test_delete_removes_the_account_and_everything_it_kept(self) -> None:
         client, _me = admin_client()
@@ -276,15 +284,21 @@ class AccountsTest(AdminTestCase):
         self.assertIsNone(shopper.get("/api/auth/me").get_json().get("user"))
         self.assertEqual(client.delete(f"/api/admin/accounts/{other['id']}").status_code, 404)
 
-    def test_delete_refuses_your_own_account_and_other_admins(self) -> None:
+    def test_delete_refuses_your_own_and_the_main_admin_but_not_another_admin(self) -> None:
         client, me = admin_client()
-        other = new_account("admin", admin=True)
         own = client.delete(f"/api/admin/accounts/{me['id']}")
         self.assertEqual((own.status_code, own.get_json()["error"]), (409, admin_api.OWN_ACCOUNT_MESSAGE))
-        theirs = client.delete(f"/api/admin/accounts/{other['id']}")
-        self.assertEqual((theirs.status_code, theirs.get_json()["error"]), (409, admin_api.ADMIN_ACCOUNT_MESSAGE))
         self.assertIsNotNone(accounts.get_user(DATABASE(), me["id"]))
-        self.assertIsNotNone(accounts.get_user(DATABASE(), other["id"]))
+        email = f"second{time.time_ns()}@example.com"
+        second_id = client.post("/api/admin/accounts", json={"name": "Second", "email": email, "password": PASSWORD, "admin": True}).get_json()["id"]
+        second = app.test_client()
+        second.post("/api/admin/login", json={"email": email, "password": PASSWORD})
+        main = second.delete(f"/api/admin/accounts/{me['id']}")
+        self.assertEqual((main.status_code, main.get_json()["error"]), (409, admin_api.ADMIN_ACCOUNT_MESSAGE))
+        self.assertEqual(client.delete(f"/api/admin/accounts/{second_id}").status_code, 200)
+        self.assertIsNone(accounts.get_user(DATABASE(), second_id))
+        # The deleted admin's session is over.
+        self.assertEqual(second.get("/api/admin/accounts").status_code, 401)
 
 
 class LimitsTest(AdminTestCase):
@@ -331,30 +345,6 @@ class LimitsTest(AdminTestCase):
         self.assertEqual(answer.status_code, 429)
         self.assertTrue(answer.get_json()["site_limit"])
         clear_counts()
-
-
-class ScriptTest(AdminTestCase):
-    def run_script(self, *args: str) -> tuple[int, str]:
-        out, err = io.StringIO(), io.StringIO()
-        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
-            code = admin_accounts.main(list(args))
-        return code, out.getvalue() + err.getvalue()
-
-    def test_add_list_and_remove(self) -> None:
-        original = admin_accounts.accounts_db
-        admin_accounts.accounts_db = lambda: Path(DATABASE())
-        self.addCleanup(setattr, admin_accounts, "accounts_db", original)
-        email = f"new.admin.{time.time_ns()}@example.com"
-        self.assertEqual(self.run_script("add", "--email", email)[0], 2)  # no such account, no name
-        code, said = self.run_script("add", "--email", email, "--name", "New Admin")
-        self.assertEqual(code, 0)
-        self.assertIn("Password, shown only this once", said)
-        self.assertIn(email, self.run_script("list")[1])
-        self.assertEqual(self.run_script("remove", "--email", email)[0], 0)
-        self.assertEqual(self.run_script("remove", "--email", email)[0], 1)
-        user = admin_api.user_by_email(DATABASE(), email)
-        self.assertIsNotNone(user)
-        self.assertFalse(admin_api.is_admin(DATABASE(), user["id"]))
 
 
 if __name__ == "__main__":

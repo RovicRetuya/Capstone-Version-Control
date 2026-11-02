@@ -1,41 +1,38 @@
 """The admin app's server side: accounts and daily check limits, for the DTI staff who run DeFaketive.
 
-The admin app (admin/, its own address: http://localhost:5175 on this PC) is apart from the shopping app. It has its
+The admin side (the /admin page of the app) is apart from the shopping side. It has its
 own sign-in, kept in the session as `admin_id`, never as the shopping app's `user_id`, so signing in to one never
 signs in to the other.
 
-Who is an admin. An account in the `agency_members` table (the name is from the DTI view this replaced on 26 Oct
-2026; the rows already there stay admins). The first admin is made on the server PC with scripts/admin_accounts.py;
-after that, an admin can make or remove admins in the admin app. Nobody becomes one by signing up.
+Who is an admin. The main admin, ADMIN_EMAIL (Admin@defake.com), is made in the accounts database when the server
+starts (ensure_admin), with the one-time password ADMIN_PASSWORD if it does not exist yet. Only an admin can make
+another admin: by adding an account with the admin role in the admin page. Nobody becomes an admin by signing up, and
+no existing account is promoted.
 
-Admin accounts are admin-only. The shopping app's sign-in refuses them (with the right password: a wrong one is
-counted as usual), and a shopping-app session of an account that has become an admin ends on its next request.
+Admin accounts are admin-only. The shopping app's sign-in refuses it (with the right password: a wrong one is
+counted as usual), and a shopping-app session of the account ends on its next request.
 
-What an admin can do, and what not.
+What the admin can do, and what not.
 - See every account: name, email, when it joined, how many products are in its History and Wishlist, and how many
   checks it started today. Never a password or its hash, and never which products.
-- Make an account an admin, or take that back. Not for their own account, so the last admin can never be removed
-  from the app (only scripts/admin_accounts.py can).
-- Delete an account, with its History and Wishlist (foreign keys cascade). Not their own and not another admin's:
-  remove the admin role first, so one click cannot lock anyone out.
+- Add an account (name, email, password), as a shopper or as another admin.
+- Delete an account, with its History and Wishlist (foreign keys cascade). Never their own, and never the main admin.
 - Change the three daily limits protections.py counts: new checks for the whole site, for each account, and for
   each internet connection guests use. A change counts at once and is kept in the `site_settings` table, so it
   outlives a restart; until one is saved, the numbers come from the environment (protections.Limits).
-- Change their own password (the script's one-time password first of all).
+- Change their own password.
 
     GET    /api/admin/me                   {admin: {id, name, email} | null}
     POST   /api/admin/login                {email, password}; only an admin account gets in
     POST   /api/admin/logout
     PUT    /api/admin/password             {current_password, new_password}
     GET    /api/admin/accounts?q=          every account, newest first; q searches names and emails
-    PUT    /api/admin/accounts/<id>/role   {admin: true|false}
+    POST   /api/admin/accounts             {name, email, password, admin?}: adds an account
     DELETE /api/admin/accounts/<id>
     GET    /api/admin/limits               the three limits, their defaults, and today's use of the site limit
     PUT    /api/admin/limits               {site, account, network}: whole numbers from 0 to 10,000
 
-For the public (serve.py), the admin app has an address of its own, and `door_only` makes /api/admin/* answer only
-there: the public address says 404. The original app's own /api/admin/overview, database, lexicons and logs stay
-closed (protections.CLOSED_PATHS).
+The original app's own /api/admin/overview, database, lexicons and logs stay closed (protections.CLOSED_PATHS).
 """
 
 from __future__ import annotations
@@ -64,11 +61,13 @@ CREATE TABLE IF NOT EXISTS site_settings (
 """
 
 OFFICE = "DTI"
+# The main admin. The email is compared in lower case, like every account's, so "Admin@defake.com" signs in.
+ADMIN_EMAIL = "admin@defake.com"
+# The first version of this admin used this email; its account is renamed (ensure_admin) rather than left behind.
+LEGACY_ADMIN_EMAIL = "admin@defake"
+ADMIN_NAME = "Administrator"
+ADMIN_PASSWORD = "Admin@defake.com"
 SESSION_KEY = "admin_id"
-# The WSGI environ key serve.py sets on requests that came in through the admin app's own address.
-DOOR = "defaketive.admin_door"
-# Set by serve.py when the admin app has its own address: /api/admin/* then answers only there.
-door_only = False
 # The limits an admin may change: the name on the protections.limits object, and in site_settings.
 LIMIT_NAMES = ("site", "account", "network")
 MAX_LIMIT = 10_000
@@ -78,12 +77,11 @@ SIGN_IN_MESSAGE = "Sign in with your admin account."
 WRONG_MESSAGE = "Email or password is incorrect."
 TOO_MANY_MESSAGE = "Too many tries. Wait a few minutes, then try again."
 NOT_ADMIN_MESSAGE = "This account is not an admin. Shoppers use the main DeFaketive app."
-ROLE_REMOVED_MESSAGE = "Your account is no longer an admin, so you were signed out."
+ROLE_REMOVED_MESSAGE = "Your admin session ended, so you were signed out."
 ADMIN_ONLY_MESSAGE = "This is an admin account. It can only be used in the DeFaketive admin app."
 NO_ACCOUNT_MESSAGE = "There is no such account. It may have been deleted already."
-OWN_ROLE_MESSAGE = "You can't remove your own admin role. Ask another admin to do it."
-OWN_ACCOUNT_MESSAGE = "You can't delete your own account. Ask another admin to remove your role first."
-ADMIN_ACCOUNT_MESSAGE = "This account is an admin. Remove the admin role first, then delete it."
+OWN_ACCOUNT_MESSAGE = "You can't delete your own account."
+ADMIN_ACCOUNT_MESSAGE = "The main admin account can't be deleted."
 LIMITS_MESSAGE = f"Each limit must be a whole number from 0 to {MAX_LIMIT:,}."
 
 
@@ -120,17 +118,40 @@ def is_admin(path: str | Path, user_id: Any) -> bool:
         return connection.execute("SELECT 1 FROM agency_members WHERE user_id = ?", (user_id,)).fetchone() is not None
 
 
+def ensure_admin(path: str | Path) -> None:
+    """Make sure the main admin exists and is an admin. A password someone has changed is left as it is."""
+    from werkzeug.security import generate_password_hash
+
+    with _connect(path) as connection:
+        row = connection.execute("SELECT id FROM users WHERE email = ?", (ADMIN_EMAIL,)).fetchone()
+        legacy = connection.execute("SELECT id FROM users WHERE email = ?", (LEGACY_ADMIN_EMAIL,)).fetchone()
+        if row is None and legacy is not None:
+            connection.execute(
+                "UPDATE users SET email = ?, password_hash = ? WHERE id = ?",
+                (ADMIN_EMAIL, generate_password_hash(ADMIN_PASSWORD), legacy["id"]),
+            )
+            row = legacy
+        if row is None:
+            # Made here, not through sign-up, so nobody can sign up with this email first.
+            cursor = connection.execute(
+                "INSERT INTO users(full_name, email, password_hash, created_at) VALUES (?, ?, ?, ?)",
+                (ADMIN_NAME, ADMIN_EMAIL, generate_password_hash(ADMIN_PASSWORD), _now()),
+            )
+            admin_id = cursor.lastrowid
+        else:
+            admin_id = row["id"]
+        connection.execute(
+            "INSERT INTO agency_members(user_id, office, added_at) VALUES (?, ?, ?) ON CONFLICT(user_id) DO NOTHING",
+            (admin_id, OFFICE, _now()),
+        )
+
+
 def add_admin(path: str | Path, user_id: int) -> None:
     with _connect(path) as connection:
         connection.execute(
             "INSERT INTO agency_members(user_id, office, added_at) VALUES (?, ?, ?) ON CONFLICT(user_id) DO NOTHING",
             (int(user_id), OFFICE, _now()),
         )
-
-
-def remove_admin(path: str | Path, user_id: int) -> bool:
-    with _connect(path) as connection:
-        return bool(connection.execute("DELETE FROM agency_members WHERE user_id = ?", (int(user_id),)).rowcount)
 
 
 def admins(path: str | Path) -> list[dict[str, Any]]:
@@ -230,6 +251,7 @@ def install(webapp: Any, app: Any = None) -> None:
 
     app = app or webapp.app
     defaults = {name: getattr(protections.Limits(), name) for name in LIMIT_NAMES}
+    ensure_admin(app.config["ACCOUNTS_DB"])
     apply_saved_limits(app.config["ACCOUNTS_DB"])
 
     def database() -> str:
@@ -261,8 +283,6 @@ def install(webapp: Any, app: Any = None) -> None:
         if not path.startswith("/api/"):
             return None
         if path.startswith("/api/admin/"):
-            if door_only and not request.environ.get(DOOR):
-                return refuse("Not found.", 404)
             return None
         # Admin accounts are admin-only: the shopping app's sign-in refuses one (with its right password; a wrong one
         # goes on to the original, which counts it).
@@ -354,36 +374,51 @@ def install(webapp: Any, app: Any = None) -> None:
         found = account_list(database(), str(request.args.get("q") or "")[:200], accounts.manila_day())
         for row in found["accounts"]:
             row["you"] = row["id"] == user["id"]
+            row["main"] = row["email"] == ADMIN_EMAIL
         return jsonify(found)
 
-    @blueprint.put("/accounts/<int:user_id>/role")
-    def role(user_id: int) -> Any:
-        user, refused = admin()
+    @blueprint.post("/accounts")
+    def add_account() -> Any:
+        _user, refused = admin()
         if refused:
             return refused
         payload = request.get_json(silent=True)
-        if not isinstance(payload, dict) or not isinstance(payload.get("admin"), bool):
+        if not isinstance(payload, dict):
+            return refuse("Enter a name, an email and a password.")
+        if "admin" in payload and not isinstance(payload["admin"], bool):
             return refuse("Say whether the account should be an admin.")
-        if accounts.get_user(database(), user_id) is None:
-            return refuse(NO_ACCOUNT_MESSAGE, 404)
-        if payload["admin"]:
-            add_admin(database(), user_id)
-        elif user_id == user["id"]:
-            return refuse(OWN_ROLE_MESSAGE, 409)
-        else:
-            remove_admin(database(), user_id)
-        return jsonify({"id": user_id, "admin": payload["admin"]})
+        errors = {}
+        for field, check in (
+            ("name", lambda: accounts._clean_name(payload.get("name"))),
+            ("email", lambda: accounts._clean_email(payload.get("email"))),
+            ("password", lambda: accounts._check_new_password(payload.get("password"))),
+        ):
+            try:
+                check()
+            except accounts.AccountError as error:
+                errors[field] = error.message
+        if errors:
+            return refuse(next(iter(errors.values())), 400, fields=errors)
+        try:
+            created = accounts.create_user(database(), payload["name"], payload["email"], payload["password"])
+        except accounts.EmailTaken as error:
+            return refuse(error.message.replace(" Sign in instead.", ""), 409, fields={"email": error.message})
+        if payload.get("admin"):
+            add_admin(database(), created["id"])
+        return jsonify({"id": created["id"], "name": created["name"], "email": created["email"],
+                        "admin": bool(payload.get("admin"))}), 201
 
     @blueprint.delete("/accounts/<int:user_id>")
     def delete(user_id: int) -> Any:
         user, refused = admin()
         if refused:
             return refused
-        if user_id == user["id"]:
-            return refuse(OWN_ACCOUNT_MESSAGE, 409)
         if accounts.get_user(database(), user_id) is None:
             return refuse(NO_ACCOUNT_MESSAGE, 404)
-        if is_admin(database(), user_id):
+        if user_id == user["id"]:
+            return refuse(OWN_ACCOUNT_MESSAGE, 409)
+        target = accounts.get_user(database(), user_id)
+        if target["email"] == ADMIN_EMAIL:
             return refuse(ADMIN_ACCOUNT_MESSAGE, 409)
         delete_account(database(), user_id)
         return jsonify({"deleted": user_id})

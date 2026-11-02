@@ -22,7 +22,6 @@ const python = path.join(original, '.venv', 'Scripts', 'python.exe');
 const vite = path.join(root, 'node_modules', 'vite', 'bin', 'vite.js');
 const scratch = path.join(root, 'tests', '.tmp');
 const APP = 'http://localhost:5173';
-const ADMIN = 'http://localhost:5175';
 const API = 'http://127.0.0.1:5000';
 
 const ALL = [
@@ -55,8 +54,8 @@ const portBusy = (port, host) =>
 		socket.setTimeout(1500, () => (socket.destroy(), resolve(false)));
 	});
 // Never take over, or stop, an app that is already running.
-if ((await portBusy(5000, '127.0.0.1')) || (await portBusy(5173, 'localhost')) || (await portBusy(5175, 'localhost'))) {
-	stopWith('Port 5000, 5173 or 5175 is in use. Close the app (and any other test run) first, then try again.');
+if ((await portBusy(5000, '127.0.0.1')) || (await portBusy(5173, 'localhost'))) {
+	stopWith('Port 5000 or 5173 is in use. Close the app (and any other test run) first, then try again.');
 }
 
 fs.mkdirSync(scratch, { recursive: true });
@@ -104,7 +103,6 @@ start(python, [path.join(root, 'server.py')], {
 if (dev) {
 	console.log('Starting the developer server...');
 	start(process.execPath, [vite, 'dev', '--port', '5173', '--strictPort'], { cwd: root }, 'app.log');
-	start(process.execPath, [vite, 'dev', '--config', 'admin/vite.config.ts'], { cwd: root }, 'admin.log');
 } else {
 	console.log('Building the app...');
 	const build = spawnSync(process.execPath, [vite, 'build'], { cwd: root, encoding: 'utf8' });
@@ -112,24 +110,17 @@ if (dev) {
 		console.error(build.stdout?.slice(-3000), build.stderr?.slice(-3000));
 		stopWith('The build failed, so no tests were run.');
 	}
-	const adminBuild = spawnSync(process.execPath, [vite, 'build', '--config', 'admin/vite.config.ts'], { cwd: root, encoding: 'utf8' });
-	if (adminBuild.status !== 0) {
-		console.error(adminBuild.stdout?.slice(-3000), adminBuild.stderr?.slice(-3000));
-		stopWith('The admin app could not be built, so no tests were run.');
-	}
 	console.log('Serving the builds...');
 	start(process.execPath, [vite, 'preview', '--port', '5173', '--strictPort'], { cwd: root }, 'app.log');
-	start(process.execPath, [vite, 'preview', '--config', 'admin/vite.config.ts'], { cwd: root }, 'admin.log');
 }
 await waitFor(`${API}/api/saved/products`, 'The server', 120);
 await waitFor(`${APP}/`, 'The app', 120);
-await waitFor(`${ADMIN}/`, 'The admin app', 120);
 
 function run(name) {
 	return new Promise((resolve) => {
 		const child = spawn(process.execPath, [path.join(here, `${name}.mjs`)], {
 			cwd: root,
-			env: { ...process.env, BASE: APP, ADMIN },
+			env: { ...process.env, BASE: APP },
 			windowsHide: true
 		});
 		let output = '';

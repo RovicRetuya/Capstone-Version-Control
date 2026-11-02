@@ -9,6 +9,7 @@
 	import { onMount } from 'svelte';
 	import { Alert, AlertDescription, AlertTitle } from '#lib/components/ui/alert/index.js';
 	import { Kbd } from '#lib/components/ui/kbd/index.js';
+	import ShopeeSteps from '#lib/components/app/shopee-steps.svelte';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '#lib/components/ui/card/index.js';
 	import { InputGroup, InputGroupAddon, InputGroupInput } from '#lib/components/ui/input-group/index.js';
@@ -21,6 +22,7 @@
 		MARKETPLACES,
 		queryContext,
 		refusalFor,
+		safeLink,
 		scannable,
 		typicalScanTime,
 		viaExtension
@@ -163,6 +165,9 @@
 							<CheckIcon class="size-4" /> {MARKETPLACES[context.platform!]} product link detected.
 						{/if}
 					</p>
+				{/if}
+				{#if !match && viaExtension(context.platform)}
+					<ShopeeSteps link={safeLink(query.trim())} extensionHref="/app/extension" />
 				{/if}
 				{#if match}
 					<p class="bg-muted rounded-lg px-3 py-2 text-sm" aria-live="polite">

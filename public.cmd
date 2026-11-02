@@ -5,7 +5,6 @@ cd /d "%~dp0"
 rem Starts DeFaketive for the public: serve.py on http://127.0.0.1:8080, with https-only sign-in cookies and the
 rem visitor's address read from Cloudflare (Cloudflare Tunnel points the public address at this port).
 rem See README, "Putting it online". To use the app on this PC only, use start.cmd instead.
-rem The admin app is served on http://127.0.0.1:8081, for this computer only (serve.py --admin-port, --admin-host).
 rem Extra options are passed on to serve.py, for example: public.cmd --port 8081
 set "OLD=%~dp0..\Capstone-Version-Control-Version-1.1"
 if not exist "%OLD%\webapp.py" set "OLD=%~dp0backend"
@@ -40,7 +39,6 @@ node scripts\needs-build.mjs
 if errorlevel 1 (
     echo Preparing the app, this takes about half a minute...
     call npm run build
-    if not errorlevel 1 call npm run admin:build
     if errorlevel 1 (
         echo The app could not be prepared. Nothing was started.
         pause
