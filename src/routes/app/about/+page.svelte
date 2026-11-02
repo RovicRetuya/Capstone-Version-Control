@@ -20,7 +20,7 @@
 	</p>
 </header>
 
-<section class="grid gap-4 sm:grid-cols-2" aria-label="What it does">
+<section class="grid grid-cols-1 gap-4 sm:grid-cols-2" aria-label="What it does">
 	{#each features as [title, text], index (title)}
 		<Card class="reveal gap-1 p-5" style="--i:{index}">
 			<h2 class="font-semibold">{title}</h2>

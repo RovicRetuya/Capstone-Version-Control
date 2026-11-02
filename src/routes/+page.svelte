@@ -44,7 +44,7 @@
 <SiteHeader />
 
 <main class="page-view tex-page" style:--tex="url({texture})">
-	<section class="mx-auto grid w-full max-w-6xl gap-10 px-4 py-16 md:px-6 md:py-24 lg:grid-cols-[1.1fr_0.9fr] lg:items-center" aria-labelledby="landing-title">
+	<section class="mx-auto grid grid-cols-1 w-full max-w-6xl gap-10 px-4 py-16 md:px-6 md:py-24 lg:grid-cols-[1.1fr_0.9fr] lg:items-center" aria-labelledby="landing-title">
 		<div class="hero-in space-y-6">
 			<p class="text-muted-foreground text-sm font-medium">Real reviews · Real buyers · Their own words</p>
 			<h1 id="landing-title" class="text-4xl font-semibold tracking-tight text-balance md:text-6xl">See what buyers report before you buy</h1>
@@ -69,11 +69,11 @@
 
 	<!-- The numbers are real, from the server. If they can't be fetched the strip is left out, not left loading. -->
 	<section class={['border-y', catalog.statsFailed && !catalog.stats && 'hidden']} aria-label="DeFaketive in numbers">
-		<dl class="mx-auto grid w-full max-w-6xl grid-cols-3 gap-4 px-4 py-8 text-center md:px-6">
+		<dl class="mx-auto grid w-full max-w-6xl grid-cols-3 gap-2 px-4 py-8 text-center sm:gap-4 md:px-6">
 			{#if catalog.stats}
-				<div><dd class="text-3xl font-semibold tabular-nums"><CountUp value={catalog.stats.products} /></dd><dt class="text-muted-foreground text-sm">Products checked</dt></div>
-				<div><dd class="text-3xl font-semibold tabular-nums"><CountUp value={catalog.stats.reviews} /></dd><dt class="text-muted-foreground text-sm">Reviews analyzed</dt></div>
-				<div><dd class="text-3xl font-semibold">{platforms.join(', ')}</dd><dt class="text-muted-foreground text-sm">The marketplace we check</dt></div>
+				<div class="min-w-0"><dd class="text-2xl font-semibold tabular-nums sm:text-3xl"><CountUp value={catalog.stats.products} /></dd><dt class="text-muted-foreground text-xs sm:text-sm">Products checked</dt></div>
+				<div class="min-w-0"><dd class="text-2xl font-semibold tabular-nums sm:text-3xl"><CountUp value={catalog.stats.reviews} /></dd><dt class="text-muted-foreground text-xs sm:text-sm">Reviews analyzed</dt></div>
+				<div class="min-w-0"><dd class="text-2xl font-semibold break-words sm:text-3xl">{platforms.join(', ')}</dd><dt class="text-muted-foreground text-xs sm:text-sm">The marketplace we check</dt></div>
 			{:else}
 				{#each [1, 2, 3] as n (n)}<Skeleton class="mx-auto h-14 w-32" />{/each}
 			{/if}
@@ -82,7 +82,7 @@
 
 	<section data-reveal class="mx-auto w-full max-w-6xl space-y-8 px-4 py-16 md:px-6" aria-labelledby="features-title">
 		<h2 id="features-title" class="text-3xl font-semibold tracking-tight">Built for a safer tomorrow</h2>
-		<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+		<div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
 			{#each features as feature (feature.title)}
 				<Card class="lift gap-3 p-5">
 					<feature.icon class="size-6" aria-hidden="true" />
@@ -99,7 +99,7 @@
 				<h2 id="how-title" class="text-3xl font-semibold tracking-tight">How it works</h2>
 				<p class="text-muted-foreground">Four simple steps from link to evidence.</p>
 			</div>
-			<ol class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+			<ol class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
 				{#each steps as [title, text], index (title)}
 					<li>
 						<Card class="lift h-full gap-2 p-5">
@@ -114,7 +114,7 @@
 	</section>
 
 	<section data-reveal class="mx-auto w-full max-w-6xl px-4 py-16 md:px-6" aria-labelledby="extension-title">
-		<Card class="grid gap-6 p-6 md:grid-cols-[1fr_auto] md:items-center md:p-8">
+		<Card class="grid grid-cols-1 gap-6 p-6 md:grid-cols-[1fr_auto] md:items-center md:p-8">
 			<div class="space-y-2">
 				<p class="text-muted-foreground flex items-center gap-2 text-sm font-medium"><PuzzleIcon class="size-4" aria-hidden="true" /> For Chrome and Edge on a computer</p>
 				<h2 id="extension-title" class="text-2xl font-semibold tracking-tight">Check right on Lazada and Shopee</h2>

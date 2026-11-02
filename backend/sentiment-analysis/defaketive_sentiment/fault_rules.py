@@ -37,6 +37,8 @@ F11_OFF names f11 parts switched off, for the part-by-part check only.
 import re
 
 F11_REVISION = "f11"
+# f12 (2 Nov 2026) adds the "part" group below to f11: a named part that is stuck, loose, damaged or dead, and "no sound".
+F12_REVISION = "f12"
 S2_REVISION = "s2"
 F11_OFF: set[str] = set()
 
@@ -104,6 +106,29 @@ F11_PARTS = {
             r"(?:igalaw[\s-]*galaw|galaw[\s-]*galaw\w*)\s+(?:[\w'-]+\s+){0,3}(?:jack|wire|cord|cable|plug|saksak\w*))",
             re.I,
         ),
+    ),
+    "part": (
+        # "broke instantly", "nasira agad": "sira agad" is already read; the English wording was not
+        re.compile(r"(?<!\w)(?:broke|broken|snapped|cracked)\s+(?:right\s+away|instantly|immediately|within\s+(?:a\s+)?(?:day|days|week))", re.I),
+        # 'Key "G" is stuck', "keys not responding", "button is loose", "the scroll wheel stopped"
+        re.compile(
+            r"(?<!\w)(?:keys?|buttons?|clicks?|analog|joystick|scroll(?:\s*wheel)?|wheel|trigger|switch|touchpad|usb\s+port|charging\s+port|port|jack|screen)(?!\w)"
+            r"(?:\s+[\w'\"]+){0,4}?\s+(?:(?:is|are|was|were|keeps?|na)\s+)?"
+            r"(?:not\s+responding|unresponsive|stuck|sticky|loose|jammed|stopped\s+working|(?:di|hindi)\s+(?:na\s+)?(?:gumagana|nagana|gumana|tumutugon)|ayaw\s+gumana)",
+            re.I,
+        ),
+        # "damage po yung USB port", "sira ung charging port", "basag ang screen"
+        re.compile(
+            r"(?<!\w)(?<!no\s)(?<!not\s)(?<!walang\s)(?<!without\s)(?:damage[d]?|sira|basag|broken|loose|natanggal)\s+(?:po\s+)?(?:(?:yung|ung|ang|ng|the|sa)\s+)?"
+            r"(?:[\w']+\s+){0,1}(?:usb\s+port|charging\s+port|port|jack|button|key|keys|screen|hinge|handle|switch|knob|wheel)(?!\w)",
+            re.I,
+        ),
+        # a control that moves or presses by itself: "left analog kusang gumagalaw", "ghost touch"
+        re.compile(r"(?<!\w)(?:kusang\s+(?:gumagalaw|umiikot|nagpipindot|nag\w+)|ghost[\s-]*(?:touch\w*|click\w*|tap\w*|press\w*)|stick\s+drift)", re.I),
+        re.compile(r"(?<!\w)(?:(?:di|hindi|not)\s+(?:po\s+)?consistent|inconsistent)(?!\w)", re.I),
+        # "no sound": "walang sound", "walng pong sound yong left", "wala pong tunog"
+        re.compile(r"(?<!\w)wa?le?ng\s+(?:po(?:ng)?\s+)?(?:sound|tunog|audio|boses)(?!\w)", re.I),
+        re.compile(r"(?<!\w)(?:no|zero)\s+sound\s+(?:on|from|in|at|sa)\s+(?:the\s+)?(?:left|right|one|isa)(?!\w)", re.I),
     ),
     "not_working": (
         re.compile(r"(?<!\w)(?:no\s+longer|isn'?t|is\s+not|wasn'?t|not)\s+(?:even\s+)?(?:working|functioning|functional|function)(?!\w)", re.I),

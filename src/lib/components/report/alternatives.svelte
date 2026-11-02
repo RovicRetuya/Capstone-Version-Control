@@ -21,7 +21,7 @@
 	</CardHeader>
 	<CardContent>
 		{#if shown.length}
-			<div class="grid gap-4 md:grid-cols-3">
+			<div class="grid grid-cols-1 gap-4 md:grid-cols-3">
 				{#each shown as item, index (item.link)}
 					{@const image = safeImage(item)}
 					{@const link = safeLink(item.link)}

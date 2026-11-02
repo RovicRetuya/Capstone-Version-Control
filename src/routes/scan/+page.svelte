@@ -221,7 +221,7 @@
 	<div class="mx-auto w-full max-w-2xl"><ScanStatus /></div>
 {/if}
 
-<section class="mx-auto grid w-full max-w-4xl gap-4 md:grid-cols-3" aria-label="How it works">
+<section class="mx-auto grid grid-cols-1 w-full max-w-4xl gap-4 md:grid-cols-3" aria-label="How it works">
 	{#each steps as [title, text], index (title)}
 		<Card class="reveal gap-2 p-5" style="--i:{index}">
 			<span class="text-muted-foreground text-xs font-medium">STEP 0{index + 1}</span>
@@ -237,7 +237,7 @@
 		<CardDescription>A free account adds:</CardDescription>
 	</CardHeader>
 	<CardContent class="grid gap-4">
-		<ul class="grid gap-2 text-sm sm:grid-cols-2">
+		<ul class="grid grid-cols-1 gap-2 text-sm sm:grid-cols-2">
 			{#each perks as perk (perk)}
 				<li class="flex items-center gap-2"><CheckIcon class="text-success size-4 shrink-0" /> {perk}</li>
 			{/each}

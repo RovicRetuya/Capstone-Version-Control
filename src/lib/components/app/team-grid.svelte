@@ -11,7 +11,7 @@
 	];
 </script>
 
-<ul class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+<ul class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
 	{#each team as person (person.name)}
 		<li class="flex items-center gap-3 rounded-xl border p-4">
 			<Avatar class="size-10"><AvatarFallback>{initials(person.name.replace(/,.*/, ''))}</AvatarFallback></Avatar>

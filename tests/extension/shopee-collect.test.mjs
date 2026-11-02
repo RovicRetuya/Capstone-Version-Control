@@ -20,6 +20,8 @@ test('finds the shop and item in either kind of Shopee address', () => {
 	assert.deepEqual(productIds('https://shopee.ph/product/159408769/58117695286'), { shopId: '159408769', itemId: '58117695286' });
 	assert.equal(productIds('https://shopee.ph/search?keyword=crocs'), null);
 	assert.equal(productIds('not a link'), null);
+	// A Mall page opened from a search names the listing its ratings belong to.
+	assert.deepEqual(productIds('https://shopee.ph/Lenovo-LE302-i.768326746.55809231840?vItemId=48852265195&vShopId=1257811163'), { shopId: '1257811163', itemId: '48852265195' });
 });
 
 test('reads the star counts 1 star first and sends them 5 stars first', async () => {
@@ -45,17 +47,17 @@ test('also reads a count list with the total first', async () => {
 	assert.deepEqual(result.ratings.scores, [63, 0, 2, 0, 1]);
 });
 
-test('collects each star level in the scanner order, up to 60, 59 a request, one at a time', async () => {
+test('collects every written review of each star level in the scanner order, 59 a request, one at a time', async () => {
 	const feed = pretendShopee({ counts: [3, 4, 8, 15, 400], written: { 5: 150, 4: 15, 3: 8, 2: 4, 1: 3 } });
 	const { result, pauses } = await run(feed);
 	assert.equal(result.status, 'ok');
-	assert.deepEqual(result.levels[5], { stop_reason: 'target_reached' });
+	assert.deepEqual(result.levels[5], { stop_reason: 'feed_ended' });
 	const perStar = Object.fromEntries([1, 2, 3, 4, 5].map((s) => [s, result.reviews.filter((r) => r.rating === s).length]));
-	assert.deepEqual(perStar, { 1: 3, 2: 4, 3: 8, 4: 15, 5: 60 });
-	// First the counts (type 0), then 3, 2, 4, 1, 5; the 5-star level needs a second request for its 60th review.
+	assert.deepEqual(perStar, { 1: 3, 2: 4, 3: 8, 4: 15, 5: 150 });
+	// First the counts (type 0), then 3, 2, 4, 1, 5; the 5-star level takes three requests for its 150 reviews, then one more that comes back empty.
 	assert.deepEqual(
 		feed.requests.map((r) => [r.star, r.offset]),
-		[[0, 0], [3, 0], [2, 0], [4, 0], [1, 0], [5, 0], [5, 59]]
+		[[0, 0], [3, 0], [2, 0], [4, 0], [1, 0], [5, 0], [5, 59], [5, 118], [5, 150]]
 	);
 	assert.ok(feed.requests.every((r) => r.limit <= 59 && r.itemId === '58117695286' && r.shopId === '159408769'));
 	assert.ok(feed.requests.slice(1).every((r) => r.withText));
@@ -86,11 +88,32 @@ test('skips reviews without text', async () => {
 	assert.ok(result.reviews.every((r) => r.content && r.rating === r.source_rating_filter));
 });
 
-test('stops a long level at its target of 60, well before the depth of the list', async () => {
+test('reads a long level to the end of its list', async () => {
+	const feed = pretendShopee({ counts: [0, 0, 0, 0, 900], written: { 5: 900 } });
+	const { result } = await run(feed);
+	assert.deepEqual(result.levels[5], { stop_reason: 'feed_ended' });
+	assert.equal(result.reviews.length, 900);
+});
+
+test('keeps what a list gives when Shopee cuts it short', async () => {
 	const feed = pretendShopee({ counts: [0, 0, 0, 0, 900], written: { 5: 900 }, listDepth: 354 });
 	const { result } = await run(feed);
-	assert.deepEqual(result.levels[5], { stop_reason: 'target_reached' });
-	assert.equal(result.reviews.length, 60);
+	assert.deepEqual(result.levels[5], { stop_reason: 'feed_ended' });
+	assert.equal(result.reviews.length, 354);
+});
+
+test('keeps a review Shopee lists twice, as a separate review', async () => {
+	const feed = pretendShopee({ counts: [0, 0, 0, 0, 5], written: { 5: 5 } });
+	const fetchText = async (url) => {
+		const body = JSON.parse(await feed.fetchText(url));
+		if (body.data.ratings) body.data.ratings = [body.data.ratings[0], ...body.data.ratings];
+		return JSON.stringify(body);
+	};
+	const { result } = await run({ fetchText });
+	assert.equal(result.reviews.length, 6);
+	assert.equal(new Set(result.reviews.map((r) => r.comment_id)).size, 6);
+	assert.ok(result.reviews.every((r) => /^\d+$/.test(r.comment_id)));
+	assert.equal(result.skipped.repeat_id, 1);
 });
 
 test('stops at once, and keeps nothing, when Shopee asks for a check', async () => {

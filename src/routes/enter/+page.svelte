@@ -45,7 +45,7 @@
 <svelte:head><title>DeFaketive · {signup ? 'Create account' : 'Sign in'}</title></svelte:head>
 
 <!-- One light, textured page under both halves, so the background runs on without a seam. -->
-<main class="tex-page enter grid min-h-svh lg:grid-cols-[1fr_1.15fr]" style:--tex="url({texture})" style:--tex-wash="rgba(250, 249, 247, 0.55)">
+<main class="tex-page enter grid grid-cols-1 min-h-svh lg:grid-cols-[1fr_1.15fr]" style:--tex="url({texture})" style:--tex-wash="rgba(250, 249, 247, 0.55)">
 	<section class="flex flex-col justify-between gap-10 p-8 sm:p-12">
 		<div class="hero-in inline-flex w-fit items-center gap-3 rounded-full bg-white px-4 py-2 shadow-md">
 			<img src={logo} alt="" class="size-8" />

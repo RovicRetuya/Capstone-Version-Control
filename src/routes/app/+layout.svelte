@@ -76,10 +76,10 @@
 	</div>
 {:else}
 	<div class="tex-page flex min-h-svh flex-col" style:--tex="url({texture})" style:--tex-wash="rgba(250, 249, 247, 0.55)">
-		<header data-print="hide" class="bg-background/85 sticky top-0 z-30 flex h-[70px] shrink-0 items-center gap-3 border-b px-4 backdrop-blur md:px-6">
-			<a href="/app/home" class="flex items-center gap-3" aria-label="DeFaketive home">
+		<header data-print="hide" class="bg-background/85 sticky top-0 z-30 flex h-[70px] [@media(max-height:480px)]:static shrink-0 items-center gap-2 border-b px-3 backdrop-blur sm:gap-3 sm:px-4 md:px-6">
+			<a href="/app/home" class="flex shrink-0 items-center gap-3" aria-label="DeFaketive V0.9 BETA, home">
 				<img src={logo} alt="" class="size-10 shrink-0" />
-				<span class="leading-none">
+				<span class="hidden leading-none min-[420px]:block">
 					<span class="block text-lg font-extrabold tracking-tight">DeFaketive</span>
 					<span class="text-muted-foreground block font-mono text-[10px] tracking-widest">V0.9 BETA</span>
 				</span>
@@ -88,22 +88,22 @@
 			<p class="text-muted-foreground hidden font-mono text-[11px] leading-[1.45] tracking-[0.18em] uppercase lg:block">
 				Real products.<br />Real reviews.<br />A safer you.
 			</p>
-			<div class="ml-auto flex items-center gap-1 sm:gap-2">
+			<div class="ml-auto flex min-w-0 items-center gap-1 sm:gap-2">
 				<ul class="text-muted-foreground mr-3 hidden items-center gap-4 font-mono text-xs xl:flex" aria-label="Marketplaces checked">
 					<li class="flex items-center gap-1.5"><span class="size-1.5 rounded-full bg-[#ee4d2d]" aria-hidden="true"></span> Shopee</li>
 					<li class="flex items-center gap-1.5"><span class="size-1.5 rounded-full bg-[#0f146d]" aria-hidden="true"></span> Lazada</li>
 				</ul>
 				<ScanPill />
 				<Button variant="ghost" size="icon" aria-label="Search pages and products" onclick={() => (ui.commandOpen = true)}><SearchIcon /></Button>
-				<Button variant="ghost" size="icon" href="/app/settings" aria-label="Settings"><SettingsIcon /></Button>
+				<Button variant="ghost" size="icon" href="/app/settings" aria-label="Settings" class="max-sm:hidden"><SettingsIcon /></Button>
 				<ThemeToggle />
 				<DropdownMenu>
 					<DropdownMenuTrigger>
 						{#snippet child({ props })}
-							<button type="button" {...props} class="hover:bg-accent focus-visible:ring-ring ml-1 flex items-center gap-2 rounded-full py-1 pr-2 pl-1 text-sm font-medium outline-none focus-visible:ring-2">
+							<button type="button" {...props} class="hover:bg-accent focus-visible:ring-ring flex shrink-0 items-center gap-2 rounded-full py-1 pr-1 pl-1 sm:ml-1 sm:pr-2 text-sm font-medium outline-none focus-visible:ring-2">
 								<span class="bg-foreground text-background grid size-9 place-items-center rounded-full text-xs font-bold" aria-hidden="true">{initials(auth.user?.name)}</span>
-								<span class="hidden max-w-40 truncate sm:inline">{auth.user?.name}</span>
-								<ChevronDownIcon class="size-4 opacity-60" />
+								<span class="max-w-40 truncate max-sm:sr-only">{auth.user?.name}</span>
+								<ChevronDownIcon class="size-4 opacity-60 max-sm:hidden" />
 							</button>
 						{/snippet}
 					</DropdownMenuTrigger>
@@ -144,11 +144,11 @@
 		</div>
 
 		<!-- On a phone the icons run along the bottom. -->
-		<nav data-print="hide" aria-label="Main" class="bg-background/95 fixed inset-x-0 bottom-0 z-30 flex justify-start gap-1 overflow-x-auto border-t px-2 py-2 backdrop-blur md:hidden">
+		<nav data-print="hide" aria-label="Main" class="bg-background/95 fixed inset-x-0 bottom-0 z-30 flex justify-start gap-0.5 overflow-x-auto border-t px-1 py-2 backdrop-blur min-[380px]:gap-1 min-[380px]:px-2 md:hidden">
 			{#each items as item (item.href)}
-				<a href={item.href} aria-current={active(item.href) ? 'page' : undefined} class="focus-visible:ring-ring flex min-w-16 flex-1 flex-col items-center gap-1 rounded-lg py-1 outline-none focus-visible:ring-2">
+				<a href={item.href} aria-current={active(item.href) ? 'page' : undefined} class="focus-visible:ring-ring flex min-w-0 flex-1 flex-col items-center gap-1 rounded-lg py-1 outline-none focus-visible:ring-2">
 					<span class="grid size-9 place-items-center rounded-full border {active(item.href) ? 'bg-foreground text-background border-foreground' : 'bg-background'}"><item.icon class="size-4" /></span>
-					<span class="font-mono text-[9px] tracking-wider uppercase {active(item.href) ? 'text-foreground' : 'text-muted-foreground'}">{item.label}</span>
+					<span class="font-mono text-[8px] tracking-tight uppercase min-[380px]:text-[9px] min-[380px]:tracking-wider {active(item.href) ? 'text-foreground' : 'text-muted-foreground'}">{item.label}</span>
 				</a>
 			{/each}
 		</nav>
