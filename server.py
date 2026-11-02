@@ -64,6 +64,7 @@ from flask import Blueprint, jsonify, redirect, request  # noqa: E402
 
 import admin_api  # noqa: E402  (beside this file)
 import extension_api  # noqa: E402  (beside this file)
+import link_resolver  # noqa: E402  (beside this file)
 import problem_reports  # noqa: E402  (beside this file)
 import protections  # noqa: E402  (beside this file)
 from saved_pool import SavedPool  # noqa: E402  (beside this file)
@@ -183,6 +184,7 @@ def saved_popular():
 
 
 webapp.app.register_blueprint(saved)
+webapp.app.register_blueprint(link_resolver.blueprint)
 
 # What keeps the app safe once people outside the team can reach it: closed old routes, daily limits, one Chrome
 # at a time, no copy of a scan per visitor, no reviewer names in what is sent (protections.py says why).

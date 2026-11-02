@@ -3,7 +3,20 @@ import { page } from '$app/state';
 import { toast } from 'svelte-sonner';
 import { api, ApiError, json } from '#lib/api.js';
 import { reportHrefFor } from '#lib/nav.js';
-import { LAZADA_ONLY, linkIdentity, queryContext, refusalFor, safeLink, scannable, searchProducts, view, viaExtension } from '#lib/product.js';
+import {
+	isShortLink,
+	LAZADA_ONLY,
+	linkFrom,
+	linkIdentity,
+	listingId,
+	queryContext,
+	refusalFor,
+	safeLink,
+	scannable,
+	searchProducts,
+	view,
+	viaExtension
+} from '#lib/product.js';
 import type { Job, Marketplace } from '#lib/types.js';
 import { auth } from './auth.svelte.js';
 import { catalog } from './catalog.svelte.js';
@@ -120,8 +133,26 @@ class Scan {
 		reviewCount: number;
 	}) {
 		if (this.busy) return;
-		const query = options.query.trim();
+		// The apps copy a title with a link, and a phone adds tracking to it: use the product link inside.
+		let query = linkFrom(options.query);
 		if (!query) return;
+		if (isShortLink(query)) {
+			// The Lazada app's short link names no product. Ask the server where it goes before looking anything up.
+			this.busy = true;
+			try {
+				const data = await api<{ link: string }>(`/api/resolve-link?url=${encodeURIComponent(query)}`);
+				query = data.link;
+			} catch {
+				this.feedback = {
+					title: "Couldn't open that link",
+					message: 'Open the product in your browser instead, copy its address from there, and paste it here.',
+					kind: 'error'
+				};
+				return;
+			} finally {
+				this.busy = false;
+			}
+		}
 		const context = queryContext(query);
 		if (context.isUrl && !context.platform) {
 			this.feedback = {
@@ -250,10 +281,13 @@ class Scan {
 					// history (their account, or this browser for a guest); the products table keeps it for everyone.
 					if (loaded) library.recordScan(catalog.products);
 					const direct = queryContext(job.query ?? '').isUrl;
+					// Only the product that was asked for: never "the only product there is", which opened the wrong report.
+					const wanted = listingId(job.query);
 					const product =
 						direct && loaded
-							? (catalog.products.find((p) => linkIdentity(p.link) === linkIdentity(job.query)) ??
-								(catalog.products.length === 1 ? catalog.products[0] : null))
+							? (catalog.products.find(
+									(p) => linkIdentity(p.link) === linkIdentity(job.query) || (wanted && listingId(p.link) === wanted)
+								) ?? null)
 							: null;
 					this.#set({
 						...job,
