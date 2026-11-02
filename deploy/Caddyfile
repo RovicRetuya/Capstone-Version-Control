@@ -1,0 +1,10 @@
+# Replace the first line with your address, e.g. defaketive.ph. Caddy gets the https certificate by itself.
+# Copy to /etc/caddy/Caddyfile, then: sudo systemctl reload caddy
+defaketive.ph, www.defaketive.ph {
+    encode gzip
+    reverse_proxy 127.0.0.1:8080 {
+        # serve.py (--proxy cloudflare) reads the visitor's address from this header, and only believes it on
+        # requests from this server itself. Setting it here replaces anything a visitor tries to send.
+        header_up CF-Connecting-IP {remote_host}
+    }
+}

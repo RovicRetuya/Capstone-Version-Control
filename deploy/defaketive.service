@@ -1,0 +1,15 @@
+[Unit]
+Description=DeFaketive (serve.py: the site and /api, one process)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=__USER__
+WorkingDirectory=__REPO__
+# ONE process only: the progress of running scans lives in its memory. Caddy (or cloudflared) is the https side.
+ExecStart=__REPO__/backend/.venv/bin/python __REPO__/serve.py --https --proxy cloudflare --port 8080
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
