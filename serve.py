@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import argparse
 import importlib.util
+import json
 import os
 import sys
 import threading
@@ -91,6 +92,7 @@ def create_public_app(https: bool = False) -> Any:
     app.add_url_rule("/<path:path>", "screens", screens)
 
     app.after_request(_safety_headers)
+    app.after_request(_hide_scanner_errors)
     return app
 
 
@@ -103,6 +105,22 @@ def _safety_headers(response: Any) -> Any:
     response.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
     if request.path.startswith("/api/"):
         response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+SCANNER_UNAVAILABLE = ("This site can't read new products by itself. Install the DeFaketive browser extension, open the "
+                       "product page on Lazada PH or Shopee PH and press Check. Saved reports open here as usual.")
+
+
+def _hide_scanner_errors(response: Any) -> Any:
+    """A server with no Chrome cannot run the scanner; the visitor gets this message, not its traceback and file paths."""
+    from flask import request
+
+    if request.path.startswith("/api/jobs/") and response.mimetype == "application/json":
+        job = response.get_json(silent=True)
+        if isinstance(job, dict) and job.get("state") == "error" and "Traceback" in str(job.get("message") or ""):
+            job["message"] = SCANNER_UNAVAILABLE
+            response.set_data(json.dumps(job))
     return response
 
 
