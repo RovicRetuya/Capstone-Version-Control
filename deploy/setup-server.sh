@@ -40,6 +40,7 @@ echo "== Starter reports =="
 "$PY" scripts/load_starter_data.py
 
 echo "== The site (npm run build) =="
+sudo npm install -g npm@11 >/dev/null  # the lockfile was made with npm 11; the npm 10 that comes with Node 22 rejects it
 npm ci --no-fund --no-audit
 npm run build
 
