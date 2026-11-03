@@ -643,3 +643,11 @@ header.sticky::after {
 .dark .tex-page {
 	--tex-wash: color-mix(in oklch, var(--background) 93%, transparent);
 }
+/* The signed-in app: a warm off-white wash in light mode. In dark mode it takes the dark wash above. (This used to be an
+   inline style, which beat the dark rule and left the backdrop pale behind light text.) */
+.tex-page.tex-warm {
+	--tex-wash: rgba(250, 249, 247, 0.55);
+}
+.dark .tex-page.tex-warm {
+	--tex-wash: color-mix(in oklch, var(--background) 93%, transparent);
+}

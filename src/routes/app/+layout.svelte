@@ -3,6 +3,7 @@
 	import { page } from '$app/state';
 	import ChevronDownIcon from '@lucide/svelte/icons/chevron-down';
 	import CircleHelpIcon from '@lucide/svelte/icons/circle-help';
+	import FlagIcon from '@lucide/svelte/icons/flag';
 	import HeartIcon from '@lucide/svelte/icons/heart';
 	import HistoryIcon from '@lucide/svelte/icons/history';
 	import HouseIcon from '@lucide/svelte/icons/house';
@@ -75,7 +76,7 @@
 		{/if}
 	</div>
 {:else}
-	<div class="tex-page flex min-h-svh flex-col" style:--tex="url({texture})" style:--tex-wash="rgba(250, 249, 247, 0.55)">
+	<div class="tex-page tex-warm flex min-h-svh flex-col" style:--tex="url({texture})">
 		<header data-print="hide" class="bg-background/85 sticky top-0 z-30 flex h-[70px] [@media(max-height:480px)]:static shrink-0 items-center gap-2 border-b px-3 backdrop-blur sm:gap-3 sm:px-4 md:px-6">
 			<a href="/app/home" class="flex shrink-0 items-center gap-3" aria-label="DeFaketive V0.9 BETA, home">
 				<img src={logo} alt="" class="size-10 shrink-0" />
@@ -95,6 +96,9 @@
 				</ul>
 				<ScanPill />
 				<Button variant="ghost" size="icon" aria-label="Search pages and products" onclick={() => (ui.commandOpen = true)}><SearchIcon /></Button>
+				<Button variant="ghost" size="sm" aria-label="Report a problem" class="max-sm:size-9 max-sm:px-0" onclick={() => ui.openReport()}>
+					<FlagIcon /> <span class="max-lg:sr-only">Report</span>
+				</Button>
 				<Button variant="ghost" size="icon" href="/app/settings" aria-label="Settings" class="max-sm:hidden"><SettingsIcon /></Button>
 				<ThemeToggle />
 				<DropdownMenu>
@@ -114,6 +118,7 @@
 						<DropdownMenuSeparator />
 						<DropdownMenuItem onclick={() => goto('/app/settings')}><SettingsIcon /> Settings</DropdownMenuItem>
 						<DropdownMenuItem onclick={() => goto('/app/extension')}><PuzzleIcon /> Get the extension</DropdownMenuItem>
+						<DropdownMenuItem onclick={() => ui.openReport()}><FlagIcon /> Report a problem</DropdownMenuItem>
 						<DropdownMenuItem onclick={signOut}><LogOutIcon /> Sign out</DropdownMenuItem>
 					</DropdownMenuContent>
 				</DropdownMenu>

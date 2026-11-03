@@ -1,8 +1,9 @@
 """The "Report a problem" form: POST /api/problem-report.
 
-Anyone may send a report, signed in or not. It is kept in the accounts database (table `problem_reports`) so the
-people who run the site can read it later:
-    SELECT created_at, category, message, email, page FROM problem_reports ORDER BY id DESC;
+Anyone may send a report, signed in or not. It is kept in the accounts database (table `problem_reports`) and the admin
+reads it on the admin page (admin_api.py: GET /api/admin/reports), marking each one handled when it has been dealt
+with. Without the admin page it can be read with:
+    SELECT created_at, category, message, email, page, status FROM problem_reports ORDER BY id DESC;
 Each connection may send a few reports an hour, so the form cannot be used to fill the database.
 
 Each report is also emailed to REPORT_TO (DEFAKETIVE_REPORT_TO changes it). Sending needs a mail account, set with
@@ -45,9 +46,68 @@ CREATE TABLE IF NOT EXISTS problem_reports (
     message TEXT NOT NULL,
     email TEXT NOT NULL DEFAULT '',
     page TEXT NOT NULL DEFAULT '',
-    user_id INTEGER
+    user_id INTEGER,
+    status TEXT NOT NULL DEFAULT 'new'
 );
 """
+STATUSES = ("new", "done")  # new: nobody has dealt with it yet; done: the admin marked it handled
+LIST_LIMIT = 200
+
+
+def ensure_schema(connection: Any) -> None:
+    """The table, and its `status` column on a database that had the table before reports had a status."""
+    connection.executescript(SCHEMA)
+    if "status" not in {row[1] for row in connection.execute("PRAGMA table_info(problem_reports)")}:
+        connection.execute("ALTER TABLE problem_reports ADD COLUMN status TEXT NOT NULL DEFAULT 'new'")
+
+
+def _like(text: str) -> str:
+    return "%" + text.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
+
+
+def list_reports(connection: Any, status: str = "all", category: str = "", query: str = "", limit: int = LIST_LIMIT) -> dict[str, Any]:
+    """The newest reports first, with who sent each, and how many there are in all (whatever the filters)."""
+    ensure_schema(connection)
+    where, values = ["1 = 1"], []
+    if status in STATUSES:
+        where.append("r.status = ?")
+        values.append(status)
+    if category in CATEGORIES:
+        where.append("r.category = ?")
+        values.append(category)
+    query = query.strip()[:100]
+    if query:
+        where.append("(r.message LIKE ? ESCAPE '\\' OR r.email LIKE ? ESCAPE '\\' OR r.page LIKE ? ESCAPE '\\' "
+                     "OR u.full_name LIKE ? ESCAPE '\\' OR u.email LIKE ? ESCAPE '\\')")
+        values.extend([_like(query)] * 5)
+    rows = connection.execute(
+        "SELECT r.id, r.created_at, r.category, r.message, r.email, r.page, r.status, r.user_id, "
+        "u.full_name AS user_name, u.email AS user_email FROM problem_reports r LEFT JOIN users u ON u.id = r.user_id "
+        f"WHERE {' AND '.join(where)} ORDER BY r.id DESC LIMIT ?",
+        (*values, max(1, min(int(limit), LIST_LIMIT))),
+    ).fetchall()
+    counts = {name: 0 for name in STATUSES}
+    for name, n in connection.execute("SELECT status, COUNT(*) FROM problem_reports GROUP BY status"):
+        counts[name] = counts.get(name, 0) + n
+    return {
+        "reports": [
+            {"id": row["id"], "created_at": row["created_at"], "category": row["category"],
+             "label": LABELS.get(row["category"], row["category"]), "message": row["message"], "email": row["email"],
+             "page": row["page"], "status": row["status"],
+             "user": {"name": row["user_name"], "email": row["user_email"]} if row["user_id"] and row["user_email"] else None}
+            for row in rows
+        ],
+        "counts": {**counts, "total": sum(counts.values())},
+    }
+
+
+def set_status(connection: Any, report_id: int, status: str) -> bool:
+    """Mark one report handled or open again. False when there is no such report or no such status."""
+    if status not in STATUSES:
+        return False
+    ensure_schema(connection)
+    return bool(connection.execute("UPDATE problem_reports SET status = ? WHERE id = ?", (status, int(report_id))).rowcount)
+
 
 TOO_SHORT = f"Please tell us a little more (at least {MIN_MESSAGE} characters)."
 TOO_MANY = "You've sent a few reports already. Please try again in an hour."
@@ -139,7 +199,7 @@ def install(webapp: Any, app: Any = None) -> None:
             return jsonify({"error": TOO_MANY}), 429
         user = webapp._current_user()
         with accounts._connect(str(current_app.config["ACCOUNTS_DB"])) as connection:
-            connection.executescript(SCHEMA)
+            ensure_schema(connection)
             report = {"category": category, "message": message, "email": _clean(payload.get("email"), MAX_EMAIL),
                       "page": _clean(payload.get("page"), MAX_PAGE), "user_id": user["id"] if user else None}
             report["id"] = connection.execute(

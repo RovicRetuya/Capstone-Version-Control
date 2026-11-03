@@ -6,6 +6,7 @@
 	import { onMount } from 'svelte';
 	import { boot } from '#lib/boot.js';
 	import CommandPalette from '#lib/components/app/command-palette.svelte';
+	import ProblemReportDialog from '#lib/components/app/problem-report-dialog.svelte';
 	import AuthDialog from '#lib/components/app/auth-dialog.svelte';
 	import OfflineBanner from '#lib/components/app/offline-banner.svelte';
 	import TermsDialog from '#lib/components/app/terms-dialog.svelte';
@@ -83,4 +84,4 @@
 <AuthDialog />
 <TermsDialog />
 <CommandPalette />
-{#if auth.user}<WelcomeTour />{/if}
+{#if auth.user}<WelcomeTour /><ProblemReportDialog />{/if}

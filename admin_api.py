@@ -24,6 +24,7 @@ What the admin can do, and what not.
 - Choose what the Products page offers: which "Filter by result" and "Order by" choices appear, which is
   picked first, and add options of their own (a minimum rating, a top price, a minimum review count, a marketplace,
   or an order by rating, price, reviews, date or name). Kept in the `ui_settings` table; everybody can read it (GET /api/products-filters).
+- Read the problem reports people send from the site's "Report a problem" form, and mark each handled or open again.
 - Change their own password.
 
     GET    /api/admin/me                   {admin: {id, name, email} | null}
@@ -38,6 +39,8 @@ What the admin can do, and what not.
     GET    /api/admin/filters              the Products page's choices, and the starting ones
     PUT    /api/admin/filters              {show: {enabled, default}, sort: {enabled, default}, custom: [...]}
     GET    /api/products-filters           (no sign-in) the choices the Products page offers
+    GET    /api/admin/reports?status=&category=&q=   the problem reports, newest first, with who sent each
+    PUT    /api/admin/reports/<id>         {status: "new" | "done"}
 
 The original app's own /api/admin/overview, database, lexicons and logs stay closed (protections.CLOSED_PATHS).
 """
@@ -55,6 +58,7 @@ from typing import Any
 
 from flask import Blueprint, current_app, g, jsonify, request, session
 
+import problem_reports
 import protections
 
 blueprint = Blueprint("admin", __name__, url_prefix="/api/admin")
@@ -93,6 +97,7 @@ TOO_MANY_MESSAGE = "Too many tries. Wait a few minutes, then try again."
 NOT_ADMIN_MESSAGE = "This account is not an admin. Shoppers use the main DeFaketive app."
 ROLE_REMOVED_MESSAGE = "Your admin session ended, so you were signed out."
 ADMIN_ONLY_MESSAGE = "This is an admin account. It can only be used in the DeFaketive admin app."
+NO_REPORT_MESSAGE = "There is no such report."
 DELETE_REFUSED_MESSAGE = "The admin page can't delete accounts. People delete their own account from Settings."
 LIMITS_MESSAGE = f"Each limit must be a whole number from 0 to {MAX_LIMIT:,}."
 
@@ -591,6 +596,30 @@ def install(webapp: Any, app: Any = None) -> None:
             return refuse(problem)
         save_filters(database(), cleaned)
         return jsonify({"filters": cleaned, "defaults": FILTER_DEFAULTS})
+
+    @blueprint.get("/reports")
+    def reports_answer() -> Any:
+        """The problem reports people sent, newest first. ?status=new|done, ?category=, ?q= narrow them."""
+        _user, refused = admin()
+        if refused:
+            return refused
+        with _connect(database()) as connection:
+            return jsonify(problem_reports.list_reports(
+                connection, request.args.get("status", "all"), request.args.get("category", ""), request.args.get("q", "")))
+
+    @blueprint.put("/reports/<int:report_id>")
+    def change_report(report_id: int) -> Any:
+        _user, refused = admin()
+        if refused:
+            return refused
+        payload = request.get_json(silent=True)
+        status = payload.get("status") if isinstance(payload, dict) else None
+        if status not in problem_reports.STATUSES:
+            return refuse("Mark a report new or done.")
+        with _connect(database()) as connection:
+            if not problem_reports.set_status(connection, report_id, status):
+                return refuse(NO_REPORT_MESSAGE, 404)
+        return jsonify({"id": report_id, "status": status})
 
     @public_blueprint.get("/products-filters")
     def products_filters() -> Any:
