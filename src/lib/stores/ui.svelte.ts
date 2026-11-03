@@ -21,11 +21,20 @@ class Ui {
 	/** The welcome tour: opens by itself right after an account is created; Settings and Ctrl+K open it again. */
 	tourOpen = $state(false);
 
+	/** The "Report a problem" pop-up (problem-report-dialog.svelte), and what it starts on. */
+	reportOpen = $state(false);
+	reportCategory = $state('other');
+
 	openAuth(kind: 'signin' | 'signup' = 'signin', notice = '', after = '') {
 		this.authKind = kind;
 		this.authNotice = notice;
 		this.afterAuth = after;
 		this.authOpen = true;
+	}
+
+	openReport(category = 'other') {
+		this.reportCategory = category;
+		this.reportOpen = true;
 	}
 
 	openTerms(section: 'terms' | 'privacy' = 'terms') {

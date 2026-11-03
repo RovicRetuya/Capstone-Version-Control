@@ -2,9 +2,11 @@
 	import ExtensionCard from '#lib/components/app/extension-card.svelte';
 	import FaqList from '#lib/components/app/faq-list.svelte';
 	import VerdictBadge from '#lib/components/app/verdict-badge.svelte';
+	import { Button } from '#lib/components/ui/button/index.js';
 	import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '#lib/components/ui/card/index.js';
 	import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '#lib/components/ui/table/index.js';
 	import { groupOfTone, SAFETY_LIFT_NOTE, VERDICT_GUIDE } from '#lib/product.js';
+	import { ui } from '#lib/stores/ui.svelte.js';
 </script>
 
 <svelte:head><title>FAQ · DeFaketive</title></svelte:head>
@@ -48,7 +50,10 @@
 	</CardContent>
 </Card>
 
-<p class="text-muted-foreground text-sm">
-	Still stuck? Email the team at
-	<a class="text-primary underline underline-offset-4" href="mailto:bmacalino_20ur2047@psu.edu.ph">bmacalino_20ur2047@psu.edu.ph</a>.
-</p>
+<div class="flex flex-wrap items-center gap-3">
+	<Button variant="outline" onclick={() => ui.openReport()}>Report a problem</Button>
+	<p class="text-muted-foreground text-sm">
+		Still stuck? Send the team a report, or email
+		<a class="text-primary underline underline-offset-4" href="mailto:bmacalino_20ur2047@psu.edu.ph">bmacalino_20ur2047@psu.edu.ph</a>.
+	</p>
+</div>

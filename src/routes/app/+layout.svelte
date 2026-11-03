@@ -3,6 +3,7 @@
 	import { page } from '$app/state';
 	import ChevronDownIcon from '@lucide/svelte/icons/chevron-down';
 	import CircleHelpIcon from '@lucide/svelte/icons/circle-help';
+	import FlagIcon from '@lucide/svelte/icons/flag';
 	import HeartIcon from '@lucide/svelte/icons/heart';
 	import HistoryIcon from '@lucide/svelte/icons/history';
 	import HouseIcon from '@lucide/svelte/icons/house';
@@ -95,6 +96,9 @@
 				</ul>
 				<ScanPill />
 				<Button variant="ghost" size="icon" aria-label="Search pages and products" onclick={() => (ui.commandOpen = true)}><SearchIcon /></Button>
+				<Button variant="ghost" size="sm" aria-label="Report a problem" class="max-sm:size-9 max-sm:px-0" onclick={() => ui.openReport()}>
+					<FlagIcon /> <span class="max-lg:sr-only">Report</span>
+				</Button>
 				<Button variant="ghost" size="icon" href="/app/settings" aria-label="Settings" class="max-sm:hidden"><SettingsIcon /></Button>
 				<ThemeToggle />
 				<DropdownMenu>
@@ -114,6 +118,7 @@
 						<DropdownMenuSeparator />
 						<DropdownMenuItem onclick={() => goto('/app/settings')}><SettingsIcon /> Settings</DropdownMenuItem>
 						<DropdownMenuItem onclick={() => goto('/app/extension')}><PuzzleIcon /> Get the extension</DropdownMenuItem>
+						<DropdownMenuItem onclick={() => ui.openReport()}><FlagIcon /> Report a problem</DropdownMenuItem>
 						<DropdownMenuItem onclick={signOut}><LogOutIcon /> Sign out</DropdownMenuItem>
 					</DropdownMenuContent>
 				</DropdownMenu>

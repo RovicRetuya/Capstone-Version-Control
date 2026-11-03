@@ -20,6 +20,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from server_under_test import accounts, app, clear_counts, webapp  # noqa: E402
 
 import admin_api  # noqa: E402
+import problem_reports  # noqa: E402
 import protections  # noqa: E402
 
 DATABASE = lambda: app.config["ACCOUNTS_DB"]  # noqa: E731
@@ -231,11 +232,116 @@ class FiltersTest(AdminTestCase):
         self.assertEqual(app.test_client().get("/api/admin/filters").status_code, 401)
 
 
+class ReportsTest(AdminTestCase):
+    """The problem reports people send from the site, and what the admin does with them."""
+
+    def setUp(self) -> None:
+        super().setUp()
+
+        def forget() -> None:
+            with admin_api._connect(DATABASE()) as connection:
+                problem_reports.ensure_schema(connection)
+                connection.execute("DELETE FROM problem_reports")
+            problem_reports._recent.clear()
+
+        forget()
+        self.addCleanup(forget)
+
+    def send(self, client, message: str, **extra):
+        return client.post("/api/problem-report", json={"category": "scan-problem", "message": message, **extra})
+
+    def test_a_report_a_guest_or_a_shopper_sends_reaches_the_admin_with_who_sent_it(self) -> None:
+        admin, _me = admin_client()
+        self.assertEqual(admin.get("/api/admin/reports").get_json(), {"reports": [], "counts": {"new": 0, "done": 0, "total": 0}})
+        guest = app.test_client()
+        self.assertEqual(self.send(guest, "The scan stopped halfway and nothing happened", page="/scan").status_code, 201)
+        shopper, user = shopper_client()
+        self.assertEqual(self.send(shopper, "My wishlist did not save this product", category="display-bug", email="me@example.com", page="/app/report?link=x").status_code, 201)
+        got = admin.get("/api/admin/reports").get_json()
+        self.assertEqual(got["counts"], {"new": 2, "done": 0, "total": 2})
+        newest, oldest = got["reports"]
+        # Newest first, with the label the person picked, and who the shopper was; a guest has no account.
+        self.assertEqual((newest["category"], newest["label"], newest["status"]), ("display-bug", "Something looks or works broken", "new"))
+        self.assertEqual(newest["user"], {"name": user["name"], "email": user["email"]})
+        self.assertEqual((newest["email"], newest["page"]), ("me@example.com", "/app/report?link=x"))
+        self.assertIsNone(oldest["user"])
+        self.assertEqual(oldest["message"], "The scan stopped halfway and nothing happened")
+        self.assertNotIn("password", str(got).lower())
+
+    def test_the_admin_marks_reports_handled_and_open_again_and_narrows_the_list(self) -> None:
+        admin, _me = admin_client()
+        guest = app.test_client()
+        self.send(guest, "First: the scan failed on a Lazada link")
+        self.send(guest, "Second: I cannot sign in at all", category="account")
+        self.send(guest, "Third: the result looks wrong to me", category="wrong-result", email="reply@example.com")
+        by_text = {one["message"].split(":")[0]: one["id"] for one in admin.get("/api/admin/reports").get_json()["reports"]}
+        done = admin.put(f"/api/admin/reports/{by_text['First']}", json={"status": "done"})
+        self.assertEqual((done.status_code, done.get_json()["status"]), (200, "done"))
+        self.assertEqual(admin.get("/api/admin/reports").get_json()["counts"], {"new": 2, "done": 1, "total": 3})
+        names = lambda **query: [one["message"].split(":")[0] for one in admin.get("/api/admin/reports", query_string=query).get_json()["reports"]]
+        self.assertEqual(names(status="new"), ["Third", "Second"])
+        self.assertEqual(names(status="done"), ["First"])
+        self.assertEqual(names(category="account"), ["Second"])
+        self.assertEqual(names(q="reply@example"), ["Third"])
+        self.assertEqual(names(q="LAZADA"), ["First"])
+        # The counts are for every report, whatever the list is narrowed to.
+        self.assertEqual(admin.get("/api/admin/reports", query_string={"status": "done"}).get_json()["counts"]["total"], 3)
+        self.assertEqual(admin.put(f"/api/admin/reports/{by_text['First']}", json={"status": "new"}).status_code, 200)
+        self.assertEqual(admin.get("/api/admin/reports").get_json()["counts"]["new"], 3)
+
+    def test_percent_and_underscore_in_a_search_are_just_characters(self) -> None:
+        admin, _me = admin_client()
+        guest = app.test_client()
+        self.send(guest, "It said 100% done but nothing showed")
+        self.send(guest, "Plain words and nothing odd at all")
+        self.send(guest, "snake_case in the page title looks odd")
+        texts = lambda q: [one["message"] for one in admin.get("/api/admin/reports", query_string={"q": q}).get_json()["reports"]]
+        self.assertEqual(texts("100%"), ["It said 100% done but nothing showed"])
+        self.assertEqual(texts("%"), ["It said 100% done but nothing showed"])
+        self.assertEqual(texts("_"), ["snake_case in the page title looks odd"])
+        self.assertEqual(texts("a_e"), [])  # not "any letter between a and e"
+
+    def test_bad_requests_are_refused(self) -> None:
+        admin, _me = admin_client()
+        self.send(app.test_client(), "A report so it has an id to point at")
+        rid = admin.get("/api/admin/reports").get_json()["reports"][0]["id"]
+        for body in ({"status": "deleted"}, {"status": 1}, {}, [], None):
+            self.assertEqual(admin.put(f"/api/admin/reports/{rid}", json=body).status_code, 400, body)
+        missing = admin.put("/api/admin/reports/999999", json={"status": "done"})
+        self.assertEqual((missing.status_code, missing.get_json()["error"]), (404, admin_api.NO_REPORT_MESSAGE))
+        # Odd filters are ignored, not an error.
+        self.assertEqual(admin.get("/api/admin/reports", query_string={"status": "x", "category": "y"}).status_code, 200)
+        # Nobody else may read or change them.
+        for client in (app.test_client(), shopper_client()[0]):
+            self.assertEqual(client.get("/api/admin/reports").status_code, 401)
+            self.assertEqual(client.put(f"/api/admin/reports/{rid}", json={"status": "done"}).status_code, 401)
+        self.assertEqual(admin.get("/api/admin/reports").get_json()["reports"][0]["status"], "new")
+
+    def test_the_form_still_refuses_a_short_message_and_too_many_reports(self) -> None:
+        guest = app.test_client()
+        self.assertEqual(self.send(guest, "short").status_code, 400)
+        for n in range(problem_reports.PER_HOUR):
+            self.assertEqual(self.send(guest, f"Report number {n} so the hourly limit is reached").status_code, 201)
+        self.assertEqual(self.send(guest, "One more than the hour allows").status_code, 429)
+
+    def test_a_database_that_had_the_table_before_reports_had_a_status_is_upgraded(self) -> None:
+        with admin_api._connect(DATABASE()) as connection:
+            connection.executescript("DROP TABLE problem_reports; CREATE TABLE problem_reports (id INTEGER PRIMARY KEY AUTOINCREMENT, "
+                                     "created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, category TEXT NOT NULL, message TEXT NOT NULL, "
+                                     "email TEXT NOT NULL DEFAULT '', page TEXT NOT NULL DEFAULT '', user_id INTEGER);")
+            connection.execute("INSERT INTO problem_reports (category, message) VALUES ('other', 'Sent long before reports had a status')")
+        admin, _me = admin_client()
+        got = admin.get("/api/admin/reports").get_json()
+        self.assertEqual([(one["status"], one["message"]) for one in got["reports"]], [("new", "Sent long before reports had a status")])
+        self.assertEqual(admin.put(f"/api/admin/reports/{got['reports'][0]['id']}", json={"status": "done"}).status_code, 200)
+
+
 class SignInTest(AdminTestCase):
     ROUTES = (
         ("get", "/api/admin/accounts", None), ("post", "/api/admin/accounts", {"name": "A", "email": "a@b.co", "password": "long enough 1"}),
         ("delete", "/api/admin/accounts/1", None), ("get", "/api/admin/limits", None),
         ("get", "/api/admin/filters", None), ("put", "/api/admin/filters", {"show": {"enabled": ["all"], "default": "all"}}),
+        ("get", "/api/admin/reports", None), ("put", "/api/admin/reports/1", {"status": "done"}),
         ("put", "/api/admin/limits", {"site": 1, "account": 1, "network": 1}),
         ("put", "/api/admin/password", {"current_password": PASSWORD, "new_password": "another long one"}),
     )

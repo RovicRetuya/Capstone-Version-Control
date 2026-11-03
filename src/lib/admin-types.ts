@@ -53,3 +53,27 @@ export interface AdminFilters {
 	filters: FilterChoices;
 	defaults: FilterChoices;
 }
+
+/** One problem report, as the admin reads it. */
+export interface AdminReport {
+	id: number;
+	/** When it was sent (SQLite's UTC text; problem-report.ts reportTime shows it). */
+	created_at: string;
+	category: string;
+	/** The category in words, as the person picked it. */
+	label: string;
+	message: string;
+	/** The email the person gave to be written back at; '' when they gave none. */
+	email: string;
+	/** The page they were on. */
+	page: string;
+	status: 'new' | 'done';
+	/** Their account, or null for a guest. */
+	user: { name: string; email: string } | null;
+}
+
+export interface AdminReports {
+	reports: AdminReport[];
+	/** Every report, whatever the list is narrowed to. */
+	counts: { new: number; done: number; total: number };
+}

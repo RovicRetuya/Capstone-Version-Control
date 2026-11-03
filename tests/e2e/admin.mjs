@@ -375,6 +375,91 @@ await context.request.put(base + '/api/admin/limits', { data: before });
 	await visitor.context.close();
 }
 
+// ---- 4d. Problem reports: sent from the app, read on the admin page ---------------------------------------------
+{
+	const sender = await open();
+	const who = await signUp(sender.context, base, 'Report Sender');
+	const stamp = Date.now();
+	const message = `The scan said it was done but no report opened (${stamp}).`;
+	await sender.page.goto(base + '/app/home', { waitUntil: 'networkidle' });
+	await closeTour(sender.page);
+
+	// The button is in the header, and the pop-up checks the message before sending.
+	await sender.page.getByRole('button', { name: 'Report a problem' }).first().click();
+	const dialog = sender.page.getByRole('dialog', { name: 'Report a problem' });
+	await dialog.waitFor({ timeout: 10000 });
+	check((await dialog.getByLabel('Your email (optional)').inputValue()) === who.email, 'report: the account email is filled in');
+	check((await dialog.getByText('/app/home').count()) === 1, 'report: the page the person is on goes with it');
+	await dialog.getByLabel('What happened?').fill('too short');
+	await dialog.getByRole('button', { name: 'Send report' }).click();
+	check((await dialog.getByRole('alert').innerText()).includes('at least 10'), 'report: a message that is too short is refused before it is sent');
+	await dialog.getByLabel('What is it about?').click();
+	await sender.page.getByRole('option', { name: 'A scan failed or got stuck' }).click();
+	await dialog.getByLabel('What happened?').fill(message);
+	await sender.page.waitForTimeout(600); // the kind list is still animating away; axe would see it half-closed
+	await axeCheck(sender.page, 'the Report a problem pop-up');
+	await dialog.getByRole('button', { name: 'Send report' }).click();
+	await sender.page.getByText('Thanks. Your report was sent.').waitFor({ timeout: 10000 });
+	await dialog.waitFor({ state: 'detached', timeout: 10000 });
+	check(true, 'report: it is sent, thanked, and the pop-up closes');
+
+	// The same form opens from the user menu and from the FAQ page.
+	await sender.page.getByRole('button', { name: new RegExp(who.name) }).click();
+	await sender.page.getByRole('menuitem', { name: 'Report a problem' }).click();
+	await sender.page.getByRole('dialog', { name: 'Report a problem' }).waitFor({ timeout: 10000 });
+	check((await sender.page.getByRole('dialog').getByLabel('What happened?').inputValue()) === '', 'report: it opens clean from the user menu');
+	await sender.page.keyboard.press('Escape');
+	await sender.page.goto(base + '/app/faq', { waitUntil: 'networkidle' });
+	await sender.page.getByRole('button', { name: 'Report a problem' }).last().click(); // the header's comes first, the page's last
+	check(await sender.page.getByRole('dialog', { name: 'Report a problem' }).isVisible(), 'report: the FAQ page has the button too');
+	await sender.context.close();
+
+	// The admin side.
+	await page.goto(base + '/admin?tab=reports', { waitUntil: 'networkidle' });
+	check((await page.getByRole('tab', { name: /Reports/ }).innerText()).match(/\d/) !== null, 'admin: the Reports tab says how many are new');
+	const card = page.locator('li[data-report]', { hasText: String(stamp) });
+	await card.waitFor({ timeout: 10000 });
+	const text = await card.innerText();
+	check(text.includes('A scan failed or got stuck') && text.includes(message), 'admin: the report shows what it is about and what was written');
+	check(text.includes('Report Sender') && text.includes(who.email), 'admin: it shows which account sent it');
+	check(text.includes('/app/home') && /New/.test(text), 'admin: it shows the page, and that it is new');
+	check((await card.getByRole('link', { name: who.email }).getAttribute('href')).startsWith(`mailto:${who.email}`), 'admin: the sender can be written back to');
+	await page.waitForTimeout(600);
+	await axeCheck(page, 'the Reports tab (light)');
+	await page.screenshot({ path: 'tests/e2e/shots/admin_reports.png' });
+
+	// Search, narrow, and mark it handled.
+	await page.getByLabel('Search reports').fill(String(stamp));
+	await page.waitForTimeout(700);
+	check((await page.locator('li[data-report]').count()) === 1, 'admin: searching for words in the message finds just that report');
+	await page.getByLabel('Search reports').fill('nothing of the sort xyzzy');
+	await page.getByText('No reports match').waitFor({ timeout: 10000 });
+	check(true, 'admin: a search with no match says so');
+	await page.getByLabel('Search reports').fill(String(stamp));
+	await card.waitFor({ timeout: 10000 });
+	await card.getByRole('button', { name: 'Mark as handled' }).click();
+	await card.waitFor({ state: 'detached', timeout: 10000 });
+	check(true, 'admin: marking it handled takes it off the list of reports that need a look');
+	await page.getByLabel('Show', { exact: true }).click();
+	await page.getByRole('option', { name: 'Handled' }).click();
+	await card.waitFor({ timeout: 10000 });
+	check((await card.getByRole('button', { name: 'Open again' }).count()) === 1, 'admin: it is under Handled, with Open again');
+	await card.getByRole('button', { name: 'Open again' }).click();
+	await card.waitFor({ state: 'detached', timeout: 10000 });
+	await page.getByLabel('Show', { exact: true }).click();
+	await page.getByRole('option', { name: 'All reports' }).click();
+	await card.waitFor({ timeout: 10000 });
+	check(/New/.test(await card.innerText()), 'admin: opened again, it is new');
+	await page.getByLabel('Kind', { exact: true }).click();
+	await page.getByRole('option', { name: 'Sign in or account' }).click();
+	await page.getByText('No reports match').waitFor({ timeout: 10000 });
+	check(true, 'admin: narrowing to another kind hides it');
+	await page.getByLabel('Kind', { exact: true }).click();
+	await page.getByRole('option', { name: 'Any kind' }).click();
+	await card.waitFor({ timeout: 10000 });
+	check((await page.getByLabel('Search reports').inputValue()) === String(stamp), 'admin: the search is kept while the kind changes');
+}
+
 // ---- 5. Own password ----------------------------------------------------------------------------------------------
 const NEW_PASSWORD = 'a brand new password';
 await page.getByRole('button', { name: 'Change password' }).click();
@@ -409,6 +494,9 @@ await context.request.put(base + '/api/admin/password', { data: { current_passwo
 	await phonePage.getByRole('tab', { name: 'Products page' }).click();
 	await phonePage.getByRole('checkbox', { name: 'Most reported problems' }).waitFor({ timeout: 10000 });
 	check(await noSideways(phonePage), 'phone: the Products page tab does not scroll sideways');
+	await phonePage.getByRole('tab', { name: /Reports/ }).click();
+	await phonePage.locator('li[data-report]').first().waitFor({ timeout: 10000 }).catch(() => {});
+	check(await noSideways(phonePage), 'phone: the Reports tab does not scroll sideways');
 	await phone.close();
 }
 
