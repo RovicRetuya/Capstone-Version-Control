@@ -1,4 +1,5 @@
 <script lang="ts">
+	import ExtensionCard from '#lib/components/app/extension-card.svelte';
 	import FaqList from '#lib/components/app/faq-list.svelte';
 	import VerdictBadge from '#lib/components/app/verdict-badge.svelte';
 	import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '#lib/components/ui/card/index.js';
@@ -17,6 +18,8 @@
 	<CardHeader><CardTitle>Common questions</CardTitle></CardHeader>
 	<CardContent><FaqList value="q4" /></CardContent>
 </Card>
+
+<ExtensionCard guideHref="/app/extension" />
 
 <Card>
 	<CardHeader>

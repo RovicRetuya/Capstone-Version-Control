@@ -12,6 +12,7 @@
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Card, CardContent, CardHeader, CardTitle } from '#lib/components/ui/card/index.js';
 	import { Tabs, TabsContent, TabsList, TabsTrigger } from '#lib/components/ui/tabs/index.js';
+	import { EXTENSION_CONTACT, EXTENSION_DOWNLOAD, extensionFileAvailable } from '#lib/extension-download.js';
 	import { LAZADA_REVIEWS_PER_STAR } from '#lib/product.js';
 	import { auth } from '#lib/stores/auth.svelte.js';
 
@@ -19,18 +20,13 @@
 	// it, written for someone who has never added an extension. The same page sits on the public site (/extension) and
 	// in the app (/app/extension). Until the extension is in the Chrome Web Store it is installed from a .zip, which
 	// is offered only when the site has one (scripts/build-extension.mjs --download; deploy/setup-server.sh does it).
-	const DOWNLOAD = '/downloads/defaketive-extension.zip';
-	const CONTACT = 'mailto:bmacalino_20ur2047@psu.edu.ph?subject=DeFaketive%20extension';
+	const DOWNLOAD = EXTENSION_DOWNLOAD;
+	const CONTACT = EXTENSION_CONTACT;
 
-	// null while we look; a missing file comes back as the app's own page (text/html), not as a .zip.
+	// null while we look; shared with every page that offers the download.
 	let download = $state<boolean | null>(null);
 	onMount(async () => {
-		try {
-			const response = await fetch(DOWNLOAD, { method: 'HEAD', cache: 'no-store' });
-			download = response.ok && !(response.headers.get('content-type') ?? '').includes('text/html');
-		} catch {
-			download = false;
-		}
+		download = await extensionFileAvailable();
 	});
 
 	const pasteHref = $derived(auth.user ? '/app/analyze' : '/scan');

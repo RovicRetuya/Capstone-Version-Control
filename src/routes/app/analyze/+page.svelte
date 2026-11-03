@@ -9,6 +9,7 @@
 	import { onMount } from 'svelte';
 	import { Alert, AlertDescription, AlertTitle } from '#lib/components/ui/alert/index.js';
 	import { Kbd } from '#lib/components/ui/kbd/index.js';
+	import ExtensionCard from '#lib/components/app/extension-card.svelte';
 	import ShopeeSteps from '#lib/components/app/shopee-steps.svelte';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '#lib/components/ui/card/index.js';
@@ -231,3 +232,5 @@
 		</form>
 	</CardContent>
 </Card>
+
+<ExtensionCard guideHref="/app/extension" />
