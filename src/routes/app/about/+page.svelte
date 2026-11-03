@@ -1,11 +1,12 @@
 <script lang="ts">
+	import ExtensionCard from '#lib/components/app/extension-card.svelte';
 	import TeamGrid from '#lib/components/app/team-grid.svelte';
 	import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '#lib/components/ui/card/index.js';
 
 	const features = [
 		['Taglish-aware sentiment', 'A language model trained on Filipino and English reviews sorts each review as positive, negative, or mixed or unclear.'],
 		['Separate warnings', 'Safety, fake and defect reports are checked one by one, so good reviews never average away a fire report.'],
-		['Lazada PH and Shopee PH', 'Reads public reviews from Lazada PH product pages and, with the extension, from Shopee PH product pages, up to 60 from each star level.'],
+		['Lazada PH and Shopee PH', 'Reads public reviews from Lazada PH product pages (up to 60 from each star level) and, with the extension, from Shopee PH product pages (every written review).'],
 		['Similar products', 'When reviewers report problems, see similar products whose reviews raised no warnings.']
 	];
 </script>
@@ -28,6 +29,8 @@
 		</Card>
 	{/each}
 </section>
+
+<ExtensionCard guideHref="/app/extension" />
 
 <Card>
 	<CardHeader>

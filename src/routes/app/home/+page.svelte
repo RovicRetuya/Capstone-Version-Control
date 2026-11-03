@@ -1,4 +1,5 @@
 <script lang="ts">
+	import ExtensionCard from '#lib/components/app/extension-card.svelte';
 	import CircleAlertIcon from '@lucide/svelte/icons/circle-alert';
 	import CircleCheckIcon from '@lucide/svelte/icons/circle-check';
 	import TriangleAlertIcon from '@lucide/svelte/icons/triangle-alert';
@@ -107,6 +108,9 @@
 			</dl>
 		</Card>
 	{/if}
+
+	<!-- The extension and its guide, with the download. -->
+	<ExtensionCard class="mx-auto w-full max-w-3xl" />
 
 	{#if library.ready && (safety.length || caution.length)}
 		<section class="mx-auto flex w-full max-w-4xl flex-wrap items-end justify-between gap-3 pt-2" aria-label="What needs a look">

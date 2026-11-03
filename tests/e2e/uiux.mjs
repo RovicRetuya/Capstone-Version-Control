@@ -28,6 +28,8 @@ const browser = await chromium.launch({ channel: 'chrome', headless: true });
 
 async function newPage({ width = 1280, height = 900, scheme = 'light' } = {}) {
 	const context = await browser.newContext({ viewport: { width, height }, colorScheme: scheme });
+	// The first-visit intro screen would cover the page: say it has been seen (as responsive.mjs does).
+	await context.addInitScript(() => sessionStorage.setItem('splash-seen', '1'));
 	await signUp(context, base);
 	const page = await context.newPage();
 	page.on('pageerror', (error) => errors.push(error.message));
@@ -184,6 +186,8 @@ const offerZip = (page) => page.route(ZIP, (route) => route.fulfill({ status: 20
 
 async function guestPage({ width = 1280, height = 900, scheme = 'light' } = {}) {
 	const context = await browser.newContext({ viewport: { width, height }, colorScheme: scheme });
+	// The first-visit intro screen would cover the page: say it has been seen (as responsive.mjs does).
+	await context.addInitScript(() => sessionStorage.setItem('splash-seen', '1'));
 	const page = await context.newPage();
 	page.on('pageerror', (error) => errors.push(error.message));
 	return { context, page };
@@ -231,9 +235,15 @@ async function guestPage({ width = 1280, height = 900, scheme = 'light' } = {}) 
 	check(widened > narrowed && !new URL(page.url()).searchParams.has('q'), `clearing it shows everything again and leaves the address (${widened} cards)`);
 	await page.goto(base + '/app/analyze', { waitUntil: 'networkidle' });
 	check(
-		(await page.getByRole('heading', { name: 'What happens next?' }).count()) === 0 &&
-			(await page.getByRole('main').getByRole('link', { name: /Get the extension/ }).count()) === 0,
-		'Check a product has no side cards: just the link box'
+		(await page.getByRole('heading', { name: 'What happens next?' }).count()) === 0,
+		'Check a product has no side cards beside the link box'
+	);
+	// What sits below the link box: the extension, with its download and a link to the whole guide.
+	const extensionCard = page.locator('section[aria-labelledby="extension-card-title"]');
+	check(
+		(await extensionCard.isVisible()) &&
+			(await extensionCard.getByRole('link', { name: 'Read the step-by-step guide' }).getAttribute('href')) === '/app/extension',
+		'Check a product shows the extension card with a link to the guide'
 	);
 	await context.close();
 }
@@ -244,10 +254,10 @@ async function guestPage({ width = 1280, height = 900, scheme = 'light' } = {}) 
 	await offerZip(page);
 	await page.goto(base + '/extension', { waitUntil: 'networkidle' });
 	await page.waitForTimeout(800);
-	check(await page.getByRole('heading', { level: 1, name: 'Check right on Lazada' }).isVisible(), 'guest: /extension opens the guide');
+	check(await page.getByRole('heading', { level: 1, name: 'How to check a Lazada or Shopee product' }).isVisible(), 'guest: /extension opens the guide');
 	const download = page.getByRole('link', { name: /Download the extension/ });
 	check((await download.isVisible()) && (await download.getAttribute('href')) === '/downloads/defaketive-extension.zip', 'with a .zip on the site: a download button');
-	check((await page.locator('ol > li').count()) === 4, 'four install steps');
+	check((await page.locator('[data-slot="card"]', { hasText: 'Part 1. Install it' }).locator('ol > li').count()) === 6, 'six install steps');
 	check((await page.getByText('What it reads').isVisible()) && (await page.getByText('What it never reads').isVisible()), 'what it reads and what it never reads');
 	check((await page.getByRole('link', { name: 'Paste a link instead' }).getAttribute('href')) === '/scan', 'guest: "Paste a link instead" goes to the guest check');
 	await page.screenshot({ path: `${out}/uiux_extension.png`, fullPage: true });
@@ -282,7 +292,7 @@ async function guestPage({ width = 1280, height = 900, scheme = 'light' } = {}) 
 	const { context, page } = await newPage();
 	await page.goto(base + '/extension', { waitUntil: 'networkidle' });
 	await page.waitForURL(/\/app\/extension$/, { timeout: 10000 });
-	await page.getByRole('heading', { level: 1, name: 'Check right on Lazada' }).waitFor({ timeout: 10000 });
+	await page.getByRole('heading', { level: 1, name: 'How to check a Lazada or Shopee product' }).waitFor({ timeout: 10000 });
 	check(true, 'signed in: /extension opens the guide inside the app');
 	check((await page.getByRole('link', { name: 'Paste a link instead' }).getAttribute('href')) === '/app/analyze', 'signed in: "Paste a link instead" goes to Check a product');
 	const menu = page.locator('[data-slot="sidebar"]').getByRole('link', { name: 'Get the extension' });
@@ -351,6 +361,8 @@ const tour = (page) => page.locator('[data-tour]');
 const tourGone = async (page) => (await tour(page).waitFor({ state: 'detached', timeout: 5000 }).then(() => true).catch(() => false));
 {
 	const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+	// The first-visit intro screen would cover the page: say it has been seen (as responsive.mjs does).
+	await context.addInitScript(() => sessionStorage.setItem('splash-seen', '1'));
 	const page = await context.newPage();
 	page.on('pageerror', (error) => errors.push(error.message));
 	await signUpInTheDialog(page);
@@ -399,6 +411,8 @@ const tourGone = async (page) => (await tour(page).waitFor({ state: 'detached', 
 }
 {
 	const context = await browser.newContext({ viewport: { width: 390, height: 844 }, colorScheme: 'dark' });
+	// The first-visit intro screen would cover the page: say it has been seen (as responsive.mjs does).
+	await context.addInitScript(() => sessionStorage.setItem('splash-seen', '1'));
 	const page = await context.newPage();
 	page.on('pageerror', (error) => errors.push(error.message));
 	await signUpInTheDialog(page);
@@ -414,6 +428,8 @@ const tourGone = async (page) => (await tour(page).waitFor({ state: 'detached', 
 {
 	// An existing account signing in gets no tour.
 	const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+	// The first-visit intro screen would cover the page: say it has been seen (as responsive.mjs does).
+	await context.addInitScript(() => sessionStorage.setItem('splash-seen', '1'));
 	const { email, password } = await signUp(context, base);
 	await context.clearCookies();
 	const page = await context.newPage();

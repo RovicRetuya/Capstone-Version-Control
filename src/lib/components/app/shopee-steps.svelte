@@ -1,7 +1,6 @@
 <script lang="ts">
 	import PuzzleIcon from '@lucide/svelte/icons/puzzle';
 	import { Button } from '#lib/components/ui/button/index.js';
-	import { LAZADA_REVIEWS_PER_STAR } from '#lib/product.js';
 
 	// Shown when a Shopee PH link is pasted: Shopee is checked by the browser extension, in the shopper's own browser,
 	// so the link alone can't be scanned here. These are the steps to do it. The full install guide is /extension.
@@ -11,7 +10,7 @@
 		['Add the extension', 'Chrome or Edge on a computer. It takes about 2 minutes and only needs to be done once.'],
 		['Open the product on Shopee', 'Use the same link you pasted. Log in to Shopee if it asks.'],
 		['Press Check with DeFaketive', 'The button is at the bottom left of the Shopee page. Keep that tab open while it reads the reviews.'],
-		['Read your report', `It opens here once the reviews are read: up to ${LAZADA_REVIEWS_PER_STAR} from each star level, usually within a minute or two.`]
+		['Read your report', 'It opens here once every written review is read. A popular product can take a few minutes.']
 	];
 </script>
 
