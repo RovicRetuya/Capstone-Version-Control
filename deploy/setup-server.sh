@@ -39,6 +39,12 @@ grep -v -i -E '^(selenium|undetected-chromedriver|trio|trio-websocket|outcome|we
 echo "== Starter reports =="
 "$PY" scripts/load_starter_data.py
 
+echo "== The extension (the site offers it for download) =="
+# The address the extension reports to: DEFAKETIVE_SITE if set, else the first address in deploy/Caddyfile.
+SITE="${DEFAKETIVE_SITE:-https://$(grep -m1 -E '^[^#].*\{$' deploy/Caddyfile | sed -E 's/[ ,{].*//')}"
+echo "The extension will report to $SITE"
+node scripts/build-extension.mjs --site "$SITE" --download
+
 echo "== The site (npm run build) =="
 sudo npm install -g npm@11 >/dev/null  # the lockfile was made with npm 11; the npm 10 that comes with Node 22 rejects it
 npm ci --no-fund --no-audit
