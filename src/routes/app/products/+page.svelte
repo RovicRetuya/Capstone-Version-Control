@@ -17,17 +17,28 @@
 	import * as Select from '#lib/components/ui/select/index.js';
 	import { api } from '#lib/api.js';
 	import { byConcern, matchesConcern, reviewCount, type ConcernFilter } from '#lib/product.js';
-	import { ALL_CHOICES, ORDER_SENTENCE, SHOW_CHOICES, SHOW_LABEL, SORT_CHOICES, SORT_LABEL, type FilterChoices, type SortKey } from '#lib/product-filters.js';
+	import {
+		ALL_CHOICES,
+		customCompare,
+		customFilter,
+		orderSentence,
+		SHOW_CHOICES,
+		SHOW_LABEL,
+		SORT_CHOICES,
+		SORT_LABEL,
+		type FilterChoices
+	} from '#lib/product-filters.js';
 	import { catalog } from '#lib/stores/catalog.svelte.js';
 
-	let concern = $state<ConcernFilter>('all');
-	let sort = $state<SortKey>('fewest');
+	// A built-in choice's name, or the id of one the admin made up.
+	let concern = $state('all');
+	let sort = $state('fewest');
 	// What the admin lets this page offer, and what it starts on (the admin page's Filters tab). Until the server
 	// answers, or if it can't, every choice is offered, as before.
 	let choices = $state<FilterChoices>(ALL_CHOICES);
 	api<FilterChoices>('/api/products-filters')
 		.then((answer) => {
-			choices = answer;
+			choices = { ...answer, custom: answer.custom ?? [] };
 			// Only move to the starting choice if the visitor has not picked anything yet.
 			if (concern === ALL_CHOICES.show.default && sort === ALL_CHOICES.sort.default) {
 				concern = answer.show.default;
@@ -57,18 +68,34 @@
 		});
 	});
 
-	const concerns = $derived(SHOW_CHOICES.filter(([key]) => choices.show.enabled.includes(key)));
-	const sorts = $derived(SORT_CHOICES.filter(([key]) => choices.sort.enabled.includes(key)));
+	// Every choice the page knows (built in, then the admin's own), narrowed to the ones the admin left on.
+	const concerns = $derived(
+		([...SHOW_CHOICES, ...choices.custom.filter((c) => c.group === 'show').map((c) => [c.id, c.label])] as [string, string][]).filter(([key]) =>
+			choices.show.enabled.includes(key)
+		)
+	);
+	const sorts = $derived(
+		([...SORT_CHOICES, ...choices.custom.filter((c) => c.group === 'sort').map((c) => [c.id, c.label])] as [string, string][]).filter(([key]) =>
+			choices.sort.enabled.includes(key)
+		)
+	);
+	const madeFilter = $derived(choices.custom.find((c) => c.group === 'show' && c.id === concern));
+	const madeOrder = $derived(choices.custom.find((c) => c.group === 'sort' && c.id === sort));
+	const passes = $derived(madeFilter ? customFilter(madeFilter) : (p: Product) => matchesConcern(p, concern as ConcernFilter));
+	const compare = $derived(
+		madeOrder
+			? customCompare(madeOrder)
+			: (a: Product, b: Product) =>
+					sort === 'reviews' ? reviewCount(b) - reviewCount(a) : sort === 'most' ? byConcern(a, b) : byConcern(b, a)
+	);
 
 	// A search shows its own matches; otherwise this is the whole catalog.
 	const searching = $derived(catalog.results.length > 0);
 	const source = $derived(searching ? catalog.results : catalog.browse);
 	const filtered = $derived(
 		source
-			.filter((p) => matchesConcern(p, concern) && named(p))
-			.sort((a, b) =>
-				sort === 'reviews' ? reviewCount(b) - reviewCount(a) : sort === 'most' ? byConcern(a, b) : byConcern(b, a)
-			)
+			.filter((p) => passes(p) && named(p))
+			.sort(compare)
 	);
 	const filtering = $derived(concern !== choices.show.default || terms.length > 0);
 	const activeFilters = $derived((concern !== choices.show.default ? 1 : 0) + (sort !== choices.sort.default ? 1 : 0));
@@ -86,7 +113,7 @@
 <header class="space-y-1">
 	<h1 class="text-3xl font-semibold tracking-tight">Products</h1>
 	<p class="text-muted-foreground">
-		Every product anyone has checked with DeFaketive. {ORDER_SENTENCE[choices.sort.default]}
+		Every product anyone has checked with DeFaketive. {orderSentence(choices)}
 	</p>
 </header>
 

@@ -267,6 +267,114 @@ await context.request.put(base + '/api/admin/limits', { data: before });
 	await visitor.context.close();
 }
 
+// ---- 4c. Options the admin makes up -------------------------------------------------------------------------------
+{
+	const visitor = await open();
+	await signUp(visitor.context, base, 'Option Viewer');
+	const savedProducts = (await (await visitor.context.request.get(base + '/api/saved/products')).json()).products;
+	const rating = (p) => (Number.isFinite(Number(p.rating)) && Number(p.rating) > 0 ? Number(p.rating) : null);
+	const byLink = new Map(savedProducts.map((p) => [String(p.link), p])); // by the exact link: a few listings are saved under more than one address
+	const shownLinks = async (p) => [...new Set(await p.locator('a[href^="/app/report?link="]').evaluateAll((links) => links.map((a) => new URL(a.href).searchParams.get('link'))))];
+	const keyOf = (link) => String(link);
+
+	await page.goto(base + '/admin?tab=filters', { waitUntil: 'networkidle' });
+	await page.getByRole('checkbox', { name: 'Most reported problems' }).waitFor({ timeout: 10000 });
+	const addButtons = page.getByRole('button', { name: 'Add your own option' });
+
+	// A filter: the name starts as a suggestion from the number.
+	await addButtons.nth(0).click();
+	const form = page.getByRole('form', { name: 'Add your own option' });
+	check((await form.getByLabel('Name visitors see').inputValue()) === 'Rated 4 stars or more', 'custom: the name starts as a suggestion ("Rated 4 stars or more")');
+	// Mistakes are named before anything is sent.
+	await form.getByLabel('Number').fill('9');
+	await form.getByRole('button', { name: 'Add option' }).click();
+	check((await form.getByRole('alert').innerText()).includes('from 1 to 5'), 'custom: a rating of 9 is refused with the range');
+	await form.getByLabel('Number').fill('4');
+	await form.getByLabel('Name visitors see').fill('');
+	await form.getByRole('button', { name: 'Add option' }).click();
+	check((await form.getByRole('alert').innerText()).includes('name'), 'custom: an empty name is refused');
+	await form.getByLabel('Number').fill('4.5');
+	await form.getByLabel('Name visitors see').fill('Rated 4.5 stars or more');
+	await form.getByRole('button', { name: 'Add option' }).click();
+	check((await page.getByText('Added by you').count()) === 1 && (await page.getByRole('checkbox', { name: 'Rated 4.5 stars or more' }).isChecked()), 'custom: the new filter is in the list and offered');
+
+	// An order.
+	await addButtons.nth(1).click();
+	const orderForm = page.getByRole('form', { name: 'Add your own option' });
+	check((await orderForm.getByLabel('Name visitors see').inputValue()) === 'Highest rated', 'custom: an order starts as "Highest rated"');
+	await orderForm.getByRole('button', { name: 'Add option' }).click();
+	check((await page.getByText('Added by you').count()) === 2, 'custom: the new order is in the list');
+
+	// Edit: a name that is still the suggestion follows the number.
+	await page.getByRole('button', { name: 'Edit Rated 4.5 stars or more' }).click();
+	const editForm = page.getByRole('form', { name: 'Edit this option' });
+	await editForm.getByLabel('Number').fill('4.8');
+	check((await editForm.getByLabel('Name visitors see').inputValue()) === 'Rated 4.8 stars or more', 'custom: editing the number updates a name that was only a suggestion');
+	await editForm.getByRole('button', { name: 'Update option' }).click();
+	check((await page.getByRole('checkbox', { name: 'Rated 4.8 stars or more' }).count()) === 1, 'custom: the edit shows in the list');
+	await page.getByRole('radio', { name: 'Highest rated: start on this choice' }).click();
+	await page.getByRole('button', { name: 'Save choices' }).click();
+	await page.getByText('Saved. The Products page shows these choices from now on.').waitFor({ timeout: 10000 });
+	await page.reload({ waitUntil: 'networkidle' });
+	await page.getByRole('checkbox', { name: 'Rated 4.8 stars or more' }).waitFor({ timeout: 10000 });
+	check((await page.getByRole('radio', { name: 'Highest rated: start on this choice' }).isChecked()), 'custom: a reload keeps the options, and the start on the new order');
+
+	// What a visitor gets: the filter keeps exactly the products with that rating, and the page starts on the new order.
+	await visitor.page.goto(base + '/app/products', { waitUntil: 'networkidle' });
+	await closeTour(visitor.page);
+	await visitor.page.getByLabel('Filter by result').first().click();
+	check((await visitor.page.getByRole('option', { name: 'Rated 4.8 stars or more' }).count()) === 1, 'products: the visitor is offered the admin-made filter');
+	await visitor.page.getByRole('option', { name: 'Rated 4.8 stars or more' }).click();
+	const expected = savedProducts.filter((p) => (rating(p) ?? 0) >= 4.8).length;
+	await visitor.page.getByText(/products? shown/).waitFor({ timeout: 10000 });
+	const shown = Number((await visitor.page.getByText(/products? shown/).innerText()).match(/\d+/)?.[0]);
+	check(expected > 0 && shown === expected, `products: "Rated 4.8 stars or more" shows exactly the ${expected} products rated that high (page says ${shown})`);
+	const links = await shownLinks(visitor.page);
+	const ratings = links.map((link) => rating(byLink.get(keyOf(link)) ?? {}));
+	check(ratings.length > 1 && ratings.every((r, i) => i === 0 || r === null || ratings[i - 1] === null || ratings[i - 1] >= r), 'products: the page started on "Highest rated" (ratings never go up down the page)');
+	check(ratings.every((r) => r !== null && r >= 4.8), 'products: every product shown has a rating of 4.8 or more');
+
+	// An order, applied: pick the other direction by removing the filter first.
+	await visitor.page.getByLabel('Filter by result').first().click();
+	await visitor.page.getByRole('option', { name: 'All products' }).click();
+	await visitor.page.getByText(/products? shown/).waitFor();
+	const allLinks = await shownLinks(visitor.page);
+	const allRatings = allLinks.map((link) => rating(byLink.get(keyOf(link)) ?? {}));
+	const firstUnrated = allRatings.findIndex((r) => r === null);
+	const rated = firstUnrated === -1 ? allRatings : allRatings.slice(0, firstUnrated);
+	check(rated.every((r, i) => i === 0 || rated[i - 1] >= r) && allRatings.slice(rated.length).every((r) => r === null), 'products: "Highest rated" puts the best first and the unrated last');
+	await visitor.page.getByLabel('Order by').first().click();
+	await visitor.page.getByRole('option', { name: 'Fewest reported problems' }).click();
+	check((await visitor.page.getByText('appear first.').count()) === 1 || (await visitor.page.getByText(/ordered by|appear first/).count()) === 1, 'products: the line under the title follows the order');
+
+	// Remove both: they are gone from the lists, and the page falls back to the built-in start.
+	await page.getByRole('button', { name: 'Remove Rated 4.8 stars or more' }).click();
+	await page.getByRole('button', { name: 'Remove Highest rated' }).click();
+	check((await page.getByText('Added by you').count()) === 0 && (await page.getByRole('radio', { name: 'Fewest reported problems: start on this choice' }).isChecked()), 'custom: removing the options removes them and moves the start back to one that is left');
+	await page.getByRole('button', { name: 'Save choices' }).click();
+	await page.getByText('Saved. The Products page shows these choices from now on.').waitFor({ timeout: 10000 });
+	await visitor.page.reload({ waitUntil: 'networkidle' });
+	await closeTour(visitor.page);
+	await visitor.page.getByLabel('Filter by result').first().click();
+	check((await visitor.page.getByRole('option', { name: 'Rated 4.8 stars or more' }).count()) === 0, 'products: a removed option is no longer offered');
+	await visitor.page.keyboard.press('Escape');
+
+	// A marketplace option, and one more look at accessibility with a form open.
+	await page.reload({ waitUntil: 'networkidle' });
+	await page.getByRole('checkbox', { name: 'Most reported problems' }).waitFor({ timeout: 10000 });
+	await addButtons.nth(0).click();
+	await page.getByRole('form', { name: 'Add your own option' }).getByLabel('Filter by').click();
+	await page.getByRole('option', { name: 'Marketplace' }).click();
+	await page.getByRole('form', { name: 'Add your own option' }).getByLabel('Marketplace').click();
+	await page.getByRole('option', { name: 'Shopee PH' }).click();
+	check((await page.getByLabel('Name visitors see').inputValue()) === 'Shopee PH only', 'custom: a marketplace option is named from the marketplace');
+	await page.waitForTimeout(600);
+	await axeCheck(page, 'the Products page tab with the add form open');
+	await page.getByRole('button', { name: 'Cancel' }).click();
+	check((await page.getByText('Added by you').count()) === 0, 'custom: cancelling adds nothing');
+	await visitor.context.close();
+}
+
 // ---- 5. Own password ----------------------------------------------------------------------------------------------
 const NEW_PASSWORD = 'a brand new password';
 await page.getByRole('button', { name: 'Change password' }).click();
