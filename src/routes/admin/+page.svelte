@@ -4,6 +4,7 @@
 	import LogOutIcon from '@lucide/svelte/icons/log-out';
 	import { toast } from 'svelte-sonner';
 	import Accounts from '#lib/components/admin/accounts.svelte';
+	import Filters from '#lib/components/admin/filters.svelte';
 	import Limits from '#lib/components/admin/limits.svelte';
 	import PasswordDialog from '#lib/components/admin/password-dialog.svelte';
 	import EmptyState from '#lib/components/app/empty-state.svelte';
@@ -22,10 +23,12 @@
 	});
 
 	// The open tab is in the address (?tab=limits), so a reload opens the same one.
-	let tab = $state(new URL(location.href).searchParams.get('tab') === 'limits' ? 'limits' : 'accounts');
+	const TABS = ['accounts', 'limits', 'filters'];
+	const asked = new URL(location.href).searchParams.get('tab') ?? '';
+	let tab = $state(TABS.includes(asked) ? asked : 'accounts');
 	$effect(() => {
 		const url = new URL(location.href);
-		if (tab === 'limits') url.searchParams.set('tab', 'limits');
+		if (tab !== 'accounts') url.searchParams.set('tab', tab);
 		else url.searchParams.delete('tab');
 		if (url.href !== location.href) history.replaceState(history.state, '', url);
 	});
@@ -79,16 +82,18 @@
 		{:else}
 			<header class="space-y-1">
 				<h1 class="text-3xl font-semibold tracking-tight">Admin</h1>
-				<p class="text-muted-foreground">Manage the accounts on DeFaketive and how many new checks can start each day.</p>
+				<p class="text-muted-foreground">Manage the accounts on DeFaketive, how many new checks can start each day, and what the Products page offers.</p>
 			</header>
 
 			<Tabs bind:value={tab} onValueChange={recheck} class="gap-6">
 				<TabsList>
 					<TabsTrigger value="accounts">Manage accounts</TabsTrigger>
 					<TabsTrigger value="limits">Daily limits</TabsTrigger>
+					<TabsTrigger value="filters">Products page</TabsTrigger>
 				</TabsList>
 				<TabsContent value="accounts"><Accounts /></TabsContent>
 				<TabsContent value="limits"><Limits /></TabsContent>
+				<TabsContent value="filters"><Filters /></TabsContent>
 			</Tabs>
 		{/if}
 	</main>

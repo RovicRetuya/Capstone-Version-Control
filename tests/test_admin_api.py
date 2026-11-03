@@ -87,10 +87,68 @@ class AdminTestCase(unittest.TestCase):
         return next(row for row in rows if row["id"] == user_id)
 
 
+class FiltersTest(AdminTestCase):
+    """What the Products page offers: the admin picks the choices, everybody reads them."""
+
+    def setUp(self) -> None:
+        super().setUp()
+
+        def forget() -> None:
+            with admin_api._connect(DATABASE()) as connection:
+                connection.execute("DELETE FROM ui_settings")
+
+        forget()
+        self.addCleanup(forget)
+
+    def test_every_choice_is_offered_until_the_admin_changes_it(self) -> None:
+        shown = app.test_client().get("/api/products-filters")
+        self.assertEqual((shown.status_code, shown.get_json()), (200, admin_api.FILTER_DEFAULTS))
+
+    def test_the_admin_saves_choices_and_everybody_sees_them(self) -> None:
+        client, _me = admin_client()
+        wanted = {"show": {"enabled": ["safety", "all", "clear"], "default": "clear"},
+                  "sort": {"enabled": ["reviews", "fewest"], "default": "reviews"}}
+        saved = client.put("/api/admin/filters", json=wanted)
+        self.assertEqual(saved.status_code, 200)
+        # Kept in the page's own order, whatever order they were sent in.
+        expected = {"show": {"enabled": ["all", "safety", "clear"], "default": "clear"},
+                    "sort": {"enabled": ["fewest", "reviews"], "default": "reviews"}}
+        self.assertEqual(saved.get_json()["filters"], expected)
+        self.assertEqual(client.get("/api/admin/filters").get_json()["filters"], expected)
+        self.assertEqual(app.test_client().get("/api/products-filters").get_json(), expected)
+
+    def test_choices_that_make_no_sense_are_refused_and_nothing_changes(self) -> None:
+        client, _me = admin_client()
+        good = {"show": {"enabled": ["all"], "default": "all"}, "sort": {"enabled": ["fewest"], "default": "fewest"}}
+        bad = [
+            {**good, "show": {"enabled": [], "default": "all"}},  # nothing to choose from
+            {**good, "show": {"enabled": ["all"], "default": "safety"}},  # starts on a choice that is off
+            {**good, "sort": {"enabled": ["fewest", "cheapest"], "default": "fewest"}},  # a choice that does not exist
+            {**good, "sort": {"enabled": "fewest", "default": "fewest"}},
+            {"show": good["show"]},  # one list missing
+            ["all"],
+        ]
+        for body in bad:
+            answer = client.put("/api/admin/filters", json=body)
+            self.assertEqual((answer.status_code, answer.get_json()["error"]), (400, admin_api.FILTERS_MESSAGE), body)
+        self.assertEqual(app.test_client().get("/api/products-filters").get_json(), admin_api.FILTER_DEFAULTS)
+
+    def test_a_saved_row_that_cannot_be_read_falls_back_to_every_choice(self) -> None:
+        with admin_api._connect(DATABASE()) as connection:
+            connection.execute("INSERT INTO ui_settings(name, value, updated_at) VALUES (?, ?, ?)", (admin_api.FILTERS_KEY, "{not json", "now"))
+        self.assertEqual(app.test_client().get("/api/products-filters").get_json(), admin_api.FILTER_DEFAULTS)
+
+    def test_a_shopper_cannot_change_them(self) -> None:
+        shopper, _user = shopper_client()
+        self.assertEqual(shopper.put("/api/admin/filters", json=admin_api.FILTER_DEFAULTS).status_code, 401)
+        self.assertEqual(app.test_client().get("/api/admin/filters").status_code, 401)
+
+
 class SignInTest(AdminTestCase):
     ROUTES = (
         ("get", "/api/admin/accounts", None), ("post", "/api/admin/accounts", {"name": "A", "email": "a@b.co", "password": "long enough 1"}),
         ("delete", "/api/admin/accounts/1", None), ("get", "/api/admin/limits", None),
+        ("get", "/api/admin/filters", None), ("put", "/api/admin/filters", {"show": {"enabled": ["all"], "default": "all"}}),
         ("put", "/api/admin/limits", {"site": 1, "account": 1, "network": 1}),
         ("put", "/api/admin/password", {"current_password": PASSWORD, "new_password": "another long one"}),
     )

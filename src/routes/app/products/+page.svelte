@@ -15,11 +15,26 @@
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Label } from '#lib/components/ui/label/index.js';
 	import * as Select from '#lib/components/ui/select/index.js';
-	import { byConcern, GROUP_NAMES, matchesConcern, reviewCount, type ConcernFilter } from '#lib/product.js';
+	import { api } from '#lib/api.js';
+	import { byConcern, matchesConcern, reviewCount, type ConcernFilter } from '#lib/product.js';
+	import { ALL_CHOICES, ORDER_SENTENCE, SHOW_CHOICES, SHOW_LABEL, SORT_CHOICES, SORT_LABEL, type FilterChoices, type SortKey } from '#lib/product-filters.js';
 	import { catalog } from '#lib/stores/catalog.svelte.js';
 
 	let concern = $state<ConcernFilter>('all');
-	let sort = $state<'fewest' | 'most' | 'reviews'>('fewest');
+	let sort = $state<SortKey>('fewest');
+	// What the admin lets this page offer, and what it starts on (the admin page's Filters tab). Until the server
+	// answers, or if it can't, every choice is offered, as before.
+	let choices = $state<FilterChoices>(ALL_CHOICES);
+	api<FilterChoices>('/api/products-filters')
+		.then((answer) => {
+			choices = answer;
+			// Only move to the starting choice if the visitor has not picked anything yet.
+			if (concern === ALL_CHOICES.show.default && sort === ALL_CHOICES.sort.default) {
+				concern = answer.show.default;
+				sort = answer.sort.default;
+			}
+		})
+		.catch(() => {});
 	// Search by name, as you type. Check a product sends a typed name here (?q=), and the address keeps the
 	// search so that Back from a report finds it again.
 	let search = $state(page.url.searchParams.get('q') ?? '');
@@ -42,20 +57,8 @@
 		});
 	});
 
-	// The same four group names as everywhere else, plus both warning groups together.
-	const concerns: [ConcernFilter, string][] = [
-		['all', 'All products'],
-		['attention', `${GROUP_NAMES.caution} or ${GROUP_NAMES.safety.toLowerCase()}`],
-		['safety', GROUP_NAMES.safety],
-		['caution', GROUP_NAMES.caution],
-		['clear', GROUP_NAMES.clear],
-		['unknown', GROUP_NAMES.unknown]
-	];
-	const sorts: [typeof sort, string][] = [
-		['fewest', 'Fewest reported problems'],
-		['most', 'Most reported problems'],
-		['reviews', 'Most reviews analyzed']
-	];
+	const concerns = $derived(SHOW_CHOICES.filter(([key]) => choices.show.enabled.includes(key)));
+	const sorts = $derived(SORT_CHOICES.filter(([key]) => choices.sort.enabled.includes(key)));
 
 	// A search shows its own matches; otherwise this is the whole catalog.
 	const searching = $derived(catalog.results.length > 0);
@@ -67,13 +70,13 @@
 				sort === 'reviews' ? reviewCount(b) - reviewCount(a) : sort === 'most' ? byConcern(a, b) : byConcern(b, a)
 			)
 	);
-	const filtering = $derived(concern !== 'all' || terms.length > 0);
-	const activeFilters = $derived((concern !== 'all' ? 1 : 0) + (sort !== 'fewest' ? 1 : 0));
+	const filtering = $derived(concern !== choices.show.default || terms.length > 0);
+	const activeFilters = $derived((concern !== choices.show.default ? 1 : 0) + (sort !== choices.sort.default ? 1 : 0));
 	let filtersOpen = $state(false);
 	const label = (list: string[][] | [string, string][], value: string) => list.find(([v]) => v === value)?.[1] ?? '';
 
 	function clearFilters() {
-		concern = 'all';
+		concern = choices.show.default;
 		search = '';
 	}
 </script>
@@ -83,13 +86,14 @@
 <header class="space-y-1">
 	<h1 class="text-3xl font-semibold tracking-tight">Products</h1>
 	<p class="text-muted-foreground">
-		Every product anyone has checked with DeFaketive. Products with the fewest reported problems appear first.
+		Every product anyone has checked with DeFaketive. {ORDER_SENTENCE[choices.sort.default]}
 	</p>
 </header>
 
 {#snippet filterControls(suffix: string)}
+	{#if concerns.length > 1}
 	<div class="grid gap-1.5">
-		<Label for="filter-risk{suffix}">Show</Label>
+		<Label for="filter-risk{suffix}">{SHOW_LABEL}</Label>
 		<Select.Root type="single" bind:value={concern}>
 			<Select.Trigger id="filter-risk{suffix}" class="w-full sm:w-60">{label(concerns, concern)}</Select.Trigger>
 			<Select.Content>
@@ -97,8 +101,10 @@
 			</Select.Content>
 		</Select.Root>
 	</div>
+	{/if}
+	{#if sorts.length > 1}
 	<div class="grid gap-1.5">
-		<Label for="filter-sort{suffix}">Sort by</Label>
+		<Label for="filter-sort{suffix}">{SORT_LABEL}</Label>
 		<Select.Root type="single" bind:value={sort}>
 			<Select.Trigger id="filter-sort{suffix}" class="w-full sm:w-56">{label(sorts, sort)}</Select.Trigger>
 			<Select.Content>
@@ -106,6 +112,7 @@
 			</Select.Content>
 		</Select.Root>
 	</div>
+	{/if}
 {/snippet}
 
 <div class="grid max-w-xl gap-1.5">
@@ -141,13 +148,13 @@
 	<SheetContent side="bottom" class="max-h-[85svh] rounded-t-xl">
 		<SheetHeader>
 			<SheetTitle>Filter products</SheetTitle>
-			<SheetDescription>Choose what to show and how to sort it.</SheetDescription>
+			<SheetDescription>Narrow the list by result and choose its order.</SheetDescription>
 		</SheetHeader>
 		<div class="grid gap-4 px-4">{@render filterControls('-sheet')}</div>
 		<SheetFooter>
 			<Button onclick={() => (filtersOpen = false)}>Show {filtered.length} product{filtered.length === 1 ? '' : 's'}</Button>
-			{#if filtering || sort !== 'fewest'}
-				<Button variant="ghost" onclick={() => { clearFilters(); sort = 'fewest'; }}>Reset</Button>
+			{#if filtering || sort !== choices.sort.default}
+				<Button variant="ghost" onclick={() => { clearFilters(); sort = choices.sort.default; }}>Reset</Button>
 			{/if}
 		</SheetFooter>
 	</SheetContent>

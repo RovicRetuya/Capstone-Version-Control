@@ -1,4 +1,5 @@
 // What the server's admin routes answer (admin_api.py).
+import type { FilterChoices } from './product-filters.js';
 
 /** The signed-in admin, or null. */
 export interface AdminMe {
@@ -45,4 +46,10 @@ export interface AdminLimits {
 	defaults: DailyLimits;
 	site_used_today: number;
 	max: number;
+}
+
+/** What the Products page offers (the admin's choice), and the full set it starts from. See product-filters.ts for the names. */
+export interface AdminFilters {
+	filters: FilterChoices;
+	defaults: FilterChoices;
 }

@@ -4,7 +4,7 @@
 // refuses it, and nobody else can open the admin page.
 import { chromium } from 'playwright-core';
 import fs from 'node:fs';
-import { PASSWORD, signUp } from './_signin.mjs';
+import { closeTour, PASSWORD, signUp } from './_signin.mjs';
 
 const base = process.env.BASE || 'http://localhost:5173';
 fs.mkdirSync('tests/e2e/shots', { recursive: true });
@@ -29,6 +29,8 @@ const ADMIN_PASSWORD = 'Admin@defake.com';
 const browser = await chromium.launch({ channel: 'chrome', headless: true });
 async function open(options = {}) {
 	const context = await browser.newContext({ viewport: { width: 1280, height: 900 }, ...options });
+	// The first-visit intro screen would cover the page: say it has been seen (as responsive.mjs does).
+	await context.addInitScript(() => sessionStorage.setItem('splash-seen', '1'));
 	const page = await context.newPage();
 	const errors = [];
 	page.on('pageerror', (error) => errors.push(error.message));
@@ -195,6 +197,76 @@ await axeCheck(page, 'the Daily limits tab');
 await page.screenshot({ path: 'tests/e2e/shots/admin_limits.png' });
 await context.request.put(base + '/api/admin/limits', { data: before });
 
+// ---- 4b. The Products page's choices ------------------------------------------------------------------------------
+{
+	// Before the admin changes anything, the page names its lists in plain words and offers every choice.
+	// The Products page is for signed-in accounts, so the visitor is a shopper (the welcome tour is skipped).
+	const visitor = await open();
+	await signUp(visitor.context, base, 'Filter Viewer');
+	await visitor.page.goto(base + '/app/products', { waitUntil: 'networkidle' });
+	await closeTour(visitor.page);
+	const labelsOf = async (p) => (await p.locator('label').allInnerTexts()).map((t) => t.trim());
+	let labels = await labelsOf(visitor.page);
+	check(labels.includes('Filter by result') && labels.includes('Order by'), 'products: the lists are called "Filter by result" and "Order by"');
+	check(!labels.includes('Show') && !labels.includes('Sort by'), 'products: the old "Show" and "Sort by" labels are gone');
+	await visitor.page.getByLabel('Order by').first().click();
+	check((await visitor.page.getByRole('option').count()) === 3, 'products: every order is offered at first');
+	await visitor.page.keyboard.press('Escape');
+
+	// The admin's tab.
+	await page.goto(base + '/admin', { waitUntil: 'networkidle' });
+	await page.getByRole('tab', { name: 'Products page' }).click();
+	check(page.url().endsWith('/admin?tab=filters'), 'filters: the tab is in the address');
+	await page.getByRole('checkbox', { name: 'Most reported problems' }).waitFor({ timeout: 10000 });
+	check((await page.getByRole('button', { name: 'Save choices' }).isDisabled()), 'filters: Save is off until something changes');
+	await page.waitForTimeout(600); // the tab fades in; axe would measure a half-faded text
+	await axeCheck(page, 'the Products page tab (light)');
+	await page.screenshot({ path: 'tests/e2e/shots/admin_filters.png' });
+
+	// Turn "Most reported problems" off and start on "Most reviews analyzed". Leaving only one order hides that list.
+	await page.getByRole('checkbox', { name: 'Most reported problems' }).click();
+	await page.getByRole('checkbox', { name: 'Fewest reported problems' }).click();
+	check(await page.getByRole('radio', { name: 'Most reviews analyzed: start on this choice' }).isChecked(), 'filters: turning off the starting order moves the start to one still offered');
+	check((await page.getByText('With one choice left').count()) === 1, 'filters: one choice left says the list will be hidden');
+	await page.getByRole('checkbox', { name: 'Fewest reported problems' }).click();
+	check((await page.getByText('With one choice left').count()) === 0, 'filters: two choices left, the warning goes');
+	await page.getByRole('checkbox', { name: 'No result yet' }).click();
+	await page.getByRole('button', { name: 'Save choices' }).click();
+	await page.getByText('Saved. The Products page shows these choices from now on.').waitFor({ timeout: 10000 });
+	check(true, 'filters: the admin saves the choices');
+
+	// Turning every choice off is refused on the page.
+	for (const name of ['All products', 'Caution or safety reports', 'Safety reports', 'Caution', 'No warnings']) {
+		await page.getByRole('checkbox', { name, exact: true }).click();
+	}
+	check((await page.getByText('Keep at least one choice on.').count()) === 1 && (await page.getByRole('button', { name: 'Save choices' }).isDisabled()), 'filters: no choice left is refused before it is sent');
+	await page.getByRole('button', { name: 'Offer every choice' }).click();
+	await page.getByRole('button', { name: 'Offer every choice' }).waitFor();
+	// Put the saved choices back to what the visitor test below expects: reload shows what the server kept.
+	await page.reload({ waitUntil: 'networkidle' });
+	await page.getByRole('checkbox', { name: 'Most reported problems' }).waitFor({ timeout: 10000 });
+	check(!(await page.getByRole('checkbox', { name: 'Most reported problems' }).isChecked()), 'filters: a reload shows the choices the server kept');
+
+	// A visitor now sees only what the admin left on, and the page starts on the admin's order.
+	await visitor.page.reload({ waitUntil: 'networkidle' });
+	await closeTour(visitor.page);
+	check((await visitor.page.getByLabel('Order by').count()) > 0, 'products: the list of orders shows while two are offered');
+	labels = await labelsOf(visitor.page);
+	check(labels.includes('Filter by result') && labels.includes('Order by'), 'products: both lists show after the change');
+	check((await visitor.page.getByText('appear first.').innerText()).includes('most reviews analyzed'), 'products: the first line names the order the admin starts on');
+	await visitor.page.getByLabel('Filter by result').first().click();
+	const offered = await visitor.page.getByRole('option').allInnerTexts();
+	check(!offered.includes('No result yet') && offered.includes('All products'), 'products: a result the admin turned off is not offered');
+	await visitor.page.keyboard.press('Escape');
+
+	// Back to every choice, so the next run starts the same way.
+	const all = await context.request.get(base + '/api/admin/filters');
+	const defaults = (await all.json()).defaults;
+	const restored = await context.request.put(base + '/api/admin/filters', { data: defaults });
+	check(restored.ok(), 'filters: every choice is offered again');
+	await visitor.context.close();
+}
+
 // ---- 5. Own password ----------------------------------------------------------------------------------------------
 const NEW_PASSWORD = 'a brand new password';
 await page.getByRole('button', { name: 'Change password' }).click();
@@ -216,6 +288,7 @@ await context.request.put(base + '/api/admin/password', { data: { current_passwo
 // ---- 6. Phone width -----------------------------------------------------------------------------------------------
 {
 	const phone = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, storageState: await context.storageState() });
+	await phone.addInitScript(() => sessionStorage.setItem('splash-seen', '1'));
 	const phonePage = await phone.newPage();
 	await phonePage.goto(base + '/admin', { waitUntil: 'networkidle' });
 	await phonePage.locator(`li[data-account="admin@defake.com"]`).waitFor({ timeout: 15000 });
@@ -225,6 +298,9 @@ await context.request.put(base + '/api/admin/password', { data: { current_passwo
 	await phonePage.getByRole('tab', { name: 'Daily limits' }).click();
 	await phonePage.getByLabel('Whole site').waitFor({ timeout: 10000 });
 	check(await noSideways(phonePage), 'phone: the Daily limits tab does not scroll sideways');
+	await phonePage.getByRole('tab', { name: 'Products page' }).click();
+	await phonePage.getByRole('checkbox', { name: 'Most reported problems' }).waitFor({ timeout: 10000 });
+	check(await noSideways(phonePage), 'phone: the Products page tab does not scroll sideways');
 	await phone.close();
 }
 
