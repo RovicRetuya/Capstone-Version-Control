@@ -16,7 +16,8 @@ What the admin can do, and what not.
 - See every account: name, email, when it joined, how many products are in its History and Wishlist, and how many
   checks it started today. Never a password or its hash, and never which products.
 - Add an account (name, email, password), as a shopper or as another admin.
-- Delete an account, with its History and Wishlist (foreign keys cascade). Never their own, and never the main admin.
+- NOT delete an account. The admin cannot delete anyone's account (not even a shopper's): DELETE below always refuses.
+  A person deletes their own account from Settings in the shopping app.
 - Change the three daily limits protections.py counts: new checks for the whole site, for each account, and for
   each internet connection guests use. A change counts at once and is kept in the `site_settings` table, so it
   outlives a restart; until one is saved, the numbers come from the environment (protections.Limits).
@@ -28,7 +29,7 @@ What the admin can do, and what not.
     PUT    /api/admin/password             {current_password, new_password}
     GET    /api/admin/accounts?q=          every account, newest first; q searches names and emails
     POST   /api/admin/accounts             {name, email, password, admin?}: adds an account
-    DELETE /api/admin/accounts/<id>
+    DELETE /api/admin/accounts/<id>      always refused (403): the admin cannot delete accounts
     GET    /api/admin/limits               the three limits, their defaults, and today's use of the site limit
     PUT    /api/admin/limits               {site, account, network}: whole numbers from 0 to 10,000
 
@@ -79,9 +80,7 @@ TOO_MANY_MESSAGE = "Too many tries. Wait a few minutes, then try again."
 NOT_ADMIN_MESSAGE = "This account is not an admin. Shoppers use the main DeFaketive app."
 ROLE_REMOVED_MESSAGE = "Your admin session ended, so you were signed out."
 ADMIN_ONLY_MESSAGE = "This is an admin account. It can only be used in the DeFaketive admin app."
-NO_ACCOUNT_MESSAGE = "There is no such account. It may have been deleted already."
-OWN_ACCOUNT_MESSAGE = "You can't delete your own account."
-ADMIN_ACCOUNT_MESSAGE = "The main admin account can't be deleted."
+DELETE_REFUSED_MESSAGE = "The admin page can't delete accounts. People delete their own account from Settings."
 LIMITS_MESSAGE = f"Each limit must be a whole number from 0 to {MAX_LIMIT:,}."
 
 
@@ -202,11 +201,6 @@ def account_list(path: str | Path, query: str = "", day: str = "") -> dict[str, 
         "total": total,
         "admins": admin_count,
     }
-
-
-def delete_account(path: str | Path, user_id: int) -> bool:
-    with _connect(path) as connection:
-        return bool(connection.execute("DELETE FROM users WHERE id = ?", (int(user_id),)).rowcount)
 
 
 # --- Daily limits ---------------------------------------------------------------------------------------------------
@@ -410,18 +404,11 @@ def install(webapp: Any, app: Any = None) -> None:
 
     @blueprint.delete("/accounts/<int:user_id>")
     def delete(user_id: int) -> Any:
-        user, refused = admin()
+        # Kept as a route, so the answer says why, but nothing is deleted: the admin has no permission to.
+        _user, refused = admin()
         if refused:
             return refused
-        if accounts.get_user(database(), user_id) is None:
-            return refuse(NO_ACCOUNT_MESSAGE, 404)
-        if user_id == user["id"]:
-            return refuse(OWN_ACCOUNT_MESSAGE, 409)
-        target = accounts.get_user(database(), user_id)
-        if target["email"] == ADMIN_EMAIL:
-            return refuse(ADMIN_ACCOUNT_MESSAGE, 409)
-        delete_account(database(), user_id)
-        return jsonify({"deleted": user_id})
+        return refuse(DELETE_REFUSED_MESSAGE, 403)
 
     def limits_answer() -> dict[str, Any]:
         used = accounts.guest_scans_used(database(), protections.SITE_KEY, accounts.manila_day())

@@ -272,33 +272,22 @@ class AccountsTest(AdminTestCase):
         self.assertIn(admin_again.status_code, (400, 409))
         self.assertEqual([row["email"] for row in admin_api.admins(DATABASE())], ["admin@defake.com"])
 
-    def test_delete_removes_the_account_and_everything_it_kept(self) -> None:
-        client, _me = admin_client()
+    def test_the_admin_cannot_delete_any_account(self) -> None:
+        client, me = admin_client()
         shopper, other = shopper_client()
         accounts.set_wishlist(DATABASE(), other["id"], LAZADA, True)
-        self.assertEqual(client.delete(f"/api/admin/accounts/{other['id']}").get_json(), {"deleted": other["id"]})
-        self.assertIsNone(accounts.get_user(DATABASE(), other["id"]))
-        with admin_api._connect(DATABASE()) as connection:
-            left = connection.execute("SELECT COUNT(*) FROM user_wishlist WHERE user_id = ?", (other["id"],)).fetchone()[0]
-        self.assertEqual(left, 0)
-        self.assertIsNone(shopper.get("/api/auth/me").get_json().get("user"))
-        self.assertEqual(client.delete(f"/api/admin/accounts/{other['id']}").status_code, 404)
-
-    def test_delete_refuses_your_own_and_the_main_admin_but_not_another_admin(self) -> None:
-        client, me = admin_client()
-        own = client.delete(f"/api/admin/accounts/{me['id']}")
-        self.assertEqual((own.status_code, own.get_json()["error"]), (409, admin_api.OWN_ACCOUNT_MESSAGE))
-        self.assertIsNotNone(accounts.get_user(DATABASE(), me["id"]))
         email = f"second{time.time_ns()}@example.com"
         second_id = client.post("/api/admin/accounts", json={"name": "Second", "email": email, "password": PASSWORD, "admin": True}).get_json()["id"]
-        second = app.test_client()
-        second.post("/api/admin/login", json={"email": email, "password": PASSWORD})
-        main = second.delete(f"/api/admin/accounts/{me['id']}")
-        self.assertEqual((main.status_code, main.get_json()["error"]), (409, admin_api.ADMIN_ACCOUNT_MESSAGE))
-        self.assertEqual(client.delete(f"/api/admin/accounts/{second_id}").status_code, 200)
-        self.assertIsNone(accounts.get_user(DATABASE(), second_id))
-        # The deleted admin's session is over.
-        self.assertEqual(second.get("/api/admin/accounts").status_code, 401)
+        # A shopper, another admin, the admin's own account: every one is refused, and nothing is deleted.
+        for user_id in (other["id"], second_id, me["id"], 999_999):
+            answer = client.delete(f"/api/admin/accounts/{user_id}")
+            self.assertEqual((answer.status_code, answer.get_json()["error"]), (403, admin_api.DELETE_REFUSED_MESSAGE))
+        for user_id in (other["id"], second_id, me["id"]):
+            self.assertIsNotNone(accounts.get_user(DATABASE(), user_id))
+        with admin_api._connect(DATABASE()) as connection:
+            kept = connection.execute("SELECT COUNT(*) FROM user_wishlist WHERE user_id = ?", (other["id"],)).fetchone()[0]
+        self.assertEqual(kept, 1)
+        self.assertIsNotNone(shopper.get("/api/auth/me").get_json().get("user"))
 
 
 class LimitsTest(AdminTestCase):
