@@ -11,6 +11,7 @@ Accounts go to the temporary database server_under_test sets up. The limits are 
 from __future__ import annotations
 
 import sys
+import json
 import time
 import unittest
 from pathlib import Path
@@ -112,7 +113,7 @@ class FiltersTest(AdminTestCase):
         self.assertEqual(saved.status_code, 200)
         # Kept in the page's own order, whatever order they were sent in.
         expected = {"show": {"enabled": ["all", "safety", "clear"], "default": "clear"},
-                    "sort": {"enabled": ["fewest", "reviews"], "default": "reviews"}}
+                    "sort": {"enabled": ["fewest", "reviews"], "default": "reviews"}, "custom": []}
         self.assertEqual(saved.get_json()["filters"], expected)
         self.assertEqual(client.get("/api/admin/filters").get_json()["filters"], expected)
         self.assertEqual(app.test_client().get("/api/products-filters").get_json(), expected)
@@ -137,6 +138,92 @@ class FiltersTest(AdminTestCase):
         with admin_api._connect(DATABASE()) as connection:
             connection.execute("INSERT INTO ui_settings(name, value, updated_at) VALUES (?, ?, ?)", (admin_api.FILTERS_KEY, "{not json", "now"))
         self.assertEqual(app.test_client().get("/api/products-filters").get_json(), admin_api.FILTER_DEFAULTS)
+
+    def test_the_admin_adds_options_of_their_own(self) -> None:
+        client, _me = admin_client()
+        wanted = {
+            "show": {"enabled": ["all", "cfour5", "cunder5"], "default": "cfour5"},
+            "sort": {"enabled": ["fewest", "cnew001"], "default": "cnew001"},
+            "custom": [
+                {"id": "cfour5", "group": "show", "label": "  Rated 4.5 stars or more ", "kind": "min_rating", "value": 4.46},
+                {"id": "cunder5", "group": "show", "label": "Under 500", "kind": "max_price", "value": 500},
+                {"id": "cnew001", "group": "sort", "label": "Newest checked", "kind": "checked", "direction": "desc"},
+            ],
+        }
+        saved = client.put("/api/admin/filters", json=wanted)
+        self.assertEqual(saved.status_code, 200, saved.get_json())
+        got = saved.get_json()["filters"]
+        # Names are trimmed, a rating is kept to one decimal, and the page's order is kept: built-in first, then added.
+        self.assertEqual([one["label"] for one in got["custom"]], ["Rated 4.5 stars or more", "Under 500", "Newest checked"])
+        self.assertEqual(got["custom"][0]["value"], 4.5)
+        self.assertEqual(got["show"], {"enabled": ["all", "cfour5", "cunder5"], "default": "cfour5"})
+        self.assertEqual(got["sort"], {"enabled": ["fewest", "cnew001"], "default": "cnew001"})
+        self.assertEqual(app.test_client().get("/api/products-filters").get_json(), got)
+
+    def test_an_option_that_is_not_listed_cannot_be_turned_on_and_removing_one_drops_it_everywhere(self) -> None:
+        client, _me = admin_client()
+        base = {"show": {"enabled": ["all"], "default": "all"}, "sort": {"enabled": ["fewest"], "default": "fewest"}}
+        ghost = client.put("/api/admin/filters", json={**base, "show": {"enabled": ["all", "cghost1"], "default": "all"}, "custom": []})
+        self.assertEqual((ghost.status_code, ghost.get_json()["error"]), (400, admin_api.FILTERS_MESSAGE))
+        # An option made for the order list is not a choice in the result list.
+        wrong_list = {"id": "cthing1", "group": "sort", "label": "Cheapest", "kind": "price", "direction": "asc"}
+        mixed = client.put("/api/admin/filters", json={**base, "show": {"enabled": ["all", "cthing1"], "default": "all"}, "custom": [wrong_list]})
+        self.assertEqual(mixed.status_code, 400)
+        # Take an option away from the list of options, and it is gone from the enabled choices too (a start on it is refused).
+        added = {**base, "show": {"enabled": ["all", "cthing2"], "default": "cthing2"},
+                 "custom": [{"id": "cthing2", "group": "show", "label": "Lazada", "kind": "marketplace", "value": "lazada"}]}
+        self.assertEqual(client.put("/api/admin/filters", json=added).status_code, 200)
+        removed = client.put("/api/admin/filters", json={**added, "custom": []})
+        self.assertEqual(removed.status_code, 400)
+
+    def test_options_that_make_no_sense_are_refused_with_the_reason_and_nothing_changes(self) -> None:
+        client, _me = admin_client()
+        base = {"show": {"enabled": ["all"], "default": "all"}, "sort": {"enabled": ["fewest"], "default": "fewest"}}
+
+        def made(**one):
+            group = one.get("group", "show")
+            listed = group if group in base else "show"  # a made-up group is put in a real list, so only its name is wrong
+            item = {"id": "cmade01", "group": group, "label": "Mine", **one}
+            return {**base, listed: {"enabled": [base[listed]["enabled"][0], "cmade01"], "default": base[listed]["default"]}, "custom": [item]}
+
+        bad = [
+            ("name", made(label="")), ("name", made(label="   ")), ("name", made(label="x" * 41)), ("name", made(label="two\nlines")),
+            ("name", made(label=5)),
+            ("number", made(kind="min_rating", value=0)), ("number", made(kind="min_rating", value=5.5)),
+            ("number", made(kind="min_rating", value=True)), ("number", made(kind="min_rating", value="4")),
+            ("number", made(kind="max_price", value=-1)), ("number", made(kind="max_price", value=10_000_001)),
+            ("number", made(kind="min_reviews", value=0)), ("number", made(kind="max_price", value=float("nan"))),
+            ("Lazada or Shopee", made(kind="marketplace", value="temu")), ("Lazada or Shopee", made(kind="marketplace", value=1)),
+            ("filter by", made(kind="made_up", value=3)), ("filter by", made(kind="price", value=3)),
+            ("order by", made(group="sort", kind="rating", direction="up")), ("order by", made(group="sort", kind="min_rating", direction="asc")),
+            ("order by", made(group="sort", kind="rating")),
+            ("id", made(id="Capital")), ("id", made(id="c")), ("id", made(id="cwaytoolongforanid")), ("id", made(id="x12345")),
+            ("belongs to no list", made(group="other")),
+            ("not an object", {**base, "custom": ["cmade01"]}),
+        ]
+        for needle, body in bad:
+            answer = client.put("/api/admin/filters", json=body)
+            self.assertEqual(answer.status_code, 400, (needle, body["custom"]))
+            self.assertTrue(answer.get_json()["error"].startswith(admin_api.CUSTOM_MESSAGE), answer.get_json())
+        # Too many, and the same id twice.
+        many = [{"id": f"cmany{n:02d}", "group": "show", "label": f"No. {n}", "kind": "min_reviews", "value": n + 1} for n in range(admin_api.MAX_CUSTOM + 1)]
+        self.assertEqual(client.put("/api/admin/filters", json={**base, "custom": many}).status_code, 400)
+        twice = [{"id": "cdup001", "group": "show", "label": "A", "kind": "min_reviews", "value": 1}] * 2
+        self.assertEqual(client.put("/api/admin/filters", json={**base, "custom": twice}).status_code, 400)
+        not_a_list = client.put("/api/admin/filters", json={**base, "custom": {"id": "x"}})
+        self.assertEqual(not_a_list.status_code, 400)
+        # The most is allowed, and nothing that was refused was kept.
+        top = client.put("/api/admin/filters", json={**base, "custom": many[: admin_api.MAX_CUSTOM]})
+        self.assertEqual(top.status_code, 200, top.get_json())
+        client.put("/api/admin/filters", json={**base, "custom": []})
+        self.assertEqual(app.test_client().get("/api/products-filters").get_json()["custom"], [])
+
+    def test_a_row_saved_before_options_could_be_added_still_reads(self) -> None:
+        old = {"show": {"enabled": ["all", "safety"], "default": "all"}, "sort": {"enabled": ["fewest"], "default": "fewest"}}
+        with admin_api._connect(DATABASE()) as connection:
+            connection.execute("INSERT INTO ui_settings(name, value, updated_at) VALUES (?, ?, ?)", (admin_api.FILTERS_KEY, json.dumps(old), "now"))
+        got = app.test_client().get("/api/products-filters").get_json()
+        self.assertEqual(got, {**old, "custom": []})
 
     def test_a_shopper_cannot_change_them(self) -> None:
         shopper, _user = shopper_client()

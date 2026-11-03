@@ -21,8 +21,9 @@ What the admin can do, and what not.
 - Change the three daily limits protections.py counts: new checks for the whole site, for each account, and for
   each internet connection guests use. A change counts at once and is kept in the `site_settings` table, so it
   outlives a restart; until one is saved, the numbers come from the environment (protections.Limits).
-- Choose what the Products page offers: which "Filter by result" and "Order by" choices appear, and which is
-  picked first. Kept in the `ui_settings` table; everybody can read it (GET /api/products-filters).
+- Choose what the Products page offers: which "Filter by result" and "Order by" choices appear, which is
+  picked first, and add options of their own (a minimum rating, a top price, a minimum review count, a marketplace,
+  or an order by rating, price, reviews, date or name). Kept in the `ui_settings` table; everybody can read it (GET /api/products-filters).
 - Change their own password.
 
     GET    /api/admin/me                   {admin: {id, name, email} | null}
@@ -35,7 +36,7 @@ What the admin can do, and what not.
     GET    /api/admin/limits               the three limits, their defaults, and today's use of the site limit
     PUT    /api/admin/limits               {site, account, network}: whole numbers from 0 to 10,000
     GET    /api/admin/filters              the Products page's choices, and the starting ones
-    PUT    /api/admin/filters              {show: {enabled, default}, sort: {enabled, default}}
+    PUT    /api/admin/filters              {show: {enabled, default}, sort: {enabled, default}, custom: [...]}
     GET    /api/products-filters           (no sign-in) the choices the Products page offers
 
 The original app's own /api/admin/overview, database, lexicons and logs stay closed (protections.CLOSED_PATHS).
@@ -44,6 +45,7 @@ The original app's own /api/admin/overview, database, lexicons and logs stay clo
 from __future__ import annotations
 
 import json
+import re
 import time
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -249,39 +251,109 @@ def _whole_number(value: Any) -> int | None:
 
 # --- The Products page's choices -------------------------------------------------------------------------------------
 
-# Every choice the page can offer, by the names the screens use (src/lib/product-filters.ts has their labels).
+# Every built-in choice the page can offer, by the names the screens use (src/lib/product-filters.ts has their labels).
 FILTER_CHOICES = {
     "show": ("all", "attention", "safety", "caution", "clear", "unknown"),
     "sort": ("fewest", "most", "reviews"),
 }
-FILTER_DEFAULTS: dict[str, dict[str, Any]] = {
+FILTER_DEFAULTS: dict[str, Any] = {
     "show": {"enabled": list(FILTER_CHOICES["show"]), "default": "all"},
     "sort": {"enabled": list(FILTER_CHOICES["sort"]), "default": "fewest"},
+    "custom": [],
 }
 FILTERS_KEY = "product_filters"
 FILTERS_MESSAGE = "Keep at least one choice in each list, and pick one of them to show first."
 
+# Options the admin makes up. The page has to know how to apply each one, so the admin picks a kind and gives it a
+# number (or a marketplace), a name, and, for an order, a direction. A custom option is in the `custom` list, and in a
+# list's `enabled` by its id like any built-in one.
+CUSTOM_ID = re.compile(r"^c[a-z0-9]{4,12}$")
+MAX_CUSTOM = 20
+LABEL_MAX = 40
+# Filters: kind -> (lowest, highest) for a number, or the names a marketplace may have.
+FILTER_KINDS: dict[str, Any] = {
+    "min_rating": (1, 5),  # rated at least this many stars
+    "max_price": (1, 10_000_000),  # priced at most this many pesos
+    "min_reviews": (1, 1_000_000),  # at least this many reviews analyzed
+    "marketplace": ("lazada", "shopee"),
+}
+# Orders: the thing to order by, and which way.
+ORDER_FIELDS = ("rating", "price", "reviews", "checked", "name")
+DIRECTIONS = ("asc", "desc")
+CUSTOM_MESSAGE = "An option you added isn't valid: "
 
-def clean_filters(value: Any) -> dict[str, dict[str, Any]] | None:
-    """The choices in the shape the page uses (known names only, in the page's order), or None when they make no sense."""
+
+def _clean_custom_one(item: Any) -> tuple[dict[str, Any] | None, str]:
+    """One admin-made option in the shape the page uses, or (None, why not)."""
+    if not isinstance(item, dict):
+        return None, "it is not an object."
+    identifier, group, label, kind = item.get("id"), item.get("group"), item.get("label"), item.get("kind")
+    if not isinstance(identifier, str) or not CUSTOM_ID.match(identifier):
+        return None, "it has no valid id."
+    if group not in ("show", "sort"):
+        return None, "it belongs to no list."
+    if not isinstance(label, str) or not 1 <= len(label.strip()) <= LABEL_MAX or not label.strip().isprintable():
+        return None, f"its name must be 1 to {LABEL_MAX} characters."
+    clean: dict[str, Any] = {"id": identifier, "group": group, "label": label.strip(), "kind": kind}
+    if group == "sort":
+        if kind not in ORDER_FIELDS or item.get("direction") not in DIRECTIONS:
+            return None, "choose what to order by and which way."
+        clean["direction"] = item["direction"]
+        return clean, ""
+    if kind not in FILTER_KINDS:
+        return None, "choose what to filter by."
+    value, allowed = item.get("value"), FILTER_KINDS[kind]
+    if kind == "marketplace":
+        if value not in allowed:
+            return None, "choose Lazada or Shopee."
+        clean["value"] = value
+        return clean, ""
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or value != value:
+        return None, "its number is missing."
+    low, high = allowed
+    if not low <= value <= high:
+        return None, f"its number must be from {low:,} to {high:,}."
+    clean["value"] = int(value) if kind == "min_reviews" else round(float(value), 1 if kind == "min_rating" else 2)
+    return clean, ""
+
+
+def check_filters(value: Any) -> tuple[dict[str, Any] | None, str]:
+    """The choices in the shape the page uses (known names only, in the page's order), or (None, why not)."""
     if not isinstance(value, dict):
-        return None
-    cleaned: dict[str, dict[str, Any]] = {}
-    for group, known in FILTER_CHOICES.items():
+        return None, FILTERS_MESSAGE
+    raw_custom = value.get("custom", [])
+    if not isinstance(raw_custom, list) or len(raw_custom) > MAX_CUSTOM:
+        return None, f"{CUSTOM_MESSAGE}at most {MAX_CUSTOM} can be added."
+    custom: list[dict[str, Any]] = []
+    for item in raw_custom:
+        one, problem = _clean_custom_one(item)
+        if one is None:
+            return None, CUSTOM_MESSAGE + problem
+        if any(other["id"] == one["id"] for other in custom):
+            return None, CUSTOM_MESSAGE + "two share an id."
+        custom.append(one)
+    cleaned: dict[str, Any] = {}
+    for group, built_in in FILTER_CHOICES.items():
         part = value.get(group)
         if not isinstance(part, dict) or not isinstance(part.get("enabled"), list):
-            return None
+            return None, FILTERS_MESSAGE
+        known = [*built_in, *(one["id"] for one in custom if one["group"] == group)]
         asked = part["enabled"]
         if any(not isinstance(name, str) or name not in known for name in asked):
-            return None
+            return None, FILTERS_MESSAGE
         enabled = [name for name in known if name in asked]
         if not enabled or part.get("default") not in enabled:
-            return None
+            return None, FILTERS_MESSAGE
         cleaned[group] = {"enabled": enabled, "default": part["default"]}
-    return cleaned
+    cleaned["custom"] = custom
+    return cleaned, ""
 
 
-def saved_filters(path: str | Path) -> dict[str, dict[str, Any]]:
+def clean_filters(value: Any) -> dict[str, Any] | None:
+    return check_filters(value)[0]
+
+
+def saved_filters(path: str | Path) -> dict[str, Any]:
     """What the admin saved, or every choice with the usual starting ones when nothing (usable) is saved."""
     with _connect(path) as connection:
         row = connection.execute("SELECT value FROM ui_settings WHERE name = ?", (FILTERS_KEY,)).fetchone()
@@ -293,7 +365,7 @@ def saved_filters(path: str | Path) -> dict[str, dict[str, Any]]:
         return FILTER_DEFAULTS
 
 
-def save_filters(path: str | Path, filters: dict[str, dict[str, Any]]) -> None:
+def save_filters(path: str | Path, filters: dict[str, Any]) -> None:
     with _connect(path) as connection:
         connection.execute(
             "INSERT INTO ui_settings(name, value, updated_at) VALUES (?, ?, ?) "
@@ -514,9 +586,9 @@ def install(webapp: Any, app: Any = None) -> None:
         _user, refused = admin()
         if refused:
             return refused
-        cleaned = clean_filters(request.get_json(silent=True))
+        cleaned, problem = check_filters(request.get_json(silent=True))
         if cleaned is None:
-            return refuse(FILTERS_MESSAGE)
+            return refuse(problem)
         save_filters(database(), cleaned)
         return jsonify({"filters": cleaned, "defaults": FILTER_DEFAULTS})
 
