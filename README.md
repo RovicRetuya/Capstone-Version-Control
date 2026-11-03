@@ -241,10 +241,8 @@ products. Each account is labelled **Admin** or **Shopper**:
 
 - *Add account*: the admin types a name, email and password and picks shopper or admin (the same rules as
   signing up: a real-looking email, 8+ characters). The admin hands the password over.
-- *Delete*: the account with its History and Wishlist (saved reports stay: they are everyone's), shopper or admin.
-  Never your own, and never the main admin.
-
-Deleting asks first, naming the account.
+- No delete: the admin cannot delete accounts (the server refuses `DELETE /api/admin/accounts/<id>` with 403). A
+  person deletes their own account from Settings in the shopping app.
 
 **Daily limits.** Today's use of the site limit, and the three limits `protections.py` counts: the whole site, each
 account and each internet connection guests use (0 to 10,000; 0 stops new checks). A change counts at once and is kept

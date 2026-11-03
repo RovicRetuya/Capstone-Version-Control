@@ -1,6 +1,6 @@
 // The admin side (src/routes/admin, admin_api.py): the /admin page of the app, reached by signing in on the same
 // sign-in page as everyone, for the one admin account only. There is exactly one admin, Admin@defake.com (the server makes it). It lists the accounts with names and emails,
-// adds shopper accounts, deletes them and changes the daily limits. The admin account is admin-only: the shopping app
+// adds shopper accounts (it cannot delete any) and changes the daily limits. The admin account is admin-only: the shopping app
 // refuses it, and nobody else can open the admin page.
 import { chromium } from 'playwright-core';
 import fs from 'node:fs';
@@ -156,17 +156,17 @@ const signedIn = await addedShopper.context.request.post(base + '/api/auth/login
 check(signedIn.ok(), 'add account: the new account signs in to the shopping app with the password given');
 await addedShopper.context.close();
 
-// Delete an account.
-const doomed = await open();
-const doomedWho = await signUp(doomed.context, base, 'Delete Me');
+// The admin cannot delete accounts: no Delete button anywhere, and the server refuses a request for it.
+const kept = await open();
+const keptWho = await signUp(kept.context, base, 'Keep Me');
 await page.reload({ waitUntil: 'networkidle' });
-await rowOf(page, doomedWho.email).waitFor({ timeout: 10000 });
-await rowOf(page, doomedWho.email).getByRole('button', { name: "Delete Delete Me's account" }).click();
-await page.getByRole('alertdialog').getByRole('button', { name: 'Delete account' }).click();
-await rowOf(page, doomedWho.email).waitFor({ state: 'detached', timeout: 10000 });
-check(true, 'delete: the account leaves the list');
-check(!(await (await doomed.context.request.get(base + '/api/auth/me')).json()).user, 'delete: the deleted account is signed out everywhere');
-await doomed.context.close();
+await rowOf(page, keptWho.email).waitFor({ timeout: 10000 });
+check((await page.getByRole('button', { name: /delete/i }).count()) === 0, 'delete: the Accounts tab has no Delete button');
+const keptId = (await (await page.request.get(`${base}/api/admin/accounts?q=${encodeURIComponent(keptWho.email)}`)).json()).accounts[0].id;
+const refusedDelete = await page.request.delete(`${base}/api/admin/accounts/${keptId}`);
+check(refusedDelete.status() === 403, 'delete: the server refuses to delete an account');
+check(!!(await (await kept.context.request.get(base + '/api/auth/me')).json()).user, 'delete: the account is still signed in and still there');
+await kept.context.close();
 
 await page.emulateMedia({ colorScheme: 'dark' });
 await page.evaluate(() => document.documentElement.classList.add('dark'));
