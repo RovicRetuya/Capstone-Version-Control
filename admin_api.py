@@ -21,6 +21,8 @@ What the admin can do, and what not.
 - Change the three daily limits protections.py counts: new checks for the whole site, for each account, and for
   each internet connection guests use. A change counts at once and is kept in the `site_settings` table, so it
   outlives a restart; until one is saved, the numbers come from the environment (protections.Limits).
+- Choose what the Products page offers: which "Filter by result" and "Order by" choices appear, and which is
+  picked first. Kept in the `ui_settings` table; everybody can read it (GET /api/products-filters).
 - Change their own password.
 
     GET    /api/admin/me                   {admin: {id, name, email} | null}
@@ -32,12 +34,16 @@ What the admin can do, and what not.
     DELETE /api/admin/accounts/<id>      always refused (403): the admin cannot delete accounts
     GET    /api/admin/limits               the three limits, their defaults, and today's use of the site limit
     PUT    /api/admin/limits               {site, account, network}: whole numbers from 0 to 10,000
+    GET    /api/admin/filters              the Products page's choices, and the starting ones
+    PUT    /api/admin/filters              {show: {enabled, default}, sort: {enabled, default}}
+    GET    /api/products-filters           (no sign-in) the choices the Products page offers
 
 The original app's own /api/admin/overview, database, lexicons and logs stay closed (protections.CLOSED_PATHS).
 """
 
 from __future__ import annotations
 
+import json
 import time
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -50,6 +56,8 @@ from flask import Blueprint, current_app, g, jsonify, request, session
 import protections
 
 blueprint = Blueprint("admin", __name__, url_prefix="/api/admin")
+# What everybody may read: the choices the Products page offers (the admin sets them).
+public_blueprint = Blueprint("product_choices", __name__, url_prefix="/api")
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS agency_members (
@@ -58,6 +66,9 @@ CREATE TABLE IF NOT EXISTS agency_members (
 );
 CREATE TABLE IF NOT EXISTS site_settings (
     name TEXT PRIMARY KEY, value INTEGER NOT NULL, updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS ui_settings (
+    name TEXT PRIMARY KEY, value TEXT NOT NULL, updated_at TEXT NOT NULL
 );
 """
 
@@ -234,6 +245,61 @@ def _whole_number(value: Any) -> int | None:
     if isinstance(value, bool) or not isinstance(value, int) or not 0 <= value <= MAX_LIMIT:
         return None
     return value
+
+
+# --- The Products page's choices -------------------------------------------------------------------------------------
+
+# Every choice the page can offer, by the names the screens use (src/lib/product-filters.ts has their labels).
+FILTER_CHOICES = {
+    "show": ("all", "attention", "safety", "caution", "clear", "unknown"),
+    "sort": ("fewest", "most", "reviews"),
+}
+FILTER_DEFAULTS: dict[str, dict[str, Any]] = {
+    "show": {"enabled": list(FILTER_CHOICES["show"]), "default": "all"},
+    "sort": {"enabled": list(FILTER_CHOICES["sort"]), "default": "fewest"},
+}
+FILTERS_KEY = "product_filters"
+FILTERS_MESSAGE = "Keep at least one choice in each list, and pick one of them to show first."
+
+
+def clean_filters(value: Any) -> dict[str, dict[str, Any]] | None:
+    """The choices in the shape the page uses (known names only, in the page's order), or None when they make no sense."""
+    if not isinstance(value, dict):
+        return None
+    cleaned: dict[str, dict[str, Any]] = {}
+    for group, known in FILTER_CHOICES.items():
+        part = value.get(group)
+        if not isinstance(part, dict) or not isinstance(part.get("enabled"), list):
+            return None
+        asked = part["enabled"]
+        if any(not isinstance(name, str) or name not in known for name in asked):
+            return None
+        enabled = [name for name in known if name in asked]
+        if not enabled or part.get("default") not in enabled:
+            return None
+        cleaned[group] = {"enabled": enabled, "default": part["default"]}
+    return cleaned
+
+
+def saved_filters(path: str | Path) -> dict[str, dict[str, Any]]:
+    """What the admin saved, or every choice with the usual starting ones when nothing (usable) is saved."""
+    with _connect(path) as connection:
+        row = connection.execute("SELECT value FROM ui_settings WHERE name = ?", (FILTERS_KEY,)).fetchone()
+    if row is None:
+        return FILTER_DEFAULTS
+    try:
+        return clean_filters(json.loads(row["value"])) or FILTER_DEFAULTS
+    except ValueError:
+        return FILTER_DEFAULTS
+
+
+def save_filters(path: str | Path, filters: dict[str, dict[str, Any]]) -> None:
+    with _connect(path) as connection:
+        connection.execute(
+            "INSERT INTO ui_settings(name, value, updated_at) VALUES (?, ?, ?) "
+            "ON CONFLICT(name) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at",
+            (FILTERS_KEY, json.dumps(filters), _now()),
+        )
 
 
 # --- Routes ---------------------------------------------------------------------------------------------------------
@@ -438,4 +504,25 @@ def install(webapp: Any, app: Any = None) -> None:
         save_limits(database(), values)  # type: ignore[arg-type]
         return jsonify(limits_answer())
 
+    @blueprint.get("/filters")
+    def filters_answer() -> Any:
+        _user, refused = admin()
+        return refused or jsonify({"filters": saved_filters(database()), "defaults": FILTER_DEFAULTS})
+
+    @blueprint.put("/filters")
+    def change_filters() -> Any:
+        _user, refused = admin()
+        if refused:
+            return refused
+        cleaned = clean_filters(request.get_json(silent=True))
+        if cleaned is None:
+            return refuse(FILTERS_MESSAGE)
+        save_filters(database(), cleaned)
+        return jsonify({"filters": cleaned, "defaults": FILTER_DEFAULTS})
+
+    @public_blueprint.get("/products-filters")
+    def products_filters() -> Any:
+        return jsonify(saved_filters(database()))
+
     app.register_blueprint(blueprint)
+    app.register_blueprint(public_blueprint)

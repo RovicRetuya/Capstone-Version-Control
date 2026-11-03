@@ -49,11 +49,18 @@ manifest.host_permissions = [`${site.origin}/*`];
 fs.writeFileSync(path.join(target, 'manifest.json'), `${JSON.stringify(manifest, null, '\t')}\n`);
 console.log(`${path.relative(root, target) || target} reports to ${site.origin} (version ${manifest.version}).`);
 
-if (zip && process.platform === 'win32') {
+if (zip) {
 	fs.rmSync(zip, { force: true });
-	// Windows' own tar writes .zip files with -a (named in full: Git Bash puts a different tar first).
-	const tar = path.join(process.env.SystemRoot || 'C:/Windows', 'System32', 'tar.exe');
-	const made = spawnSync(fs.existsSync(tar) ? tar : 'tar', ['-a', '-c', '-f', zip, '-C', target, ...fs.readdirSync(target)], { stdio: 'inherit' });
+	let made;
+	if (process.platform === 'win32') {
+		// Windows' own tar writes .zip files with -a (named in full: Git Bash puts a different tar first).
+		const tar = path.join(process.env.SystemRoot || 'C:/Windows', 'System32', 'tar.exe');
+		made = spawnSync(fs.existsSync(tar) ? tar : 'tar', ['-a', '-c', '-f', zip, '-C', target, ...fs.readdirSync(target)], { stdio: 'inherit' });
+	} else {
+		// Linux and macOS (the server): `zip` when it is installed, otherwise Python's own zipfile module.
+		made = spawnSync('zip', ['-r', '-q', zip, '.'], { cwd: target, stdio: 'inherit' });
+		if (made.status !== 0) made = spawnSync('python3', ['-m', 'zipfile', '-c', zip, ...fs.readdirSync(target)], { cwd: target, stdio: 'inherit' });
+	}
 	if (made.status === 0) console.log('dist-extension.zip is ready for the Chrome Web Store.');
 	else console.log('The .zip could not be made; zip the contents of dist-extension/ by hand.');
 	if (made.status === 0 && args.includes('--download')) {
