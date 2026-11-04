@@ -33,12 +33,10 @@
 	function signedIn() {
 		void goto('/app/home');
 	}
-	// Without signing in, people use the original DeFaketive app that the server itself serves.
-	// The same address you are already on (localhost or 127.0.0.1), so the two never look like different sites.
-	const originalAppUrl = () => `${location.protocol}//${location.hostname}:5000/#landing`;
+	// Without signing in, people use the guest page (/scan): a few free checks a day, no account.
 	function guest() {
 		markSplashSeen();
-		location.href = originalAppUrl();
+		void goto('/scan');
 	}
 </script>
 
