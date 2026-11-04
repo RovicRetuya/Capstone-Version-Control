@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
+	import { auth } from '#lib/stores/auth.svelte.js';
 	import { fly } from 'svelte/transition';
 	import FileSearchIcon from '@lucide/svelte/icons/file-search';
 	import LanguagesIcon from '@lucide/svelte/icons/languages';
@@ -34,8 +35,16 @@
 		void goto('/app/home');
 	}
 	// Without signing in, people use the guest page (/scan): a few free checks a day, no account.
-	function guest() {
+	// Someone still signed in on this browser is signed out first: the guest page sends signed-in people to their account.
+	async function guest() {
 		markSplashSeen();
+		if (auth.user) {
+			try {
+				await auth.signOut();
+			} catch {
+				// Could not sign out: the guest page will then open the account, which is what is signed in.
+			}
+		}
 		void goto('/scan');
 	}
 </script>
