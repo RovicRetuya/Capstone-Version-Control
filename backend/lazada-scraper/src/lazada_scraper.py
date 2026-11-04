@@ -310,6 +310,17 @@ class LazadaScraper:
     @staticmethod
     def _detect_chrome_major():
         if not sys.platform.startswith("win"):
+            # Linux (the public server): ask the installed browser, so the driver matches it.
+            for command in ("google-chrome", "google-chrome-stable", "chromium", "chromium-browser"):
+                try:
+                    result = subprocess.run(
+                        [command, "--version"], capture_output=True, text=True, timeout=10, check=False
+                    )
+                except (OSError, subprocess.SubprocessError):
+                    continue
+                match = re.search(r"(\d+)\.\d+\.\d+", result.stdout)
+                if match:
+                    return int(match.group(1))
             return None
         roots = [
             os.path.join(os.environ.get("PROGRAMFILES", ""), "Google", "Chrome", "Application"),
