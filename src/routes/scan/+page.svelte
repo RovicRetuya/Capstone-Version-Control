@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { page } from '$app/state';
+	import ClearLinkButton from '#lib/components/app/clear-link-button.svelte';
 	import ArrowRightIcon from '@lucide/svelte/icons/arrow-right';
 	import CheckIcon from '@lucide/svelte/icons/check';
 	import CircleAlertIcon from '@lucide/svelte/icons/circle-alert';
@@ -119,6 +120,7 @@
 						disabled={scan.busy}
 						aria-invalid={notALink || unsupported || refused}
 					/>
+					<ClearLinkButton bind:value={query} disabled={scan.busy} />
 					<InputGroupAddon align="inline-end" class="max-md:hidden"><Kbd title="Press / to jump here">/</Kbd></InputGroupAddon>
 				</InputGroup>
 				{#if notALink}

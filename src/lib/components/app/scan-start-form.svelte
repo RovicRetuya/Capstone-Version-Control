@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import ArrowRightIcon from '@lucide/svelte/icons/arrow-right';
+	import ClearLinkButton from '#lib/components/app/clear-link-button.svelte';
 	import LinkIcon from '@lucide/svelte/icons/link';
 	import { onMount } from 'svelte';
 	import { toast } from 'svelte-sonner';
@@ -71,6 +72,7 @@
 				autocomplete="off"
 				aria-label="Product link"
 			/>
+			<ClearLinkButton bind:value />
 			<InputGroupAddon align="inline-end" class="max-md:hidden"><Kbd title="Press / to jump here">/</Kbd></InputGroupAddon>
 		</InputGroup>
 		<Button type="submit" {size}>Check <ArrowRightIcon /></Button>
