@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
+	import { session as adminSession } from '#lib/stores/admin.svelte.js';
 	import { auth } from '#lib/stores/auth.svelte.js';
 	import { fly } from 'svelte/transition';
 	import FileSearchIcon from '@lucide/svelte/icons/file-search';
@@ -35,16 +36,15 @@
 		void goto('/app/home');
 	}
 	// Without signing in, people use the guest page (/scan): a few free checks a day, no account.
-	// Someone still signed in on this browser is signed out first: the guest page sends signed-in people to their account.
+	// Someone still signed in on this browser (as a shopper, or as the admin, which is a separate sign-in) is signed
+	// out first: the guest page sends signed-in people to their account.
 	async function guest() {
 		markSplashSeen();
-		if (auth.user) {
-			try {
-				await auth.signOut();
-			} catch {
-				// Could not sign out: the guest page will then open the account, which is what is signed in.
-			}
-		}
+		if (!adminSession.ready) await adminSession.load();
+		const steps: Promise<unknown>[] = [];
+		if (auth.user) steps.push(auth.signOut());
+		if (adminSession.me) steps.push(adminSession.signOut());
+		await Promise.allSettled(steps);
 		void goto('/scan');
 	}
 </script>
