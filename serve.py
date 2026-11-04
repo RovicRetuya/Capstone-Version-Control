@@ -27,6 +27,7 @@ from __future__ import annotations
 import argparse
 import importlib.util
 import json
+import re
 import os
 import sys
 import threading
@@ -118,7 +119,7 @@ def _hide_scanner_errors(response: Any) -> Any:
 
     if request.path.startswith("/api/jobs/") and response.mimetype == "application/json":
         job = response.get_json(silent=True)
-        if isinstance(job, dict) and job.get("state") == "error" and "Traceback" in str(job.get("message") or ""):
+        if isinstance(job, dict) and job.get("state") == "error" and re.search(r"Traceback|site-packages|\.venv|Stacktrace|selenium|webdriver", str(job.get("message") or "")):
             job["message"] = SCANNER_UNAVAILABLE
             response.set_data(json.dumps(job))
     return response

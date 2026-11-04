@@ -52,8 +52,4 @@
 
 <div class="flex flex-wrap items-center gap-3">
 	<Button variant="outline" onclick={() => ui.openReport()}>Report a problem</Button>
-	<p class="text-muted-foreground text-sm">
-		Still stuck? Send the team a report, or email
-		<a class="text-primary underline underline-offset-4" href="mailto:bmacalino_20ur2047@psu.edu.ph">bmacalino_20ur2047@psu.edu.ph</a>.
-	</p>
 </div>
