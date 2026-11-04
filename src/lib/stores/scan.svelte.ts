@@ -47,6 +47,13 @@ export const needsYouTitle = (job: { needs_team?: boolean } | null | undefined) 
 	job?.needs_team ? 'Waiting for our team' : 'This scan needs you';
 const POLL_MS = 2500;
 
+/** A scanner crash comes back as Python's own error text (file paths, a stack trace). A shopper gets a plain line instead. */
+const LOOKS_TECHNICAL = /Traceback|site-packages|\.venv|Stacktrace|selenium|webdriver|chromedriver|File "|\/home\/|at 0x[0-9a-f]+/i;
+const SCAN_FAILED =
+	"This site couldn't read that product by itself. Install the DeFaketive browser extension, open the product page on Lazada PH or Shopee PH and press Check. Saved reports still open here.";
+export const plainScanMessage = (message: string | null | undefined, fallback: string): string =>
+	!message ? fallback : LOOKS_TECHNICAL.test(message) || message.length > 400 ? SCAN_FAILED : message;
+
 /** The guest screen lives under /scan. A scan started there stays there. */
 const onGuestScreen = () => page.url.pathname.startsWith('/scan');
 const reportHref = (link: string) => reportHrefFor(link, onGuestScreen());
@@ -319,10 +326,10 @@ class Scan {
 					this.#set(job);
 					this.feedback = {
 						title: 'Live scan stopped',
-						message: job.message || "The marketplace couldn't complete this scan.",
+						message: plainScanMessage(job.message, "The marketplace couldn't complete this scan."),
 						kind: 'error'
 					};
-					prefs.notify("Your scan couldn't finish", job.message || 'Open DeFaketive to try again.');
+					prefs.notify("Your scan couldn't finish", plainScanMessage(job.message, 'Open DeFaketive to try again.'));
 					return;
 				}
 
@@ -403,7 +410,7 @@ class Scan {
 			this.markSeen();
 			this.feedback = {
 				title: 'Live scan stopped',
-				message: scan.message || 'Try another product link.',
+				message: plainScanMessage(scan.message, 'Try another product link.'),
 				kind: 'error'
 			};
 		}

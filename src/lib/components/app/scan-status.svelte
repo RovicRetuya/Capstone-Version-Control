@@ -10,7 +10,7 @@
 	import { Spinner } from '#lib/components/ui/spinner/index.js';
 	import { MARKETPLACES } from '#lib/product.js';
 	import { catalog } from '#lib/stores/catalog.svelte.js';
-	import { needsYouTitle, scan } from '#lib/stores/scan.svelte.js';
+	import { needsYouTitle, plainScanMessage, scan } from '#lib/stores/scan.svelte.js';
 	import type { Marketplace } from '#lib/types.js';
 
 	// The latest scan, on Home. It stays after a scan finishes so a shopper who wandered off can find the report.
@@ -71,7 +71,7 @@
 			<p class="text-sm {needsYou ? 'text-foreground' : 'text-muted-foreground'}">
 				{complete
 					? "Your report is saved. Open it whenever you're ready."
-					: summary.message || 'You can keep browsing while we work.'}
+					: plainScanMessage(summary.message, 'You can keep browsing while we work.')}
 			</p>
 			{#if running}
 				<ScanProgress {stage} {progress} compact class="mt-2" />
