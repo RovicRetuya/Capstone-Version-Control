@@ -65,6 +65,7 @@ from flask import Blueprint, jsonify, redirect, request  # noqa: E402
 import admin_api  # noqa: E402  (beside this file)
 import extension_api  # noqa: E402  (beside this file)
 import link_resolver  # noqa: E402  (beside this file)
+import password_requests  # noqa: E402  (beside this file)
 import problem_reports  # noqa: E402  (beside this file)
 import protections  # noqa: E402  (beside this file)
 from saved_pool import SavedPool  # noqa: E402  (beside this file)
@@ -220,9 +221,11 @@ def one_address():
 # The admin side's accounts and daily limits, open only to admin accounts (admin_api.py: Admin@defake.com and the
 # admins it makes).
 # After protections.install, so the limits an admin saved replace the environment's.
-admin_api.install(webapp)
+admin_api.install(webapp, products_db=DEFAULT_DB)
 # The "Report a problem" form (problem_reports.py).
 problem_reports.install(webapp)
+# The "Forgot password" form (password_requests.py).
+password_requests.install(webapp)
 
 if __name__ == "__main__":
     # Flask's debug mode shows a developer's error page in the browser. That is for changing the code (dev.cmd

@@ -76,7 +76,7 @@
 				<Field orientation="horizontal">
 					<Checkbox id="add-admin" bind:checked={makeAdmin} />
 					<FieldLabel for="add-admin" class="block font-normal">
-						Make this account an admin. It can then manage accounts and limits here, but can no longer be used in the shopping app.
+						Make this account an admin. It can then manage accounts and limits here.
 					</FieldLabel>
 				</Field>
 			</FieldGroup>

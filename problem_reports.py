@@ -136,33 +136,20 @@ def _clean(value: Any, limit: int) -> str:
     return " ".join(str(value or "").split())[:limit] if limit <= MAX_PAGE else str(value or "").strip()[:limit]
 
 
-def email_report(report: dict[str, Any]) -> bool:
-    """Send one report to the contact address. False (and a log line) when no mail account is set or sending fails."""
+def send_mail(to: str, subject: str, body: str, reply_to: str = "", label: str = "email") -> bool:
+    """Send one plain-text email from the site's mail account. False (and a log line) when none is set or sending fails."""
     host, user, password = (os.environ.get(f"DEFAKETIVE_SMTP_{name}", "") for name in ("HOST", "USER", "PASSWORD"))
     if not (host and user and password):
-        log.warning("Problem report %s saved but not emailed: DEFAKETIVE_SMTP_HOST/USER/PASSWORD are not set.", report["id"])
+        log.warning("%s saved but not emailed: DEFAKETIVE_SMTP_HOST/USER/PASSWORD are not set.", label)
         return False
     port = int(os.environ.get("DEFAKETIVE_SMTP_PORT", "587") or 587)
     message = EmailMessage()
-    message["Subject"] = f"DeFaketive problem report: {LABELS.get(report['category'], report['category'])}"
+    message["Subject"] = subject
     message["From"] = os.environ.get("DEFAKETIVE_SMTP_FROM") or user
-    message["To"] = os.environ.get("DEFAKETIVE_REPORT_TO") or REPORT_TO
-    if report["email"]:
-        message["Reply-To"] = report["email"]
-    kind = LABELS.get(report["category"], report["category"])
-    sender = report["email"] or "no email given"
-    who = "signed in" if report["user_id"] else "guest"
-    message.set_content(
-        chr(10).join([
-            f"Report #{report['id']}",
-            f"Type: {kind}",
-            f"Page: {report['page'] or '-'}",
-            f"From: {sender} ({who})",
-            "",
-            report["message"],
-            "",
-        ])
-    )
+    message["To"] = to
+    if reply_to:
+        message["Reply-To"] = reply_to
+    message.set_content(body)
     try:
         if port == 465:
             with smtplib.SMTP_SSL(host, port, timeout=20, context=ssl.create_default_context()) as server:
@@ -174,9 +161,25 @@ def email_report(report: dict[str, Any]) -> bool:
                 server.login(user, password)
                 server.send_message(message)
     except (OSError, smtplib.SMTPException) as problem:
-        log.warning("Problem report %s saved but the email failed: %s", report["id"], problem)
+        log.warning("%s saved but the email failed: %s", label, problem)
         return False
     return True
+
+
+def email_report(report: dict[str, Any]) -> bool:
+    """Send one report to the contact address. False (and a log line) when no mail account is set or sending fails."""
+    kind = LABELS.get(report["category"], report["category"])
+    body = chr(10).join([
+        f"Report #{report['id']}",
+        f"Type: {kind}",
+        f"Page: {report['page'] or '-'}",
+        f"From: {report['email'] or 'no email given'} ({'signed in' if report['user_id'] else 'guest'})",
+        "",
+        report["message"],
+        "",
+    ])
+    return send_mail(os.environ.get("DEFAKETIVE_REPORT_TO") or REPORT_TO, f"DeFaketive problem report: {kind}", body,
+                     report["email"], f"Problem report {report['id']}")
 
 
 def install(webapp: Any, app: Any = None) -> None:

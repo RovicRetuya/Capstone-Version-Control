@@ -16,8 +16,8 @@ What the admin can do, and what not.
 - See every account: name, email, when it joined, how many products are in its History and Wishlist, and how many
   checks it started today. Never a password or its hash, and never which products.
 - Add an account (name, email, password), as a shopper or as another admin.
-- NOT delete an account. The admin cannot delete anyone's account (not even a shopper's): DELETE below always refuses.
-  A person deletes their own account from Settings in the shopping app.
+- Delete their OWN account (with their password), and never anyone else's: a shopper deletes their own account from
+  Settings in the shopping app. The last admin can't delete itself.
 - Change the three daily limits protections.py counts: new checks for the whole site, for each account, and for
   each internet connection guests use. A change counts at once and is kept in the `site_settings` table, so it
   outlives a restart; until one is saved, the numbers come from the environment (protections.Limits).
@@ -26,6 +26,9 @@ What the admin can do, and what not.
   or an order by rating, price, reviews, date or name). Kept in the `ui_settings` table; everybody can read it (GET /api/products-filters).
 - Read the problem reports people send from the site's "Report a problem" form, and mark each handled or open again.
 - Change their own password.
+- Read the "Forgot password" requests (password_requests.py), and answer one by setting a new password on that
+  account. The new password is shown once and emailed to the address the person gave (when a mail account is set up).
+- See the products the site has saved: name, marketplace, price, rating, result, reviews read, when saved.
 
     GET    /api/admin/me                   {admin: {id, name, email} | null}
     POST   /api/admin/login                {email, password}; only an admin account gets in
@@ -33,7 +36,7 @@ What the admin can do, and what not.
     PUT    /api/admin/password             {current_password, new_password}
     GET    /api/admin/accounts?q=          every account, newest first; q searches names and emails
     POST   /api/admin/accounts             {name, email, password, admin?}: adds an account
-    DELETE /api/admin/accounts/<id>      always refused (403): the admin cannot delete accounts
+    DELETE /api/admin/accounts/<id>      {current_password}: only your own id; refused for anyone else (403)
     GET    /api/admin/limits               the three limits, their defaults, and today's use of the site limit
     PUT    /api/admin/limits               {site, account, network}: whole numbers from 0 to 10,000
     GET    /api/admin/filters              the Products page's choices, and the starting ones
@@ -41,6 +44,10 @@ What the admin can do, and what not.
     GET    /api/products-filters           (no sign-in) the choices the Products page offers
     GET    /api/admin/reports?status=&category=&q=   the problem reports, newest first, with who sent each
     PUT    /api/admin/reports/<id>         {status: "new" | "done"}
+    GET    /api/admin/password-requests?status=&q=   the Forgot password requests, newest first
+    PUT    /api/admin/password-requests/<id>         {status: "new" | "done"}
+    POST   /api/admin/password-requests/<id>/reset   sets a new password, emails it, marks the request done
+    GET    /api/admin/products?q=&platform=          the saved products, newest first
 
 The original app's own /api/admin/overview, database, lexicons and logs stay closed (protections.CLOSED_PATHS).
 """
@@ -49,6 +56,7 @@ from __future__ import annotations
 
 import json
 import re
+import sqlite3
 import time
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -58,6 +66,7 @@ from typing import Any
 
 from flask import Blueprint, current_app, g, jsonify, request, session
 
+import password_requests
 import problem_reports
 import protections
 
@@ -98,7 +107,11 @@ NOT_ADMIN_MESSAGE = "This account is not an admin. Shoppers use the main DeFaket
 ROLE_REMOVED_MESSAGE = "Your admin session ended, so you were signed out."
 ADMIN_ONLY_MESSAGE = "This is an admin account. It can only be used in the DeFaketive admin app."
 NO_REPORT_MESSAGE = "There is no such report."
-DELETE_REFUSED_MESSAGE = "The admin page can't delete accounts. People delete their own account from Settings."
+LAST_ADMIN_MESSAGE = "You are the only admin. Add another admin account first, then you can delete this one."
+OWN_ONLY_MESSAGE = "You can delete your own account only. People delete their own account from Settings."
+ADMIN_RESET_MESSAGE = "An admin account's password can't be reset here. The admin changes it on the admin page."
+NO_ACCOUNT_MESSAGE = "No account has that email, so there is no password to change."
+PRODUCT_LIMIT = 500
 LIMITS_MESSAGE = f"Each limit must be a whole number from 0 to {MAX_LIMIT:,}."
 
 
@@ -148,6 +161,9 @@ def ensure_admin(path: str | Path) -> None:
                 (ADMIN_EMAIL, generate_password_hash(ADMIN_PASSWORD), legacy["id"]),
             )
             row = legacy
+        if row is None and connection.execute("SELECT 1 FROM agency_members").fetchone() is not None:
+            # Another admin exists (the main one deleted its own account): the default login is not made again.
+            return
         if row is None:
             # Made here, not through sign-up, so nobody can sign up with this email first.
             cursor = connection.execute(
@@ -382,7 +398,62 @@ def save_filters(path: str | Path, filters: dict[str, Any]) -> None:
 # --- Routes ---------------------------------------------------------------------------------------------------------
 
 
-def install(webapp: Any, app: Any = None) -> None:
+def _source_word(source: Any) -> str:
+    """How a product got here, in words. The stored value can be a file path on the server, which is not shown."""
+    text = str(source or "")
+    if text == "defaketive-extension":
+        return "Extension"
+    if text == "starter data":
+        return "Starter set"
+    return "Site scan" if text else ""
+
+
+def saved_products(path: str | Path | None, query: str = "", platform: str = "") -> dict[str, Any]:
+    """The saved products for the admin's list. Read only: the products database is opened so it cannot be written."""
+    empty: dict[str, Any] = {"products": [], "total": 0, "platforms": {}, "shown": 0}
+    if not path or not Path(path).exists():
+        return empty
+    where, values = ["1 = 1"], []
+    platform = platform.strip().lower()[:30]
+    if platform:
+        where.append("lower(platform) = ?")
+        values.append(platform)
+    query = query.strip()[:100]
+    if query:
+        where.append("(name LIKE ? ESCAPE '\\' OR link LIKE ? ESCAPE '\\')")
+        values.extend([_like(query)] * 2)
+    try:
+        connection = sqlite3.connect(f"{Path(path).resolve().as_uri()}?mode=ro", uri=True)
+    except sqlite3.Error:
+        return empty
+    connection.row_factory = sqlite3.Row
+    try:
+        rows = connection.execute(
+            "SELECT link, name, platform, price, rating, review_count, verdict_state, reviews_analyzed, reviews_listed, "
+            f"source, updated_at FROM products WHERE {' AND '.join(where)} ORDER BY updated_at DESC LIMIT ?",
+            (*values, PRODUCT_LIMIT),
+        ).fetchall()
+        total = connection.execute("SELECT COUNT(*) FROM products").fetchone()[0]
+        platforms = {str(row[0] or "other"): row[1] for row in connection.execute("SELECT platform, COUNT(*) FROM products GROUP BY platform")}
+    except sqlite3.Error:
+        return empty
+    finally:
+        connection.close()
+    return {
+        "products": [
+            {"link": row["link"], "name": row["name"] or "", "platform": row["platform"] or "", "price": row["price"],
+             "rating": row["rating"], "review_count": row["review_count"], "result": row["verdict_state"] or "",
+             "reviews_read": row["reviews_analyzed"], "reviews_listed": row["reviews_listed"],
+             "source": _source_word(row["source"]), "saved": row["updated_at"] or ""}
+            for row in rows
+        ],
+        "total": total,
+        "platforms": platforms,
+        "shown": len(rows),
+    }
+
+
+def install(webapp: Any, app: Any = None, products_db: str | Path | None = None) -> None:
     """Add the admin routes to the original app, keep admin accounts out of the shopping app, use the saved limits."""
     import accounts
 
@@ -547,11 +618,21 @@ def install(webapp: Any, app: Any = None) -> None:
 
     @blueprint.delete("/accounts/<int:user_id>")
     def delete(user_id: int) -> Any:
-        # Kept as a route, so the answer says why, but nothing is deleted: the admin has no permission to.
-        _user, refused = admin()
+        """An admin may delete their own account (with their password), never anyone else's."""
+        user, refused = admin()
         if refused:
             return refused
-        return refuse(DELETE_REFUSED_MESSAGE, 403)
+        if user_id != user["id"]:
+            return refuse(OWN_ONLY_MESSAGE, 403)
+        if len(admins(database())) < 2:
+            return refuse(LAST_ADMIN_MESSAGE, 409)
+        payload = request.get_json(silent=True)
+        try:
+            accounts.delete_user(database(), user["id"], payload.get("current_password") if isinstance(payload, dict) else None)
+        except accounts.AccountError as error:
+            return refuse(error.message, 403, fields={error.field: error.message})
+        session.pop(SESSION_KEY, None)
+        return jsonify({"deleted": True})
 
     def limits_answer() -> dict[str, Any]:
         used = accounts.guest_scans_used(database(), protections.SITE_KEY, accounts.manila_day())
@@ -620,6 +701,74 @@ def install(webapp: Any, app: Any = None) -> None:
             if not problem_reports.set_status(connection, report_id, status):
                 return refuse(NO_REPORT_MESSAGE, 404)
         return jsonify({"id": report_id, "status": status})
+
+    @blueprint.get("/password-requests")
+    def password_requests_answer() -> Any:
+        """The "Forgot password" requests, newest first. ?status=new|done, ?q= narrow them."""
+        _user, refused = admin()
+        if refused:
+            return refused
+        with _connect(database()) as connection:
+            return jsonify(password_requests.list_requests(connection, request.args.get("status", "all"), request.args.get("q", "")))
+
+    @blueprint.put("/password-requests/<int:request_id>")
+    def change_password_request(request_id: int) -> Any:
+        _user, refused = admin()
+        if refused:
+            return refused
+        payload = request.get_json(silent=True)
+        status = payload.get("status") if isinstance(payload, dict) else None
+        if status not in password_requests.STATUSES:
+            return refuse("Mark a request new or done.")
+        with _connect(database()) as connection:
+            if not password_requests.set_status(connection, request_id, status):
+                return refuse(password_requests.NO_REQUEST_MESSAGE, 404)
+        return jsonify({"id": request_id, "status": status})
+
+    @blueprint.post("/password-requests/<int:request_id>/reset")
+    def reset_password(request_id: int) -> Any:
+        """Set a new password on the account the request is about, send it to the email the person gave, and mark it done.
+
+        The new password is shown to the admin once (they can hand it over if no mail account is set up) and is
+        never kept anywhere but as the account's stored password.
+        """
+        from werkzeug.security import generate_password_hash
+
+        _user, refused = admin()
+        if refused:
+            return refused
+        with _connect(database()) as connection:
+            found = password_requests.get_request(connection, request_id)
+            if found is None:
+                return refuse(password_requests.NO_REQUEST_MESSAGE, 404)
+            target = connection.execute("SELECT id, full_name, email FROM users WHERE email = ?", (found["email"].lower(),)).fetchone()
+            if target is None:
+                return refuse(NO_ACCOUNT_MESSAGE, 404)
+            if connection.execute("SELECT 1 FROM agency_members WHERE user_id = ?", (target["id"],)).fetchone():
+                return refuse(ADMIN_RESET_MESSAGE, 403)
+            secret = password_requests.new_password()
+            connection.execute("UPDATE users SET password_hash = ? WHERE id = ?", (generate_password_hash(secret), target["id"]))
+            password_requests.set_status(connection, request_id, "done")
+            send_to, name = found["send_to"], target["full_name"]
+        body = chr(10).join([
+            f"Hello {name},", "",
+            "The DeFaketive admin set a new password for your account:", "",
+            f"    {secret}", "",
+            "Sign in with it, then change it in Settings to one only you know.", "",
+        ])
+        emailed = problem_reports.send_mail(send_to, "Your new DeFaketive password", body, label=f"Password request {request_id}")
+        return jsonify({"id": request_id, "password": secret, "emailed": emailed, "send_to": send_to, "name": name})
+
+    @blueprint.get("/products")
+    def products_answer() -> Any:
+        """Every product the site has saved (scraped by the site or sent by the extension), newest first.
+
+        ?q= searches the name and link; ?platform= narrows to one marketplace. Names, prices and counts only.
+        """
+        _user, refused = admin()
+        if refused:
+            return refused
+        return jsonify(saved_products(products_db, request.args.get("q", ""), request.args.get("platform", "")))
 
     @public_blueprint.get("/products-filters")
     def products_filters() -> Any:

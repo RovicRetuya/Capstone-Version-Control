@@ -14,12 +14,14 @@ import sys
 import json
 import time
 import unittest
+from contextlib import closing
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from server_under_test import accounts, app, clear_counts, webapp  # noqa: E402
 
 import admin_api  # noqa: E402
+import password_requests  # noqa: E402
 import problem_reports  # noqa: E402
 import protections  # noqa: E402
 
@@ -523,22 +525,51 @@ class AccountsTest(AdminTestCase):
         self.assertIn(admin_again.status_code, (400, 409))
         self.assertEqual([row["email"] for row in admin_api.admins(DATABASE())], ["admin@defake.com"])
 
-    def test_the_admin_cannot_delete_any_account(self) -> None:
+    def test_an_admin_deletes_only_their_own_account_and_never_the_last_admin(self) -> None:
         client, me = admin_client()
         shopper, other = shopper_client()
         accounts.set_wishlist(DATABASE(), other["id"], LAZADA, True)
+        # Nobody else's account can be deleted, a shopper's or another admin's.
         email = f"second{time.time_ns()}@example.com"
         second_id = client.post("/api/admin/accounts", json={"name": "Second", "email": email, "password": PASSWORD, "admin": True}).get_json()["id"]
-        # A shopper, another admin, the admin's own account: every one is refused, and nothing is deleted.
-        for user_id in (other["id"], second_id, me["id"], 999_999):
-            answer = client.delete(f"/api/admin/accounts/{user_id}")
-            self.assertEqual((answer.status_code, answer.get_json()["error"]), (403, admin_api.DELETE_REFUSED_MESSAGE))
-        for user_id in (other["id"], second_id, me["id"]):
+        for user_id in (other["id"], second_id, 999_999):
+            answer = client.delete(f"/api/admin/accounts/{user_id}", json={"current_password": admin_api.ADMIN_PASSWORD})
+            self.assertEqual((answer.status_code, answer.get_json()["error"]), (403, admin_api.OWN_ONLY_MESSAGE))
+        for user_id in (other["id"], second_id):
             self.assertIsNotNone(accounts.get_user(DATABASE(), user_id))
         with admin_api._connect(DATABASE()) as connection:
             kept = connection.execute("SELECT COUNT(*) FROM user_wishlist WHERE user_id = ?", (other["id"],)).fetchone()[0]
         self.assertEqual(kept, 1)
         self.assertIsNotNone(shopper.get("/api/auth/me").get_json().get("user"))
+
+        # The second admin deletes itself: its password is needed, and its session ends.
+        second = app.test_client()
+        self.assertEqual(second.post("/api/admin/login", json={"email": email, "password": PASSWORD}).status_code, 200)
+        wrong = second.delete(f"/api/admin/accounts/{second_id}", json={"current_password": "not it at all"})
+        self.assertEqual(wrong.status_code, 403)
+        self.assertIsNotNone(accounts.get_user(DATABASE(), second_id))
+        gone = second.delete(f"/api/admin/accounts/{second_id}", json={"current_password": PASSWORD})
+        self.assertEqual((gone.status_code, gone.get_json()), (200, {"deleted": True}))
+        self.assertIsNone(accounts.get_user(DATABASE(), second_id))
+        self.assertIsNone(second.get("/api/admin/me").get_json()["admin"])
+
+        # The only admin left can't delete itself.
+        last = client.delete(f"/api/admin/accounts/{me['id']}", json={"current_password": admin_api.ADMIN_PASSWORD})
+        self.assertEqual((last.status_code, last.get_json()["error"]), (409, admin_api.LAST_ADMIN_MESSAGE))
+        self.assertIsNotNone(accounts.get_user(DATABASE(), me["id"]))
+
+    def test_the_main_admin_is_not_made_again_when_another_admin_exists(self) -> None:
+        client, me = admin_client()
+        email = f"second{time.time_ns()}@example.com"
+        client.post("/api/admin/accounts", json={"name": "Second", "email": email, "password": PASSWORD, "admin": True})
+        accounts.delete_user(DATABASE(), me["id"], admin_api.ADMIN_PASSWORD)
+        admin_api.ensure_admin(DATABASE())
+        self.assertIsNone(admin_api.user_by_email(DATABASE(), admin_api.ADMIN_EMAIL))
+        # With no other admin, the main one is made as before (and the next test finds it).
+        with admin_api._connect(DATABASE()) as connection:
+            connection.execute("DELETE FROM agency_members")
+        admin_api.ensure_admin(DATABASE())
+        self.assertIsNotNone(admin_api.user_by_email(DATABASE(), admin_api.ADMIN_EMAIL))
 
 
 class LimitsTest(AdminTestCase):
@@ -589,3 +620,130 @@ class LimitsTest(AdminTestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class PasswordRequestsTest(AdminTestCase):
+    """"Forgot password": anyone asks, the admin sees whether the remembered password was right, and sets a new one."""
+
+    def ask(self, user: dict, **change):
+        body = {"name": user["name"], "email": user["email"], "last_password": PASSWORD, "send_to": "inbox@example.com"}
+        body.update(change)
+        return app.test_client().post("/api/password-request", json=body)
+
+    def setUp(self) -> None:
+        super().setUp()
+
+        def forget() -> None:
+            with admin_api._connect(DATABASE()) as connection:
+                password_requests.ensure_schema(connection)
+                connection.execute("DELETE FROM password_requests")
+
+        forget()
+        self.addCleanup(forget)
+        with password_requests._lock:
+            password_requests._recent.clear()
+
+    def test_a_request_is_kept_without_the_password_that_was_typed(self) -> None:
+        user = new_account("forgot")
+        self.assertEqual(self.ask(user).status_code, 201)
+        with admin_api._connect(DATABASE()) as connection:
+            stored = " ".join(str(value) for row in connection.execute("SELECT * FROM password_requests") for value in tuple(row))
+        self.assertNotIn(PASSWORD, stored)
+        client, _me = admin_client()
+        listed = client.get("/api/admin/password-requests").get_json()
+        row = listed["requests"][0]
+        self.assertEqual((listed["counts"]["new"], row["account_found"], row["name_matches"], row["password_matched"]), (1, True, True, True))
+        self.assertEqual((row["email"], row["send_to"], row["status"]), (user["email"], "inbox@example.com", "new"))
+
+    def test_a_wrong_remembered_password_or_a_stranger_is_told_apart_but_answered_the_same(self) -> None:
+        user = new_account("forgot")
+        right = self.ask(user)
+        wrong = self.ask(user, last_password="something else")
+        stranger = self.ask(user, email=f"nobody{time.time_ns()}@example.com")
+        self.assertEqual([r.status_code for r in (right, wrong, stranger)], [201, 201, 201])
+        self.assertEqual(right.get_json(), wrong.get_json())
+        self.assertEqual(right.get_json(), stranger.get_json())
+        client, _me = admin_client()
+        rows = client.get("/api/admin/password-requests").get_json()["requests"]
+        self.assertEqual([(r["account_found"], r["password_matched"]) for r in rows], [(False, False), (True, False), (True, True)])
+
+    def test_the_form_checks_its_fields_and_slows_down_a_flood(self) -> None:
+        user = new_account("forgot")
+        bad = self.ask(user, name="", send_to="not an email")
+        self.assertEqual(bad.status_code, 400)
+        self.assertEqual(set(bad.get_json()["fields"]), {"name", "send_to"})
+        answers = [self.ask(user).status_code for _ in range(password_requests.PER_HOUR + 1)]
+        self.assertEqual(answers[-1], 429)
+
+    def test_only_the_admin_reads_and_answers_requests(self) -> None:
+        user = new_account("forgot")
+        self.ask(user)
+        for client in (app.test_client(), shopper_client()[0]):
+            self.assertEqual(client.get("/api/admin/password-requests").status_code, 401)
+            self.assertEqual(client.post("/api/admin/password-requests/1/reset").status_code, 401)
+
+    def test_the_admin_sets_a_new_password_that_works_once_and_closes_the_request(self) -> None:
+        user = new_account("forgot")
+        self.ask(user)
+        client, _me = admin_client()
+        request_id = client.get("/api/admin/password-requests").get_json()["requests"][0]["id"]
+        done = client.post(f"/api/admin/password-requests/{request_id}/reset")
+        self.assertEqual(done.status_code, 200)
+        answer = done.get_json()
+        self.assertEqual((answer["send_to"], answer["emailed"]), ("inbox@example.com", False))
+        self.assertGreaterEqual(len(answer["password"]), 8)
+        self.assertIsNone(accounts.authenticate(DATABASE(), user["email"], PASSWORD))
+        self.assertIsNotNone(accounts.authenticate(DATABASE(), user["email"], answer["password"]))
+        listed = client.get("/api/admin/password-requests?status=done").get_json()
+        self.assertEqual((listed["counts"]["done"], listed["requests"][0]["id"]), (1, request_id))
+        reopened = client.put(f"/api/admin/password-requests/{request_id}", json={"status": "new"})
+        self.assertEqual(reopened.status_code, 200)
+        self.assertEqual(client.put(f"/api/admin/password-requests/{request_id}", json={"status": "?"}).status_code, 400)
+        self.assertEqual(client.post("/api/admin/password-requests/999999/reset").status_code, 404)
+
+    def test_no_password_is_set_for_an_unknown_email_or_an_admin_account(self) -> None:
+        client, me = admin_client()
+        self.ask(me)
+        self.ask(me, email=f"nobody{time.time_ns()}@example.com")
+        by_email = {r["email"]: r["id"] for r in client.get("/api/admin/password-requests").get_json()["requests"]}
+        self.assertEqual(client.post(f"/api/admin/password-requests/{by_email[me['email']]}/reset").status_code, 403)
+        other = next(i for e, i in by_email.items() if e != me["email"])
+        self.assertEqual(client.post(f"/api/admin/password-requests/{other}/reset").status_code, 404)
+        self.assertIsNotNone(accounts.authenticate(DATABASE(), "Admin@defake.com", admin_api.ADMIN_PASSWORD))
+
+
+class SavedProductsTest(AdminTestCase):
+    def test_only_the_admin_sees_the_saved_products(self) -> None:
+        self.assertEqual(app.test_client().get("/api/admin/products").status_code, 401)
+        self.assertEqual(shopper_client()[0].get("/api/admin/products").status_code, 401)
+        client, _me = admin_client()
+        answer = client.get("/api/admin/products")
+        self.assertEqual(answer.status_code, 200)
+        body = answer.get_json()
+        self.assertEqual(set(body), {"products", "total", "platforms", "shown"})
+        self.assertEqual(body["shown"], len(body["products"]))
+
+    def test_search_and_marketplace_narrow_the_list_and_treat_wildcards_as_text(self) -> None:
+        import sqlite3
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "products.db"
+            with closing(sqlite3.connect(path)) as connection:
+                connection.execute(
+                    "CREATE TABLE products (link TEXT, name TEXT, platform TEXT, price TEXT, rating REAL, review_count INTEGER, "
+                    "verdict_state TEXT, reviews_analyzed INTEGER, reviews_listed INTEGER, source TEXT, updated_at TEXT)"
+                )
+                connection.executemany(
+                    "INSERT INTO products VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    [("https://a/1", "Fast charger 100%", "lazada", "P500", 4.5, 10, "clear", 10, 10, "scan", "2026-11-01"),
+                     ("https://b/2", "Wired mouse", "shopee", "P99", 4.0, 5, "clear", 5, 5, "extension", "2026-11-02")],
+                )
+                connection.commit()
+            both = admin_api.saved_products(path)
+            self.assertEqual((both["total"], both["shown"], both["platforms"]), (2, 2, {"lazada": 1, "shopee": 1}))
+            self.assertEqual(both["products"][0]["name"], "Wired mouse")
+            self.assertEqual([p["name"] for p in admin_api.saved_products(path, platform="Lazada")["products"]], ["Fast charger 100%"])
+            self.assertEqual([p["name"] for p in admin_api.saved_products(path, query="100%")["products"]], ["Fast charger 100%"])
+            self.assertEqual(admin_api.saved_products(path, query="%")["shown"], 1)
+        self.assertEqual(admin_api.saved_products(None)["products"], [])
