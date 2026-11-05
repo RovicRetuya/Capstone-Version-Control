@@ -18,7 +18,7 @@ export interface AdminAccount {
 	admin: boolean;
 	/** The signed-in admin's own account. */
 	you: boolean;
-	/** The main admin, Admin@defake.com: it can't be deleted. */
+	/** The main admin, Admin@defake.com. */
 	main: boolean;
 	/** Products in its History, items in its Wishlist, and new checks it started today. */
 	history: number;
@@ -76,4 +76,59 @@ export interface AdminReports {
 	reports: AdminReport[];
 	/** Every report, whatever the list is narrowed to. */
 	counts: { new: number; done: number; total: number };
+}
+
+/** One "Forgot password" request. The password the person typed is never kept: only whether it matched the account's. */
+export interface AdminPasswordRequest {
+	id: number;
+	created_at: string;
+	/** What the person typed as the name and the email on the account. */
+	name: string;
+	email: string;
+	/** Where the new password should be sent. */
+	send_to: string;
+	status: 'new' | 'done';
+	handled_at: string | null;
+	/** An account has that email, the name typed is its name, and the remembered password was its password. */
+	account_found: boolean;
+	name_matches: boolean;
+	password_matched: boolean;
+}
+
+export interface AdminPasswordRequests {
+	requests: AdminPasswordRequest[];
+	counts: { new: number; done: number; total: number };
+}
+
+/** What the admin gets back after setting a new password: shown once. */
+export interface AdminPasswordReset {
+	id: number;
+	password: string;
+	emailed: boolean;
+	send_to: string;
+	name: string;
+}
+
+/** One saved product, as the admin's Products list shows it. */
+export interface AdminProduct {
+	link: string;
+	name: string;
+	platform: string;
+	price: string | number | null;
+	rating: number | null;
+	review_count: number | null;
+	result: string;
+	reviews_read: number | null;
+	reviews_listed: number | null;
+	/** How it got here (the site's own scan, the extension, or the starter set). */
+	source: string;
+	saved: string;
+}
+
+export interface AdminProducts {
+	products: AdminProduct[];
+	/** Every saved product, whatever the list is narrowed to, and the count for each marketplace. */
+	total: number;
+	platforms: Record<string, number>;
+	shown: number;
 }

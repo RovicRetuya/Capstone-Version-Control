@@ -8,6 +8,8 @@
 	import Filters from '#lib/components/admin/filters.svelte';
 	import Limits from '#lib/components/admin/limits.svelte';
 	import PasswordDialog from '#lib/components/admin/password-dialog.svelte';
+	import PasswordRequests from '#lib/components/admin/password-requests.svelte';
+	import Products from '#lib/components/admin/products.svelte';
 	import Reports from '#lib/components/admin/reports.svelte';
 	import EmptyState from '#lib/components/app/empty-state.svelte';
 	import Logo from '#lib/components/app/logo.svelte';
@@ -16,6 +18,7 @@
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Spinner } from '#lib/components/ui/spinner/index.js';
 	import { Tabs, TabsContent, TabsList, TabsTrigger } from '#lib/components/ui/tabs/index.js';
+	import { passwordRequests } from '#lib/stores/admin-requests.svelte.js';
 	import { reports } from '#lib/stores/admin-reports.svelte.js';
 	import { session } from '#lib/stores/admin.svelte.js';
 
@@ -25,13 +28,16 @@
 		if (session.ready && !session.me && !session.unreachable) void goto('/enter', { replaceState: true });
 	});
 
-	// The tab says how many reports are new, so they are loaded as soon as they are signed in.
+	// The tabs say how many reports and password requests are new, so they are loaded as soon as they are signed in.
 	$effect(() => {
-		if (session.me) untrack(() => reports.load());
+		if (session.me) untrack(() => {
+			reports.load();
+			passwordRequests.load();
+		});
 	});
 
 	// The open tab is in the address (?tab=limits), so a reload opens the same one.
-	const TABS = ['accounts', 'limits', 'filters', 'reports'];
+	const TABS = ['accounts', 'products', 'limits', 'filters', 'reports', 'passwords'];
 	const asked = new URL(location.href).searchParams.get('tab') ?? '';
 	let tab = $state(TABS.includes(asked) ? asked : 'accounts');
 	$effect(() => {
@@ -90,24 +96,31 @@
 		{:else}
 			<header class="space-y-1">
 				<h1 class="text-3xl font-semibold tracking-tight">Admin</h1>
-				<p class="text-muted-foreground">Manage the accounts on DeFaketive, how many new checks can start each day, what the Products page offers, and the problems people report.</p>
+				<p class="text-muted-foreground">Manage the accounts on DeFaketive, see the products it has saved, set how many new checks can start each day and what the Products page offers, and handle the problems and password requests people send.</p>
 			</header>
 
 			<Tabs bind:value={tab} onValueChange={recheck} class="gap-6">
-				<!-- Four tabs are wider than a phone: let them wrap onto a second line there. -->
+				<!-- Six tabs are wider than a phone: let them wrap onto a second line there. -->
 				<TabsList class="max-w-full flex-wrap justify-start group-data-horizontal/tabs:h-auto [&>[data-slot=tabs-trigger]]:flex-none">
 					<TabsTrigger value="accounts">Manage accounts</TabsTrigger>
+					<TabsTrigger value="products">Saved products</TabsTrigger>
 					<TabsTrigger value="limits">Daily limits</TabsTrigger>
 					<TabsTrigger value="filters">Products page</TabsTrigger>
 					<TabsTrigger value="reports">
 						Reports
 						{#if reports.newCount}<Badge class="ml-1 px-1.5">{reports.newCount}<span class="sr-only"> new</span></Badge>{/if}
 					</TabsTrigger>
+					<TabsTrigger value="passwords">
+						Password requests
+						{#if passwordRequests.newCount}<Badge class="ml-1 px-1.5">{passwordRequests.newCount}<span class="sr-only"> new</span></Badge>{/if}
+					</TabsTrigger>
 				</TabsList>
 				<TabsContent value="accounts"><Accounts /></TabsContent>
+				<TabsContent value="products"><Products /></TabsContent>
 				<TabsContent value="limits"><Limits /></TabsContent>
 				<TabsContent value="filters"><Filters /></TabsContent>
 				<TabsContent value="reports"><Reports /></TabsContent>
+				<TabsContent value="passwords"><PasswordRequests /></TabsContent>
 			</Tabs>
 		{/if}
 	</main>

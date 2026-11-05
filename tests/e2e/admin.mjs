@@ -1,6 +1,6 @@
 // The admin side (src/routes/admin, admin_api.py): the /admin page of the app, reached by signing in on the same
 // sign-in page as everyone, for the one admin account only. There is exactly one admin, Admin@defake.com (the server makes it). It lists the accounts with names and emails,
-// adds shopper accounts (it cannot delete any) and changes the daily limits. The admin account is admin-only: the shopping app
+// adds shopper accounts (it can delete only its own account) and changes the daily limits. The admin account is admin-only: the shopping app
 // refuses it, and nobody else can open the admin page.
 import { chromium } from 'playwright-core';
 import fs from 'node:fs';
@@ -117,7 +117,7 @@ check((await shopperRow.getByText('Shopper', { exact: true }).count()) === 1, 'a
 check((await shopperRow.getByRole('button', { name: /admin/i }).count()) === 0, 'accounts: no button makes an admin');
 const meRow = rowOf(page, 'admin@defake.com');
 check((await meRow.getByText('Admin', { exact: true }).count()) === 1 && (await meRow.getByText('This is you').count()) === 1, 'accounts: the admin row says Admin and "This is you"');
-check((await meRow.getByRole('button').count()) === 0, 'accounts: the admin cannot be deleted');
+check((await meRow.getByRole('button').count()) === 1 && (await meRow.getByRole('button', { name: 'Delete my account' }).count()) === 1, 'accounts: the admin row has one button, to delete their own account');
 await axeCheck(page, 'the Accounts tab (light)');
 await page.screenshot({ path: 'tests/e2e/shots/admin_accounts.png' });
 
@@ -158,14 +158,14 @@ const signedIn = await addedShopper.context.request.post(base + '/api/auth/login
 check(signedIn.ok(), 'add account: the new account signs in to the shopping app with the password given');
 await addedShopper.context.close();
 
-// The admin cannot delete accounts: no Delete button anywhere, and the server refuses a request for it.
+// The admin can delete only their own account: no Delete button on anyone else's row, and the server refuses a request for it.
 const kept = await open();
 const keptWho = await signUp(kept.context, base, 'Keep Me');
 await page.reload({ waitUntil: 'networkidle' });
 await rowOf(page, keptWho.email).waitFor({ timeout: 10000 });
-check((await page.getByRole('button', { name: /delete/i }).count()) === 0, 'delete: the Accounts tab has no Delete button');
+check((await page.getByRole('button', { name: /delete/i }).count()) === 1, 'delete: the only Delete button on the Accounts tab is the admin\'s own');
 const keptId = (await (await page.request.get(`${base}/api/admin/accounts?q=${encodeURIComponent(keptWho.email)}`)).json()).accounts[0].id;
-const refusedDelete = await page.request.delete(`${base}/api/admin/accounts/${keptId}`);
+const refusedDelete = await page.request.delete(`${base}/api/admin/accounts/${keptId}`, { data: { current_password: ADMIN_PASSWORD } });
 check(refusedDelete.status() === 403, 'delete: the server refuses to delete an account');
 check(!!(await (await kept.context.request.get(base + '/api/auth/me')).json()).user, 'delete: the account is still signed in and still there');
 await kept.context.close();
@@ -440,13 +440,13 @@ await context.request.put(base + '/api/admin/limits', { data: before });
 	await card.getByRole('button', { name: 'Mark as handled' }).click();
 	await card.waitFor({ state: 'detached', timeout: 10000 });
 	check(true, 'admin: marking it handled takes it off the list of reports that need a look');
-	await page.getByLabel('Show', { exact: true }).click();
+	await page.locator('#report-status').click();
 	await page.getByRole('option', { name: 'Handled' }).click();
 	await card.waitFor({ timeout: 10000 });
 	check((await card.getByRole('button', { name: 'Open again' }).count()) === 1, 'admin: it is under Handled, with Open again');
 	await card.getByRole('button', { name: 'Open again' }).click();
 	await card.waitFor({ state: 'detached', timeout: 10000 });
-	await page.getByLabel('Show', { exact: true }).click();
+	await page.locator('#report-status').click();
 	await page.getByRole('option', { name: 'All reports' }).click();
 	await card.waitFor({ timeout: 10000 });
 	check(/New/.test(await card.innerText()), 'admin: opened again, it is new');
@@ -458,6 +458,124 @@ await context.request.put(base + '/api/admin/limits', { data: before });
 	await page.getByRole('option', { name: 'Any kind' }).click();
 	await card.waitFor({ timeout: 10000 });
 	check((await page.getByLabel('Search reports').inputValue()) === String(stamp), 'admin: the search is kept while the kind changes');
+}
+
+// ---- 4e. Forgot password: asked on the sign-in page, answered on the admin page --------------------------------
+{
+	const forgetter = await open();
+	const who = await signUp(forgetter.context, base, 'Forgetful Person');
+	const stranger = await open();
+	const inbox = `inbox${Date.now()}@example.com`;
+	await stranger.page.goto(base + '/enter', { waitUntil: 'networkidle' });
+	await stranger.page.locator('#enter-email').waitFor({ timeout: 15000 });
+	await stranger.page.getByRole('button', { name: 'Forgot password?' }).click();
+	const ask = stranger.page.getByRole('dialog', { name: 'Forgot your password?' });
+	await ask.waitFor({ timeout: 10000 });
+	for (const label of ['Username', 'Email', 'Last remembered password', 'Send the new password to this email']) {
+		check((await ask.getByLabel(label, { exact: true }).count()) === 1, `forgot: the form asks for "${label}"`);
+	}
+	await ask.getByRole('button', { name: 'Send request' }).click();
+	check((await ask.getByText('Enter the name on your account.').count()) === 1, 'forgot: an empty form is refused before it is sent');
+	await ask.getByLabel('Username').fill(who.name);
+	await ask.getByLabel('Email', { exact: true }).fill(who.email);
+	await ask.getByLabel('Last remembered password').fill(PASSWORD);
+	await ask.getByLabel('Send the new password to this email').fill(inbox);
+	await axeCheck(stranger.page, 'the Forgot password pop-up');
+	await ask.getByRole('button', { name: 'Send request' }).click();
+	await ask.getByText('Your request was sent to the admin').waitFor({ timeout: 10000 });
+	check(true, 'forgot: a request is sent and thanked');
+	await stranger.context.close();
+
+	await page.goto(base + '/admin?tab=passwords', { waitUntil: 'networkidle' });
+	check((await page.getByRole('tab', { name: /Password requests/ }).innerText()).match(/\d/) !== null, 'admin: the Password requests tab says how many are new');
+	const card = page.locator('li[data-request]', { hasText: who.email });
+	await card.waitFor({ timeout: 10000 });
+	const text = await card.innerText();
+	check(text.includes('Forgetful Person') && text.includes(who.email) && text.includes(inbox), 'admin: the request shows the username, the email and where to send the new password');
+	check(text.includes('It was the account') && text.includes('An account has this email') && text.includes('The name fits'), 'admin: it says the remembered password, the email and the name all fit the account');
+	check(!text.includes(PASSWORD), 'admin: the password that was typed is not shown anywhere');
+	await page.waitForTimeout(600);
+	await axeCheck(page, 'the Password requests tab (light)');
+	await page.screenshot({ path: 'tests/e2e/shots/admin_password_requests.png' });
+	await card.getByRole('button', { name: 'Set a new password and send it' }).click();
+	const reveal = page.getByRole('dialog', { name: 'New password set' });
+	await reveal.waitFor({ timeout: 10000 });
+	const fresh = (await reveal.getByLabel('The new password').innerText()).trim();
+	check(fresh.length >= 8 && fresh !== PASSWORD, 'admin: a new password is made and shown once');
+	check((await reveal.getByText(/No email could be sent/).count()) === 1, 'admin: with no mail account set up, the dialog says to hand it over yourself');
+	await reveal.getByRole('button', { name: 'Done' }).click();
+	await page.locator('#request-status').click();
+	await page.getByRole('option', { name: 'Handled' }).click();
+	await card.waitFor({ timeout: 10000 });
+	check(/Handled/.test(await card.innerText()), 'admin: the request is now under Handled');
+
+	// The person signs in with the new password, and the old one no longer works.
+	const old = await forgetter.context.request.post(base + '/api/auth/login', { data: { email: who.email, password: PASSWORD } });
+	check(old.status() === 401, 'forgot: the old password no longer works');
+	const again = await open();
+	await signIn(again.page, who.email, fresh);
+	await again.page.waitForURL('**/app/home', { timeout: 15000 });
+	check(true, 'forgot: the new password signs the person in');
+	await again.context.close();
+	await forgetter.context.close();
+}
+
+// ---- 4f. Saved products ------------------------------------------------------------------------------------------
+{
+	await page.goto(base + '/admin?tab=products', { waitUntil: 'networkidle' });
+	await page.getByLabel('Search products').waitFor({ timeout: 10000 });
+	const first = page.locator('tr[data-product]').first();
+	const listed = (await first.count()) > 0 ? await first.waitFor({ timeout: 10000 }).then(() => true) : false;
+	const empty = (await page.getByText('No products saved yet').count()) > 0;
+	check(listed || empty, 'products: the tab lists the saved products, or says there are none');
+	if (listed) {
+		const row = await first.innerText();
+		check(!row.includes('C:\\') && !row.includes('/home/'), 'products: no file path from the server is shown');
+		await page.getByLabel('Search products').fill('zzzz-no-such-product-zzzz');
+		await page.getByText('No products match').waitFor({ timeout: 10000 });
+		check(true, 'products: a search with no match says so');
+		await page.getByRole('button', { name: 'Clear the search' }).click();
+		await first.waitFor({ timeout: 10000 });
+		check(true, 'products: clearing the search brings the list back');
+	}
+	await page.waitForTimeout(600);
+	await axeCheck(page, 'the Saved products tab (light)');
+	await page.screenshot({ path: 'tests/e2e/shots/admin_products.png' });
+}
+
+// ---- 4g. An admin deletes their own account ---------------------------------------------------------------------
+{
+	const second = `second${Date.now()}@example.com`;
+	const made = await page.request.post(base + '/api/admin/accounts', { data: { name: 'Second Admin', email: second, password: PASSWORD, admin: true } });
+	check(made.status() === 201, 'delete own: the admin adds a second admin');
+	const other = await open();
+	await signIn(other.page, second, PASSWORD);
+	await other.page.waitForURL('**/admin', { timeout: 15000 });
+	const mine = other.page.locator(`tr[data-account="${second}"]`);
+	await mine.waitFor({ timeout: 10000 });
+	await mine.getByRole('button', { name: 'Delete my account' }).click();
+	const confirm = other.page.getByRole('dialog', { name: 'Delete your account?' });
+	await confirm.waitFor({ timeout: 10000 });
+	await confirm.getByRole('button', { name: 'Delete my account' }).click();
+	check((await confirm.getByText('Enter your password to confirm.').count()) === 1, 'delete own: the password is needed');
+	await confirm.getByLabel('Your password').fill('not the password');
+	await confirm.getByRole('button', { name: 'Delete my account' }).click();
+	await confirm.getByText('That password is not correct.').waitFor({ timeout: 10000 });
+	check(true, 'delete own: a wrong password is refused and nothing is deleted');
+	await axeCheck(other.page, 'the Delete your account pop-up');
+	await confirm.getByLabel('Your password').fill(PASSWORD);
+	await confirm.getByRole('button', { name: 'Delete my account' }).click();
+	await other.page.waitForURL('**/enter', { timeout: 15000 });
+	check(true, 'delete own: the account is deleted and the admin is taken to the sign-in page');
+	const back = await other.context.request.post(base + '/api/admin/login', { data: { email: second, password: PASSWORD } });
+	check(back.status() === 401, 'delete own: the deleted account can no longer sign in');
+	await other.context.close();
+	const rows = await (await page.request.get(base + '/api/admin/accounts?q=' + encodeURIComponent(second))).json();
+	check(rows.accounts.length === 0, 'delete own: the account is gone from the list');
+	// The only admin left cannot delete itself.
+	const me = await (await page.request.get(base + '/api/admin/me')).json();
+	const last = await page.request.delete(`${base}/api/admin/accounts/${me.admin.id}`, { data: { current_password: ADMIN_PASSWORD } });
+	check(last.status() === 409, 'delete own: the only admin left cannot delete its own account');
 }
 
 // ---- 5. Own password ----------------------------------------------------------------------------------------------
@@ -485,7 +603,7 @@ await context.request.put(base + '/api/admin/password', { data: { current_passwo
 	const phonePage = await phone.newPage();
 	await phonePage.goto(base + '/admin', { waitUntil: 'networkidle' });
 	await phonePage.locator(`li[data-account="admin@defake.com"]`).waitFor({ timeout: 15000 });
-	check((await phonePage.locator('table').isVisible()) === false, 'phone: accounts are cards, not the table');
+	check((await phonePage.locator('table:visible').count()) === 0, 'phone: accounts are cards, not the table');
 	check(await noSideways(phonePage), 'phone: the Accounts tab does not scroll sideways');
 	await phonePage.screenshot({ path: 'tests/e2e/shots/admin_phone.png' });
 	await phonePage.getByRole('tab', { name: 'Daily limits' }).click();
@@ -497,6 +615,12 @@ await context.request.put(base + '/api/admin/password', { data: { current_passwo
 	await phonePage.getByRole('tab', { name: /Reports/ }).click();
 	await phonePage.locator('li[data-report]').first().waitFor({ timeout: 10000 }).catch(() => {});
 	check(await noSideways(phonePage), 'phone: the Reports tab does not scroll sideways');
+	await phonePage.getByRole('tab', { name: /Password requests/ }).click();
+	await phonePage.locator('li[data-request]').first().waitFor({ timeout: 10000 }).catch(() => {});
+	check(await noSideways(phonePage), 'phone: the Password requests tab does not scroll sideways');
+	await phonePage.getByRole('tab', { name: 'Saved products' }).click();
+	await phonePage.locator('li[data-product]').first().waitFor({ timeout: 10000 }).catch(() => {});
+	check(await noSideways(phonePage), 'phone: the Saved products tab does not scroll sideways');
 	await phone.close();
 }
 

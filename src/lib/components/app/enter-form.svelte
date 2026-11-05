@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { ApiError } from '#lib/api.js';
+	import ForgotPasswordDialog from '#lib/components/app/forgot-password-dialog.svelte';
 	import PasswordInput from '#lib/components/app/password-input.svelte';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Field, FieldError, FieldGroup, FieldLabel } from '#lib/components/ui/field/index.js';
@@ -17,6 +18,7 @@
 	let password = $state('');
 	let busy = $state(false);
 	let error = $state('');
+	let forgot = $state(false);
 
 	function markSplashSeen() {
 		try {
@@ -64,7 +66,10 @@
 			<FieldLabel for="{idPrefix}-password">Password</FieldLabel>
 			<PasswordInput id="{idPrefix}-password" name="password" autocomplete="current-password" bind:value={password} invalid={!!error} />
 			{#if error}<FieldError>{error}</FieldError>{/if}
+			<button type="button" class="text-muted-foreground hover:text-foreground w-fit text-sm underline underline-offset-4" onclick={() => (forgot = true)}>Forgot password?</button>
 		</Field>
 	</FieldGroup>
 	<Button type="submit" disabled={busy}>{#if busy}<Spinner />{/if} Sign in</Button>
 </form>
+
+<ForgotPasswordDialog bind:open={forgot} {email} />

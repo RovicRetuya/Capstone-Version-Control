@@ -1,6 +1,7 @@
 <script lang="ts">
 	import SearchIcon from '@lucide/svelte/icons/search';
 	import ShieldCheckIcon from '@lucide/svelte/icons/shield-check';
+	import Trash2Icon from '@lucide/svelte/icons/trash-2';
 	import UserPlusIcon from '@lucide/svelte/icons/user-plus';
 	import EmptyState from '#lib/components/app/empty-state.svelte';
 	import { Badge } from '#lib/components/ui/badge/index.js';
@@ -12,6 +13,7 @@
 	import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '#lib/components/ui/table/index.js';
 	import { adminApi } from '#lib/stores/admin.svelte.js';
 	import AddAccountDialog from './add-account-dialog.svelte';
+	import DeleteOwnDialog from './delete-own-dialog.svelte';
 	import type { AdminAccount, AdminAccounts } from '#lib/admin-types.js';
 
 	// Every account on the site, with what an admin may do to it (admin_api.py says what is refused, and why).
@@ -20,6 +22,7 @@
 	let query = $state('');
 	let searched = $state('');
 	let adding = $state(false);
+	let deleting = $state(false);
 
 	let requestId = 0;
 	async function load(q = query.trim()) {
@@ -52,8 +55,13 @@
 {/snippet}
 
 {#snippet actions(account: AdminAccount)}
-	{#if account.you || account.main}
-		<span class="text-muted-foreground text-sm">{account.you ? 'This is you' : 'Main admin'}</span>
+	{#if account.you}
+		<span class="flex flex-wrap items-center gap-2">
+			<span class="text-muted-foreground text-sm">This is you</span>
+			<Button variant="outline" size="sm" class="text-destructive" onclick={() => (deleting = true)}><Trash2Icon /> Delete my account</Button>
+		</span>
+	{:else if account.main}
+		<span class="text-muted-foreground text-sm">Main admin</span>
 	{/if}
 {/snippet}
 
@@ -145,3 +153,4 @@
 </div>
 
 <AddAccountDialog bind:open={adding} onadded={() => load(searched)} />
+<DeleteOwnDialog bind:open={deleting} />
