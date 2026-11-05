@@ -43,6 +43,8 @@ RECOMMENDATION_STOP_WORDS = {
 RECOMMENDATION_PART = "part"
 RECOMMENDATION_CASE = "case"
 RECOMMENDATION_PHONE = "phone"
+# Devices where the brand matters as much as the kind: an iPad suits an iPad buyer.
+RECOMMENDATION_BRANDED_DEVICES = ("phone", "tablet", "laptop", "smartwatch", "console", "tv", "earbuds")
 # Kinds that fit one device. Two of them are alike only when they are for the
 # same model: a case for a Galaxy A07 is no alternative to one for a Realme
 # C21Y, however alike the two names read.
@@ -124,16 +126,49 @@ RECOMMENDATION_LAST_RESORT_KINDS = ("monitor", "laptop", RECOMMENDATION_PART)
 _COMES_WITH = re.compile(r"(?:\bwith|\bw/)\s+(?:\S+\s+){0,2}$")
 # "... for Laptop", "... compatible with Monitors": what a product is for.
 _MADE_FOR = re.compile(r"\s(?:for|with|compatible)\s")
-# A name that opens with a phone brand and model. Only the start counts: "USB C
-# cable for iPhone 15" is a cable.
-_PHONE_NAME = re.compile(
-    r"^[\W_]*(?:(?:brand\s+new|new|apple|authentic|original)\s+)*"
-    r"(?:iphone\s?\d|samsung\s+galaxy\s+[a-z]?\d|galaxy\s+[a-z]\d|(?:xiaomi\s+)?redmi\s|poco\s+[a-z]\d|"
-    r"realme\s+[a-z]?\d|oppo\s+[a-z]\d|vivo\s+[a-z]?\d|infinix\s|tecno\s|google\s+pixel\s?\d|huawei\s+(?:nova|p\d))"
+# Devices that are known by a brand and model: (kind, pattern). Only the START of a
+# name counts, so "USB C cable for iPhone 15" is a cable and "iPad Pro Keyboard
+# Case" is not a tablet. The words "iphone", "ipad" and "tablet" are stop words
+# (half the catalogue lists what it works with), so without this a phone or a
+# tablet had no kind and matched nothing but its brand. Tablets come before
+# phones because "Galaxy Tab" and "Redmi Pad" would otherwise read as phones.
+_NAME_START = r"^[\W_]*(?:(?:brand\s+new|new|apple|authentic|original|official|sealed)\s+)*"
+RECOMMENDATION_DEVICE_NAMES = tuple(
+    (kind, re.compile(_NAME_START + pattern))
+    for kind, pattern in (
+        ("tablet", r"(?:ipad|samsung\s+galaxy\s+tab|galaxy\s+tab|redmi\s+pad|xiaomi\s+(?:redmi\s+)?pad|"
+                   r"lenovo\s+(?:tab|idea\s?tab|yoga\s+tab)|huawei\s+(?:matepad|mediapad)|matepad|"
+                   r"oppo\s+pad|realme\s+pad|honor\s+pad|amazon\s+fire\s+(?:hd|tablet)|microsoft\s+surface\s+(?:go|pro)|"
+                   r"android\s+tablet|kids\s+tablet|\d{1,2}(?:\.\d)?\s?(?:inch|in|\")\s+(?:android\s+)?tablet)"),
+        ("phone", r"(?:iphone\s?\d|iphone\s?(?:se|x[rs]?)\b|samsung\s+galaxy\s+[a-z]{0,2}\d|galaxy\s+[a-z]{0,2}\d|"
+                  r"galaxy\s+z\s|(?:xiaomi\s+)?redmi\s+(?:note\s+)?\d|(?:xiaomi\s+)?redmi\s|xiaomi\s+(?:mi\s+)?\d|poco\s+[a-z]\d|"
+                  r"realme\s+(?:gt\s+|narzo\s+|c|\d)|oppo\s+(?:reno|find|[a-z]\d)|vivo\s+(?:[a-z]\s?\d|v\d|y\d)|"
+                  r"infinix\s|tecno\s|itel\s|honor\s+(?:magic|x\d|\d)|google\s+pixel\s?\d|"
+                  r"huawei\s+(?:nova|p\d|mate\s?\d)|oneplus\s|nothing\s+phone|motorola\s+(?:moto|edge)|moto\s+[a-z]\d|"
+                  r"sony\s+xperia|asus\s+(?:rog\s+phone|zenfone)|zte\s+(?:blade|nubia)|cherry\s+mobile|myphone|symphony)"),
+        ("laptop", r"(?:macbook|lenovo\s+(?:thinkpad|ideapad|legion|loq|yoga)|thinkpad|ideapad|asus\s+(?:vivobook|zenbook|tuf|rog)|"
+                   r"vivobook|zenbook|acer\s+(?:aspire|nitro|swift|predator)|hp\s+(?:pavilion|envy|spectre|omen|victus)|"
+                   r"dell\s+(?:inspiron|latitude|xps|vostro|alienware)|msi\s+(?:katana|cyborg|thin|modern)|"
+                   r"huawei\s+matebook|matebook|chromebook|surface\s+laptop|gaming\s+laptop)"),
+        ("smartwatch", r"(?:apple\s+watch|galaxy\s+watch|samsung\s+watch|huawei\s+(?:watch|band)|amazfit|garmin|"
+                       r"redmi\s+watch|xiaomi\s+(?:watch|smart\s+band|mi\s+band)|mi\s+band|smart\s?band|fitbit|"
+                       r"realme\s+watch|oppo\s+watch|imilab|haylou|colmi|kieslect)"),
+        ("earbuds", r"(?:airpods|galaxy\s+buds|samsung\s+buds|redmi\s+buds|xiaomi\s+buds|huawei\s+freebuds|freebuds|"
+                    r"oppo\s+enco|realme\s+buds|jbl\s+(?:tune|wave|live)\s+(?:buds|flex)|sony\s+wf|anker\s+soundcore)"),
+        ("console", r"(?:playstation|ps[45]\b|nintendo\s+switch|switch\s+oled|xbox|steam\s+deck|rog\s+ally|"
+                    r"gameboy|game\s?boy|retro\s+game\s+console)"),
+        ("tv", r"(?:(?:samsung|lg|tcl|sony|hisense|xiaomi|philips|panasonic|skyworth|devant|haier|aiwa|coocaa)\s+)?(?:(?:smart\s+)?(?:android\s+)?(?:led\s+|4k\s+|uhd\s+)*tv\s+\d|\d{2}(?:\s?inch|\s?\")\s+(?:smart\s+|android\s+|led\s+|4k\s+|uhd\s+)*tv\b|"
+                "samsung\s+(?:crystal|qled|the\s+frame)|lg\s+(?:oled|nanocell|uhd)|tcl\s+(?:\d|android|google))"),
+        ("camera", r"(?:gopro|go\s?pro|canon\s+(?:eos|powershot)|nikon\s+(?:d\d|z\s?\d)|sony\s+(?:alpha|a\d|zv)|"
+                   r"fujifilm|instax|dji\s+(?:osmo|pocket|action)|insta360)"),
+    )
 )
-_PHONE_ACCESSORY = re.compile(
-    r"\b(?:case|cover|protector|tempered|glass|cable|charger|adapter|holder|stand|lcd|screen|strap|"
-    r"earphones?|earbuds?|headset|power\s?bank|film|lens)\b"
+# Words that make a name an accessory for one of those devices, not the device.
+_DEVICE_ACCESSORY = re.compile(
+    r"\b(?:case|cases|cover|protector|tempered|glass|cable|charger|adapter|holder|stand|lcd|screen|strap|"
+    r"earphones?|earbuds?|headset|power\s?bank|film|lens|pencil|stylus|pen|keyboard|sleeve|bag|pouch|skin|sticker|"
+    r"mount|tripod|replacement|dock|hub|band\s+for|bands?|straps?|controller|gamepad|remote|bracket|"
+    r"cleaner|cleaning|wipes?|stand|folio|compatible|fits)\b"
 )
 # "8+256", "8GB+256GB": memory and storage, which only a phone or tablet lists.
 _MEMORY_AND_STORAGE = re.compile(r"\b\d{1,2}\s?(?:gb)?\s?\+\s?\d{2,4}\s?(?:gb)?\b")
@@ -317,14 +352,18 @@ def _recommendation_type(product: dict[str, Any]) -> str:
         str(product.get(field) or "").casefold()
         for field in ("name", "category")
     )
-    if _PHONE_NAME.search(text) and not _PHONE_ACCESSORY.search(text):
-        # "Apple iPhone 16", "Samsung Galaxy A07": a phone by its name alone.
-        # "iPhone" is a stop word (cables list it), so without this a phone
-        # had no kind and matched nothing but its brand.
-        return RECOMMENDATION_PHONE
+    # What a device comes with ("... with Case and Charger", "+ free earphones") is not
+    # what it is, so only the words before that are read for an accessory.
+    head = re.split(r"\bwith\b|\bw/|\bfree\b|\bincludes?\b|\bbundle\b|\+", text)[0]
+    if not _DEVICE_ACCESSORY.search(head):
+        # "Apple iPhone 16", "iPad Air 5", "Galaxy Tab A9": known by name alone.
+        for device_kind, pattern in RECOMMENDATION_DEVICE_NAMES:
+            if pattern.search(text):
+                return device_kind
     if _MEMORY_AND_STORAGE.search(text):
-        # A phone sold with a charger and earphones is still a phone.
-        return RECOMMENDATION_PHONE
+        # A phone sold with a charger and earphones is still a phone; with
+        # "tablet" or "pad" in the name it is a tablet.
+        return "tablet" if re.search(r"\b(?:tablet|pad|tab)\b", text) and "phone" not in text else RECOMMENDATION_PHONE
 
     def first_seen(skip_what_it_comes_with: bool) -> dict[str, int]:
         found: dict[str, int] = {}
@@ -484,7 +523,7 @@ def _rank_recommendations(
         )
         similarity = min(
             1.0,
-            lexical_similarity + (0.25 if category_match else 0) + (0.08 if brand_match else 0),
+            lexical_similarity + (0.25 if category_match else 0) + ((0.2 if target_type in RECOMMENDATION_BRANDED_DEVICES else 0.08) if brand_match else 0),
         )
         evidence = min(1.0, math.log10(review_count + 1) / 2)
         recommendation_score = 0.6 * similarity + 0.3 * positive + 0.1 * evidence
