@@ -124,6 +124,17 @@ RECOMMENDATION_LAST_RESORT_KINDS = ("monitor", "laptop", RECOMMENDATION_PART)
 _COMES_WITH = re.compile(r"(?:\bwith|\bw/)\s+(?:\S+\s+){0,2}$")
 # "... for Laptop", "... compatible with Monitors": what a product is for.
 _MADE_FOR = re.compile(r"\s(?:for|with|compatible)\s")
+# A name that opens with a phone brand and model. Only the start counts: "USB C
+# cable for iPhone 15" is a cable.
+_PHONE_NAME = re.compile(
+    r"^[\W_]*(?:(?:brand\s+new|new|apple|authentic|original)\s+)*"
+    r"(?:iphone\s?\d|samsung\s+galaxy\s+[a-z]?\d|galaxy\s+[a-z]\d|(?:xiaomi\s+)?redmi\s|poco\s+[a-z]\d|"
+    r"realme\s+[a-z]?\d|oppo\s+[a-z]\d|vivo\s+[a-z]?\d|infinix\s|tecno\s|google\s+pixel\s?\d|huawei\s+(?:nova|p\d))"
+)
+_PHONE_ACCESSORY = re.compile(
+    r"\b(?:case|cover|protector|tempered|glass|cable|charger|adapter|holder|stand|lcd|screen|strap|"
+    r"earphones?|earbuds?|headset|power\s?bank|film|lens)\b"
+)
 # "8+256", "8GB+256GB": memory and storage, which only a phone or tablet lists.
 _MEMORY_AND_STORAGE = re.compile(r"\b\d{1,2}\s?(?:gb)?\s?\+\s?\d{2,4}\s?(?:gb)?\b")
 
@@ -306,6 +317,11 @@ def _recommendation_type(product: dict[str, Any]) -> str:
         str(product.get(field) or "").casefold()
         for field in ("name", "category")
     )
+    if _PHONE_NAME.search(text) and not _PHONE_ACCESSORY.search(text):
+        # "Apple iPhone 16", "Samsung Galaxy A07": a phone by its name alone.
+        # "iPhone" is a stop word (cables list it), so without this a phone
+        # had no kind and matched nothing but its brand.
+        return RECOMMENDATION_PHONE
     if _MEMORY_AND_STORAGE.search(text):
         # A phone sold with a charger and earphones is still a phone.
         return RECOMMENDATION_PHONE
@@ -365,6 +381,35 @@ def rank_recommendations(
     min_positive_ratio: float = 0.5,
     min_review_count: int = 5,
 ) -> list[dict[str, Any]]:
+    """Up to `limit` similar products with no warning signs.
+
+    The strict pass comes first. When it finds fewer than `limit`, a looser
+    pass fills the rest (a product whose kind the name list cannot read, a
+    slightly lower rating), so a product is not left with nothing while
+    similar safe ones exist. The loose pass never relaxes the safety rule: a
+    candidate still needs the "no warning signs" verdict and zero safety
+    reports.
+    """
+    if limit <= 0:
+        return []
+    picked = _rank_recommendations(product, products, limit, min_positive_ratio, min_review_count, loose=False)
+    if len(picked) < limit:
+        have = {str(item.get("link") or "") for item in picked}
+        loose = _rank_recommendations(
+            product, products, limit, min(min_positive_ratio, 0.4), min(min_review_count, 3), loose=True
+        )
+        picked += [item for item in loose if str(item.get("link") or "") not in have]
+    return picked[:limit]
+
+
+def _rank_recommendations(
+    product: dict[str, Any],
+    products: list[dict[str, Any]],
+    limit: int,
+    min_positive_ratio: float,
+    min_review_count: int,
+    loose: bool,
+) -> list[dict[str, Any]]:
     """Rank similar products whose reviews show no warning signs.
 
     Only products analysed with the badge model qualify: a legacy risk score
@@ -398,7 +443,7 @@ def rank_recommendations(
         if (
             positive < min_positive_ratio
             or review_count < min_review_count
-            or (rating is not None and rating < 4.0)
+            or (rating is not None and rating < (3.5 if loose else 4.0))
         ):
             continue
 
@@ -417,12 +462,21 @@ def rank_recommendations(
             # phone is not an alternative, however alike the two names are.
             continue
         overlap = target_terms & candidate_terms
+        if loose and not target_type:
+            # Two products whose kind the list cannot read (so no kind to
+            # compare) are matched on their words: three real shared words,
+            # not "men" and "s" from "Men's", and a shared category is not
+            # enough by itself. Shared words like "fast" or "charging" alone
+            # offered a stylus pen for a power bank.
+            overlap = {term for term in overlap if len(term) > 2 and term not in {"men", "women", "pcs", "set"}}
+            if len(overlap) < 3:
+                continue
         candidate_category = str(candidate.get("category") or "").strip().casefold()
         category_match = bool(target_category and target_category == candidate_category)
         type_match = bool(target_type and target_type == candidate_type)
         lexical_similarity = len(overlap) / max(1, min(len(target_terms), len(candidate_terms)))
         if not category_match and not type_match and (
-            len(overlap) < 3 or lexical_similarity < 0.35
+            len(overlap) < 3 or lexical_similarity < (0.25 if loose else 0.35)
         ):
             continue
         brand_match = bool(
