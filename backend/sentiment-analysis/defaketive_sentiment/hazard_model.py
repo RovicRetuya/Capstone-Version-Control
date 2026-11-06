@@ -45,7 +45,7 @@ from .extra_labels import (
     not_as_described_spans,
     quality_spans,
 )
-from .fault_rules import F11_REVISION, F12_REVISION, S2_REVISION, f11_match, s2_removes
+from .fault_rules import F11_REVISION, F12_REVISION, F13_REVISION, S2_REVISION, f11_match, s2_removes
 from .safety_lookalikes import S3_REVISION, S4_REVISION, s3_adds, s3_removes
 from .listing_context import LC2_REVISION, LC2F_REVISION, LC3_REVISION, LISTING_CONTEXT_REVISION, lc2_rules, lc2f_rules, lc3_rules
 from .listing_context import review_rules as listing_review_rules
@@ -1648,6 +1648,7 @@ class HazardBadgeModel:
                 + SAFETY_GUIDE16_REVISION
                 + ("" if F11_OFF else F11_REVISION)
                 + ("" if F11_OFF else F12_REVISION)
+                + ("" if F11_OFF else F13_REVISION)
                 + OWN_ACTION_REVISION
                 + QUALITY_PRAISE_REVISION
                 + ("" if S2_OFF else S2_REVISION)
