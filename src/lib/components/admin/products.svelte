@@ -10,7 +10,6 @@
 	import * as Select from '#lib/components/ui/select/index.js';
 	import { Skeleton } from '#lib/components/ui/skeleton/index.js';
 	import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '#lib/components/ui/table/index.js';
-	import { reportTime } from '#lib/problem-report.js';
 	import { adminApi } from '#lib/stores/admin.svelte.js';
 	import { safeLink } from '#lib/product.js';
 	import type { AdminProduct, AdminProducts } from '#lib/admin-types.js';
@@ -34,7 +33,6 @@
 	const rating = (product: AdminProduct) => (product.rating ? product.rating.toFixed(1) : '—');
 	const reviews = (product: AdminProduct) =>
 		product.reviews_read === null ? '—' : product.reviews_listed ? `${product.reviews_read} of ${product.reviews_listed}` : String(product.reviews_read);
-	const saved = (product: AdminProduct) => (product.saved ? reportTime(product.saved) : '—');
 
 	let requestId = 0;
 	async function load() {
@@ -115,9 +113,7 @@
 						<TableHead>Price</TableHead>
 						<TableHead class="text-right">Rating</TableHead>
 						<TableHead class="text-right">Reviews read</TableHead>
-						<TableHead>Result</TableHead>
-						<TableHead>From</TableHead>
-						<TableHead class="pr-4">Saved</TableHead>
+						<TableHead class="pr-4">Result</TableHead>
 					</TableRow>
 				</TableHeader>
 				<TableBody>
@@ -135,9 +131,7 @@
 							<TableCell class="whitespace-nowrap tabular-nums">{price(product)}</TableCell>
 							<TableCell class="text-right tabular-nums">{rating(product)}</TableCell>
 							<TableCell class="text-right whitespace-nowrap tabular-nums">{reviews(product)}</TableCell>
-							<TableCell class="whitespace-nowrap">{result(product)}</TableCell>
-							<TableCell><Badge variant="outline">{product.source || '—'}</Badge></TableCell>
-							<TableCell class="text-muted-foreground pr-4 whitespace-nowrap">{saved(product)}</TableCell>
+							<TableCell class="pr-4 whitespace-nowrap">{result(product)}</TableCell>
 						</TableRow>
 					{/each}
 				</TableBody>
@@ -154,8 +148,6 @@
 						</p>
 						<div class="flex flex-wrap items-center gap-2 text-sm">
 							<Badge variant="secondary">{result(product)}</Badge>
-							<Badge variant="outline">{product.source || '—'}</Badge>
-							<span class="text-muted-foreground">{saved(product)}</span>
 						</div>
 						{#if safeLink(product.link)}
 							<a class="text-primary inline-flex items-center gap-1 text-sm underline underline-offset-4" href={safeLink(product.link)} target="_blank" rel="noreferrer noopener">Open the listing <ExternalLinkIcon class="size-3.5" aria-hidden="true" /></a>
