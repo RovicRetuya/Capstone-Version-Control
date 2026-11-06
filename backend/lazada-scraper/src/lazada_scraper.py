@@ -123,6 +123,8 @@ class LazadaScraper:
         "https://my.lazada.com.ph/pdp/review/getReviewList"
         "?itemId={item_id}&pageSize={page_size}&filter={star}&sort=0&pageNo={page}"
     )
+    # The most reviews one scan reads in all (and so 200 from each of the five star levels).
+    MAX_TOTAL_REVIEWS = 1000
     FEED_PAGE_SIZE = 50
     FEED_PAUSE_SECONDS = 1.0
     FEED_TIMEOUT_SECONDS = 15
@@ -217,7 +219,8 @@ class LazadaScraper:
             raise ValueError("No valid Lazada Philippines category URLs were provided")
         self.rating = rating
         self.all_star_types = all_star_types
-        self.star_limit_per_type = max(0, star_limit_per_type)
+        # Five star levels share the ceiling: 1,000 reviews in one scan, however high a caller asks.
+        self.star_limit_per_type = min(max(0, star_limit_per_type), self.MAX_TOTAL_REVIEWS // 5)
         self.include_empty = include_empty
         self.chrome_user_data_dir = chrome_user_data_dir
         self.pause_for_verification = pause_for_verification

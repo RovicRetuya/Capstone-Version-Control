@@ -13,7 +13,7 @@
 	import { Card, CardContent, CardHeader, CardTitle } from '#lib/components/ui/card/index.js';
 	import { Tabs, TabsContent, TabsList, TabsTrigger } from '#lib/components/ui/tabs/index.js';
 	import { EXTENSION_CONTACT, EXTENSION_DOWNLOAD, extensionFileAvailable } from '#lib/extension-download.js';
-	import { LAZADA_REVIEWS_PER_STAR } from '#lib/product.js';
+	import { LAZADA_EXTENSION_REVIEWS_PER_STAR } from '#lib/product.js';
 	import { auth } from '#lib/stores/auth.svelte.js';
 
 	// What the browser extension is, how to put it in Chrome or Edge, and how to check a Lazada or a Shopee product with
@@ -44,7 +44,7 @@
 	const reads = [
 		"The product's name, price, seller and photo",
 		'How many ratings it has at each star level',
-		`Lazada: up to ${LAZADA_REVIEWS_PER_STAR} written reviews from each star level`,
+		`Lazada: up to ${LAZADA_EXTENSION_REVIEWS_PER_STAR} written reviews from each star level`,
 		'Shopee: every written review, so a popular product takes a few minutes'
 	];
 	const never = [
@@ -187,7 +187,7 @@
 				<ol class="grid gap-5">
 					{@render step(1, 'Open the product on Lazada in your browser', 'Go to lazada.com.ph and open the product you are thinking of buying. Use the website, not the Lazada app.')}
 					{@render step(2, 'Wait for the page to finish loading', 'Let the photos and the price show up first.')}
-					{@render step(3, 'Press Check with DeFaketive', `It is a purple button at the bottom left of the page. The extension reads the product and up to ${LAZADA_REVIEWS_PER_STAR} written reviews from each star level. A small box tells you how far it is. This takes about a minute.`)}
+					{@render step(3, 'Press Check with DeFaketive', `It is a purple button at the bottom left of the page. The extension reads the product and up to ${LAZADA_EXTENSION_REVIEWS_PER_STAR} written reviews from each star level. A small box tells you how far it is. This takes about a minute.`)}
 					{@render step(4, 'Keep the Lazada tab open', 'Do not close it or scroll to a different product until the box says your report is opening.')}
 					{@render step(5, 'Read your report', 'A new DeFaketive tab opens with the result, the checks behind it and the reviews that raised them. Use Save to keep it in your Wishlist.')}
 				</ol>

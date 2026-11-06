@@ -204,7 +204,7 @@ async function guestPage({ width = 1280, height = 900, scheme = 'light' } = {}) 
 	check(!/Fresh collection settings|Search saved reports|Collect fresh reviews|CAPTCHA/.test(text), 'no settings line, no second button, no CAPTCHA paragraph');
 	await page.locator('#search-query').fill(NEW_LINK);
 	await page.waitForTimeout(300);
-	check((await page.getByRole('button', { name: 'Check this Lazada PH product' }).isEnabled()) && (await page.getByText('We read up to 60 reviews from each star level.').isVisible()), 'a new Lazada link: "Check this Lazada PH product", and how many reviews are read');
+	check((await page.getByRole('button', { name: 'Check this Lazada PH product' }).isEnabled()) && (await page.getByText('We read up to 200 reviews from each star level.').isVisible()), 'a new Lazada link: "Check this Lazada PH product", and how many reviews are read');
 	check(!(await page.getByRole('button', { name: 'Check again for new reviews' }).isVisible()), 'a new link: nothing to check again');
 	await page.screenshot({ path: `${out}/uiux_check_new.png` });
 	await page.locator('#search-query').fill(SAVED);
