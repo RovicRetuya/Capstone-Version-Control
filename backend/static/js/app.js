@@ -1,7 +1,7 @@
 const state = { historyFilter: "all", clearedAt: 0, picks: [], popular: [], homeScan: null, catalogLoading: true, currentProduct: null, reportFrom: "history", activity: {}, wishlist: [], catalogError: false, modelUnavailable: "", products: [], catalogProducts: [], toastTimer: null, activeJobId: null, jobStartedAt: null, jobElapsedTimer: null, searchBusy: false };
 const MARKETPLACES = { shopee: "Shopee PH", lazada: "Lazada PH", temu: "Temu PH" };
 // Lazada scans read a fixed number of reviews from each star level (webapp.LAZADA_REVIEWS_PER_STAR).
-const LAZADA_REVIEWS_PER_STAR = 60;
+const LAZADA_REVIEWS_PER_STAR = 200;
 const $ = (selector) => document.querySelector(selector);
 const esc = (value) => String(value ?? "").replace(/[&<>'"]/g, char => ({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;",'"':"&quot;"}[char]));
 const money = (value) => String(value || "\u2014").replace(/(?:PHP|Php|php)\s*|\u00e2\u201a\u00b1/g, "\u20b1");

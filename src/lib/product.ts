@@ -36,8 +36,10 @@ export const EXTENSION_ONLY = 'Shopee PH products are checked with the DeFaketiv
 export const refusalFor = (platform: Marketplace): string =>
 	viaExtension(platform) ? EXTENSION_ONLY : `${LAZADA_ONLY} This ${MARKETPLACES[platform]} link can't be checked.`;
 
-/** Lazada scans read this many written reviews from each star level (webapp.LAZADA_REVIEWS_PER_STAR). */
-export const LAZADA_REVIEWS_PER_STAR = 60;
+/** Pasted Lazada links are read from each star level up to this many written reviews (webapp.LAZADA_REVIEWS_PER_STAR); five levels is 1,000 at most. */
+export const LAZADA_REVIEWS_PER_STAR = 200;
+/** The browser extension reads fewer from a Lazada page (extension_api.QUOTA). */
+export const LAZADA_EXTENSION_REVIEWS_PER_STAR = 60;
 
 /**
  * How long a live scan of one product takes, link to report. Lazada is read in the background from its review

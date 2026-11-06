@@ -56,8 +56,11 @@ SCRAPER_PROCESS_TIMEOUT = MANUAL_VERIFICATION_TIMEOUT + 300
 MAX_PRODUCTS = 30
 MAX_REVIEWS = 100
 # Lazada scans read up to this many written reviews from each star level; the
-# analysis weights each level back to the listing's star mix.
-LAZADA_REVIEWS_PER_STAR = 60
+# analysis weights each level back to the listing's star mix. Five levels at
+# 200 is at most 1,000 reviews in one scan, the ceiling (the scraper enforces
+# it too: LazadaScraper.MAX_TOTAL_REVIEWS). Lazada's review feed lists at most
+# 300 per level, so more than that could not be read anyway. It was 60.
+LAZADA_REVIEWS_PER_STAR = 200
 # Lazada scans run with no Chrome window; the scraper shows one by itself when
 # Lazada asks for a login or a verification. Reviews are read from Lazada's
 # review feed, which carries whole reviews where the page reader keeps the

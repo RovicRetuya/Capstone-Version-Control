@@ -29,6 +29,7 @@
 		chipFor,
 		counts,
 		GROUP_NAMES,
+		LAZADA_EXTENSION_REVIEWS_PER_STAR,
 		LAZADA_REVIEWS_PER_STAR,
 		liftedBySafety,
 		listingLabel,
@@ -138,7 +139,7 @@
 	const listedCount = $derived(Number(coverage.reviews_listed || coverage.reviews_available || 0) || 0);
 	const sampleNote = $derived(
 		coverage.sampling === 'stratified_by_star'
-			? `We read ${uniqueCount.toLocaleString()} reviews, ${Number(coverage.star_quota || 0) > LAZADA_REVIEWS_PER_STAR ? 'every written review the listing shows' : `up to ${Number(coverage.star_quota || LAZADA_REVIEWS_PER_STAR)} from each star level`}.${coverage.weighted ? ` The percentages are adjusted to reflect the listing's ${availableCount.toLocaleString()} ratings.` : ''}`
+			? `We read ${uniqueCount.toLocaleString()} reviews, ${Number(coverage.star_quota || 0) > LAZADA_EXTENSION_REVIEWS_PER_STAR && !String(product?.platform ?? '').toLowerCase().includes('lazada') ? 'every written review the listing shows' : `up to ${Number(coverage.star_quota || LAZADA_REVIEWS_PER_STAR)} from each star level`}.${coverage.weighted ? ` The percentages are adjusted to reflect the listing's ${availableCount.toLocaleString()} ratings.` : ''}`
 			: listedCount > uniqueCount
 				? `We read ${uniqueCount.toLocaleString()} of this listing's ${listedCount.toLocaleString()} reviews.`
 				: listedCount
