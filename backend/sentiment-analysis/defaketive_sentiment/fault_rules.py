@@ -39,6 +39,15 @@ import re
 F11_REVISION = "f11"
 # f12 (2 Nov 2026) adds the "part" group below to f11: a named part that is stuck, loose, damaged or dead, and "no sound".
 F12_REVISION = "f12"
+# f13 (6 Nov 2026) adds five groups to f11, written from reviews the checker passed although they report a fault:
+#   partial      "only one piece is working", "right lang ang gumagana", "isa lang ang nagana"
+#   was_working  "the cord was working but the adapter wasn't"
+#   connect      "can't connect on a call", "di maka-connect", "unable to pair"
+#   inaccurate   "not accurate", "hnd sya accurate" (not when it is about a colour, picture or size: that is
+#                not-as-described, see F13_VETO)
+#   damage       "may damage", "has a crack" (not when it is the box or the packaging, see F13_VETO)
+# Nothing flagged before is unflagged: these only add.
+F13_REVISION = "f13"
 S2_REVISION = "s2"
 F11_OFF: set[str] = set()
 
@@ -149,6 +158,59 @@ F11_PARTS = {
             re.I,
         ),
     ),
+    "partial": (
+        re.compile(
+            r"(?<!\w)only\s+(?:the\s+)?(?:one|1|isa|left|right|half|a\s+single\s+one|single)(?:\s+[\w'-]+){0,3}?\s+"
+            r"(?:(?:is|are|was|ay)\s+)?(?:working|works|functioning|nagana|gumagana|nakakagana)(?!\w)",
+            re.I,
+        ),
+        re.compile(
+            r"(?<!\w)(?:isa|left|right|kaliwa|kanan|one|1)\s+(?:lang|lng|only)\s+(?:ang\s+|yung\s+|ung\s+|is\s+)?"
+            r"(?:working|gumagana|nagana|gumana|works|nakakagana)(?!\w)",
+            re.I,
+        ),
+    ),
+    "was_working": (
+        re.compile(
+            r"(?<!\w)(?:was|were|is|are)\s+working\s+(?:fine\s+|well\s+)?(?:but|pero|kaso|however)\s+(?:the\s+|yung\s+|ung\s+)?"
+            r"[\w'-]+(?:\s+[\w'-]+){0,3}?\s+(?:wasn'?t|isn'?t|weren'?t|aren'?t|doesn'?t|does\s+not|is\s+not|was\s+not)(?!\w)",
+            re.I,
+        ),
+    ),
+    "connect": (
+        re.compile(
+            r"(?<!\w)(?:can'?t|cannot|can\s+not|couldn'?t|won'?t|doesn'?t|does\s+not|unable\s+to|di|hindi|hnd|hndi)\s+"
+            r"(?:(?:even|po|naman|sya|siya|ako|ma|maka|na|kasi)\s+)*"
+            r"(?:connect\w*|pair\w*|mag\s*connect|maka\s*-?\s*connect|ma\s*-?\s*connect|mag\s*pair|magconnect|"
+            r"makapag\s*-?\s*connect|naka\s*-?\s*connect|naconnect|nakapag\s*-?\s*pair)(?!\w)",
+            re.I,
+        ),
+    ),
+    "inaccurate": (
+        re.compile(
+            r"(?<!\w)(?:not|hindi|hnd|hndi|di|isn'?t|is\s+not|wasn'?t)\s+(?:(?:sya|siya|po|naman|talaga|so|very|too|really|that|masyadong|masyado)\s+)*"
+            r"(?:accurate|tumpak|precise)(?!\w)",
+            re.I,
+        ),
+        re.compile(r"(?<!\w)inaccurate(?!\w)", re.I),
+    ),
+    "damage": (
+        re.compile(
+            r"(?<!\w)(?<!no\s)(?<!not\s)(?<!walang\s)(?<!wala\s)(?<!without\s)(?:may|merong|meron|nagka|has|have|had)\s+"
+            r"(?:(?:po|ng|na|konting|kunting|kunti|slight|small|minor|a|an|some)\s+)*"
+            r"(?:damage[ds]?|sira|basag|crack(?:s|ed)?|bitak)(?!\w)",
+            re.I,
+        ),
+    ),
+}
+# A part that must not fire when the sentence is about something else.
+F13_VETO = {
+    "inaccurate": re.compile(r"(?<!\w)(?:colou?rs?|kulay|photos?|pictures?|pics?|size|description|listing|ads?)(?!\w)", re.I),
+    "damage": re.compile(
+        r"(?<!\w)(?:box|boxes|packag\w*|packing|parcel|kahon|balot|wrap\w*|plastic|pouch|sticker|seal\w*|shipping|"
+        r"courier|rider|delivery|cover|packed|akala|kala|thought|naman|okay|ok|oks)(?!\w)",
+        re.I,
+    ),
 }
 F11_GUARD = re.compile(
     r"(?<!\w)(?:sana|hope|hopefully|baka|wish|if|kung|pag\s+di|unless|i\s+hope|para\s+di|para\s+hindi|wag\s+sana|no\s+need|needed|"
@@ -192,6 +254,8 @@ def f11_match(raw: str) -> tuple[str, tuple[int, int]] | None:
             if part == "not_working" and MISTAKEN.search(text):
                 break
             if part == "drain" and STOCK.search(text):
+                break
+            if part in F13_VETO and F13_VETO[part].search(text):
                 break
             if part == "slow_charge" and FAST_NOT_CHARGING.search(text[found.start(): found.end() + 20]):
                 continue
