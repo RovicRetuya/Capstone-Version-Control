@@ -694,10 +694,13 @@ class PasswordRequestsTest(AdminTestCase):
         self.assertGreaterEqual(len(answer["password"]), 8)
         self.assertIsNone(accounts.authenticate(DATABASE(), user["email"], PASSWORD))
         self.assertIsNotNone(accounts.authenticate(DATABASE(), user["email"], answer["password"]))
-        listed = client.get("/api/admin/password-requests?status=done").get_json()
-        self.assertEqual((listed["counts"]["done"], listed["requests"][0]["id"]), (1, request_id))
-        reopened = client.put(f"/api/admin/password-requests/{request_id}", json={"status": "new"})
-        self.assertEqual(reopened.status_code, 200)
+        # A handled request holds email addresses, so it is deleted, not kept.
+        everything = client.get("/api/admin/password-requests").get_json()
+        self.assertEqual((everything["counts"]["total"], everything["requests"]), (0, []))
+        with accounts._connect(DATABASE()) as connection:
+            self.assertEqual(connection.execute("SELECT COUNT(*) FROM password_requests").fetchone()[0], 0)
+        gone = client.put(f"/api/admin/password-requests/{request_id}", json={"status": "new"})
+        self.assertEqual(gone.status_code, 404)
         self.assertEqual(client.put(f"/api/admin/password-requests/{request_id}", json={"status": "?"}).status_code, 400)
         self.assertEqual(client.post("/api/admin/password-requests/999999/reset").status_code, 404)
 
