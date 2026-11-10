@@ -10,6 +10,9 @@ password typed into this form is not written to the database, the log or an emai
 
 The form answers the same way whether or not an account exists, so it can't be used to find out who has one.
 Each connection may send a few requests an hour.
+
+A request holds email addresses, so it is deleted as soon as the admin has handled it (set_status "done", which the
+"set a new password" button also does). Handled requests left over from before are deleted when the table is opened.
 """
 
 from __future__ import annotations
@@ -71,6 +74,7 @@ def _allowed(key: str) -> bool:
 
 def ensure_schema(connection: Any) -> None:
     connection.executescript(SCHEMA)
+    connection.execute("DELETE FROM password_requests WHERE status = 'done'")
 
 
 def _clean(value: Any, limit: int) -> str:
@@ -142,12 +146,14 @@ def get_request(connection: Any, request_id: int) -> Any:
 
 
 def set_status(connection: Any, request_id: int, status: str) -> bool:
+    """Mark a request new, or handled. A handled request is deleted (it holds email addresses), so it is gone for good."""
     if status not in STATUSES:
         return False
     ensure_schema(connection)
-    handled = "datetime('now')" if status == "done" else "NULL"
+    if status == "done":
+        return bool(connection.execute("DELETE FROM password_requests WHERE id = ?", (int(request_id),)).rowcount)
     return bool(connection.execute(
-        f"UPDATE password_requests SET status = ?, handled_at = {handled} WHERE id = ?", (status, int(request_id))
+        "UPDATE password_requests SET status = ?, handled_at = NULL WHERE id = ?", (status, int(request_id))
     ).rowcount)
 
 

@@ -192,7 +192,7 @@
 			<code class="bg-muted min-w-0 flex-1 rounded-md px-3 py-2 font-mono text-base break-all select-all" aria-label="The new password">{shown?.password}</code>
 			<Button variant="outline" size="icon" aria-label="Copy the password" onclick={copy}>{#if copied}<CheckIcon />{:else}<CopyIcon />{/if}</Button>
 		</div>
-		<p class="text-muted-foreground text-sm">They should sign in with it, then change it in Settings. The request is now marked as handled.</p>
+		<p class="text-muted-foreground text-sm">They should sign in with it, then change it in Settings. The request has been deleted, because it held email addresses.</p>
 		<DialogFooter><Button onclick={() => (showOpen = false)}>Done</Button></DialogFooter>
 	</DialogContent>
 </Dialog>

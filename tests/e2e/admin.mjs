@@ -504,10 +504,8 @@ await context.request.put(base + '/api/admin/limits', { data: before });
 	check(fresh.length >= 8 && fresh !== PASSWORD, 'admin: a new password is made and shown once');
 	check((await reveal.getByText(/No email could be sent/).count()) === 1, 'admin: with no mail account set up, the dialog says to hand it over yourself');
 	await reveal.getByRole('button', { name: 'Done' }).click();
-	await page.locator('#request-status').click();
-	await page.getByRole('option', { name: 'Handled' }).click();
-	await card.waitFor({ timeout: 10000 });
-	check(/Handled/.test(await card.innerText()), 'admin: the request is now under Handled');
+	await card.waitFor({ state: 'detached', timeout: 10000 });
+	check(true, 'admin: once handled, the request is deleted and leaves the list');
 
 	// The person signs in with the new password, and the old one no longer works.
 	const old = await forgetter.context.request.post(base + '/api/auth/login', { data: { email: who.email, password: PASSWORD } });
