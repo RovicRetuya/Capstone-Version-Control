@@ -1,18 +1,22 @@
 """Runs DeFaketive for the public: the finished screens and the data from one address, on a proper web server.
 
-Run it with the original app's Python (public.cmd does this, with --https --proxy cloudflare):
+This is what runs the live site (https://defaketive.duckdns.org): a Linux server (an Azure VM) where the systemd
+service `defaketive` (deploy/defaketive.service) runs
 
-    ..\\Capstone-Version-Control-Version-1.1\\.venv\\Scripts\\python.exe serve.py
-    ..\\Capstone-Version-Control-Version-1.1\\.venv\\Scripts\\python.exe serve.py --https --proxy cloudflare
+    backend/.venv/bin/python serve.py --https --proxy cloudflare --port 8080
 
-How it differs from start.cmd, which stays the way to use the app on this PC:
+with Caddy in front of it (deploy/Caddyfile), giving the https address and passing the visitor's address along. It
+can also be run on a PC with public.cmd (the same options, with the Python that cmd file finds).
+
+How it differs from start.cmd, which stays the way to use the app on a developer's PC:
 
 - Waitress serves, not Flask's development server and Vite's preview. It is ONE process with many threads: the
   progress of running scans lives in this process's memory, so the app must never run as several processes.
 - The screens (build/, made by `npm run build`) and /api come from the same address, so nothing passes /api along.
 - The scan progress tells visitors that a team member has to clear a Lazada check (protections.use_public_wording).
-- --https: sign-in cookies travel only over https. --proxy cloudflare: the visitor's address is read from
-  Cloudflare's header (only on requests that come from this computer, which is where cloudflared runs).
+- --https: sign-in cookies travel only over https. --proxy cloudflare: the visitor's address is read from the
+  CF-Connecting-IP header, but only on requests that come from this computer. On the live server Caddy sets that
+  header itself (replacing anything a visitor sends); on a PC with Cloudflare Tunnel, Cloudflare sets it.
 - Both databases are backed up a minute after start and then once a day (scripts/backup_databases.py).
 - A few safety headers on every answer, and /api answers are never cached.
 - The admin side is a page of the app itself (/admin), signed in on the same sign-in as everyone else; only the one
@@ -43,7 +47,7 @@ BACKUP_EVERY = 24 * 60 * 60
 def _arguments(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run DeFaketive for the public.")
     parser.add_argument("--host", default="127.0.0.1", help="address to listen on (default 127.0.0.1: this computer only, "
-                        "which is all Cloudflare Tunnel needs)")
+                        "which is all Caddy or Cloudflare Tunnel needs)")
     parser.add_argument("--port", type=int, default=int(os.environ.get("PORT", "8080")), help="port (default 8080)")
     parser.add_argument("--threads", type=int, default=16, help="requests served at the same time (default 16)")
     parser.add_argument("--https", action="store_true", help="the public reaches the app over https (sign-in cookies "
@@ -57,7 +61,7 @@ def _arguments(argv: list[str] | None = None) -> argparse.Namespace:
 def create_public_app(https: bool = False) -> Any:
     """The original app with server.py's routes and protections, serving build/ and wording scans for the public."""
     if not (BUILD / "index.html").is_file():
-        sys.exit(f"The finished app was not found in {BUILD}. Run `npm run build` first (public.cmd does this).")
+        sys.exit(f"The finished app was not found in {BUILD}. Run `npm run build` first (deploy/setup-server.sh and public.cmd do this).")
 
     import protections
     import server

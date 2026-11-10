@@ -49,7 +49,7 @@ from typing import Any
 
 from flask import Flask, Response, current_app, g, jsonify, request
 
-# The original's admin routes by name: /api/admin/ itself now holds the admin app's own routes (admin_api.py).
+# The original's admin routes by name: /api/admin/ itself now holds the admin page's own routes (admin_api.py).
 CLOSED_PATHS = frozenset({
     "/api/upload", "/api/evaluation", "/api/survey",
     "/api/admin/overview", "/api/admin/database", "/api/admin/lexicons", "/api/admin/logs",
@@ -97,7 +97,7 @@ def _setting(name: str, default: int) -> int:
 
 
 class Limits:
-    """The numbers, read when the app starts. The admin app changes site, account and network on the object
+    """The numbers, read when the app starts. The admin page changes site, account and network on the object
     (admin_api.py keeps them), and so do tests."""
 
     def __init__(self) -> None:
@@ -182,9 +182,10 @@ def without_names(product: Any) -> Any:
 def client_address() -> str:
     """The visitor's internet address.
 
-    Behind Cloudflare Tunnel every request comes from cloudflared on this computer, and Cloudflare names the real
-    visitor in CF-Connecting-IP. That header is believed only when DEFAKETIVE_PROXY=cloudflare and the request
-    really came from this computer; otherwise anyone could pick their own address.
+    Behind a proxy on this same computer (Caddy on the live server, cloudflared on a PC) every request comes from
+    the proxy, which names the real visitor in CF-Connecting-IP (Caddy sets it itself: deploy/Caddyfile). That
+    header is believed only when DEFAKETIVE_PROXY=cloudflare (serve.py --proxy cloudflare) and the request really
+    came from this computer; otherwise anyone could pick their own address.
     """
     remote = request.remote_addr or ""
     if os.environ.get("DEFAKETIVE_PROXY") == "cloudflare" and remote in {"127.0.0.1", "::1"}:

@@ -1,19 +1,24 @@
 """Reviews collected by the DeFaketive browser extension, checked and analysed like a scan's.
 
-The extension (extension/) reads a Lazada product's reviews in the shopper's own browser, from the same review
-list our scanner reads, in the same way: up to 60 written reviews from each star level, star levels in the order
-3, 2, 4, 1, 5, at most 300 entries deep per list, 50 per request. The DeFaketive page the extension opens then sends
-them here, signed in, as JSON:
+The extension (extension/) reads a product's reviews in the shopper's own browser and the DeFaketive page it
+opens then sends them here, signed in, as JSON. Two marketplaces, two collectors:
+
+- Lazada PH: from the same review list our scanner reads, in the same way, but fewer: up to 60 written reviews from
+  each star level (the website's own paste-a-link scan reads up to 200), star levels in the order 3, 2, 4, 1, 5, at
+  most 300 entries deep per list, 50 per request.
+- Shopee PH: every written review the product's review list gives, 59 per request, with no quota and no depth
+  limit (SHOPEE_MAX_REVIEWS only bounds what a browser may send).
 
     POST /api/extension/check   {"product": {...}}   ->  202 {"job": {...}}, then /api/jobs/<id> as for a scan
 
 Nothing a browser sends can be trusted, so before anything is analysed:
 
 - only a signed-in account may send (and the daily limits of protections.py count it like a scan);
-- every field is checked for its type and size, the link must be a Lazada PH product page;
+- every field is checked for its type and size, the link must be a Lazada PH or a Shopee PH product page;
 - the numbers must add up: five star counts, an average that matches them, each star level's reviews no more than
-  that level lists and no more than 60, every review's stars matching its level, and each level's stop reason
-  matching what was collected (60 reviews for "target_reached", none for a level that lists none, and so on).
+  that level lists (and, for Lazada, no more than 60), every review's stars matching its level, and each level's
+  stop reason matching what was collected (Lazada: 60 reviews for "target_reached", none for a level that lists
+  none, and so on).
 
 The report is then built exactly as the scanner builds one (lazada-scraper/src/lazada_scraper.py: the feed's
 fields, its dates, its record of each star level), so the checker cannot tell the two apart, except for
@@ -47,7 +52,7 @@ import protections
 
 blueprint = Blueprint("extension", __name__, url_prefix="/api/extension")
 
-QUOTA = 60  # written reviews per star level, as LAZADA_REVIEWS_PER_STAR in the original app
+QUOTA = 60  # Lazada reviews per star level the extension reads (LAZADA_EXTENSION_REVIEWS_PER_STAR in src/lib/product.ts); a paste-a-link scan reads 200
 FEED_DEPTH = 300
 SHOPEE_MAX_REVIEWS = 30_000  # the Shopee collector reads every written review; this only bounds what a browser may send
 COLLECTION_ORDER = (3, 2, 4, 1, 5)
@@ -282,7 +287,7 @@ def product_from_extension(sent: Any) -> dict[str, Any]:
 
 
 def install(webapp: Any, app: Any = None) -> protections.ScanQueue:
-    """Add the route to the original app. Analyses wait their turn in their own queue."""
+    """Add the route to the Flask app (backend/webapp.py). Analyses wait their turn in their own queue."""
     app = app or webapp.app
     analyses = protections.ScanQueue(
         webapp._jobs, webapp._lock, parallel=lambda: 1,

@@ -12,7 +12,7 @@ Either way a listing is scanned only if it has at least --min-ratings ratings (1
 written reviews a verdict needs. One with fewer is looked at once and passed over.
 
 How. The original app's own scraper, the way the app runs it with the review feed: no Chrome window, all five
-star levels, up to 60 written reviews from each, ratings per star level recorded. The scans go to this project's
+star levels, up to 200 written reviews from each, ratings per star level recorded. The scans go to this project's
 backups/pool-scans/, never the original app's folder (its scan files are sources for its labelling work) and never
 its research/data/reference_scans/feed/ (those are the listings the baseline was measured on, and must stay that
 set). A login or a verification is not waited for and never answered: a run that reads nothing from the feed stops
@@ -50,7 +50,7 @@ LOG = OUT / "scan_log.json"
 SCRAPER = ORIGINAL / "lazada-scraper" / "src" / "lazada_scraper.py"
 BASELINE_SCANS = ORIGINAL / "research" / "data" / "reference_scans" / "feed"
 DISCOVERY = ORIGINAL / "research" / "data"
-PER_STAR = 60          # webapp.LAZADA_REVIEWS_PER_STAR
+PER_STAR = 200         # webapp.LAZADA_REVIEWS_PER_STAR
 TIME_BUDGET = 40 * 60  # one run: a search and up to a couple of dozen listings
 PAUSE_SECONDS = 10
 

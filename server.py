@@ -1,6 +1,8 @@
-"""Starts the original DeFaketive app plus the few extra, read-only routes the shadcn version needs.
+"""Starts the DeFaketive Flask app plus the few extra routes the SvelteKit screens need.
 
-The original app (../Capstone-Version-Control-Version-1.1) is imported, not edited. Its accounts, scan limits, live
+The Flask app (backend/webapp.py, a copy of the original capstone app made by scripts/sync_backend.py) is imported,
+not edited. On the live server that copy is the only one there is; on the developer's PC the original app beside
+this folder is used instead when it is there (see _original_app). Its accounts, scan limits, live
 scans, review checker and verdict wording all stay exactly as they are, and it keeps using the same two databases:
 `defaketive.db` (analyzed products and reviews) and `instance/accounts.db` (accounts, history, wishlist).
 
@@ -14,16 +16,16 @@ another person scanned) cannot be opened. The routes below add that, reading the
     GET /api/saved/popular           products saved by two or more accounts, with how many saved them
 
 It also puts in place what protects the app once the public can reach it (protections.py), the route the
-browser extension sends collected reviews to (extension_api.py, POST /api/extension/check), and the admin app's
-routes for the DTI staff who run the site (admin_api.py, /api/admin/*: accounts and daily limits).
+browser extension sends collected reviews to (extension_api.py, POST /api/extension/check), and the admin page's
+routes for the DTI staff who run the site (admin_api.py, /api/admin/*: accounts, daily limits, reports, password
+requests), plus the "Report a problem" and "Forgot password" forms and the Lazada short-link resolver.
 
 Who sees what: these routes serve the SHARED pool (the products table), which is what recommendations are picked
 from. A person's own history and wishlist stay in their account (user_activity, user_wishlist) and are only ever
 served to them, by the original app's /api/me/* routes.
 
-Run it with the original's Python (start.cmd does this):
-
-    ..\\Capstone-Version-Control-Version-1.1\\.venv\\Scripts\\python.exe server.py
+This file alone is the app on a developer's PC (start.cmd and dev.cmd run it on port 5000, with the screens on
+port 5173). The live site runs serve.py instead, which imports this file and adds the public web server.
 """
 
 from __future__ import annotations
@@ -210,7 +212,8 @@ extension_api.saved_report = _saved_report
 
 @webapp.app.before_request
 def one_address():
-    """A page opened at http://127.0.0.1:5000 goes to http://localhost:5000: the same computer, but the browser keeps
+    """Developer PC only (the live site is never opened at 127.0.0.1:5000): a page opened at
+    http://127.0.0.1:5000 goes to http://localhost:5000: the same computer, but the browser keeps
     separate sign-ins for the two names, so people were seeing two apps. Only pages are moved, never /api calls."""
     if request.method == "GET" and request.host == "127.0.0.1:5000" and not request.path.startswith("/api/"):
         if "text/html" in request.headers.get("Accept", ""):
@@ -218,8 +221,8 @@ def one_address():
     return None
 
 
-# The admin side's accounts and daily limits, open only to admin accounts (admin_api.py: Admin@defake.com and the
-# admins it makes).
+# The admin page's routes (accounts, daily limits, Products page options, reports, password requests), open only to
+# admin accounts (admin_api.py: Admin@defake.com and the admins it makes).
 # After protections.install, so the limits an admin saved replace the environment's.
 admin_api.install(webapp, products_db=DEFAULT_DB)
 # The "Report a problem" form (problem_reports.py).

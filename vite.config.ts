@@ -3,7 +3,7 @@ import adapter from '@sveltejs/adapter-static';
 import { sveltekit } from '@sveltejs/kit/vite';
 import { defineConfig } from 'vite';
 
-// The DeFaketive Flask app (in ../Capstone-Version-Control-Version-1.1) does all the
+// The DeFaketive Flask app (server.py, on port 5000 while developing; on the live site serve.py serves both) does all the
 // real work: accounts, scans, the review checker and the wording of every verdict.
 // This app is only a new face for it, so every /api call is passed straight through.
 declare const process: { env: Record<string, string | undefined> };

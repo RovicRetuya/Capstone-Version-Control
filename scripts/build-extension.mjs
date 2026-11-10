@@ -2,10 +2,11 @@
 //
 //   node scripts/build-extension.mjs                          -> for http://localhost:5173 (start.cmd)
 //   node scripts/build-extension.mjs --site http://127.0.0.1:8080          (public.cmd on this PC)
-//   node scripts/build-extension.mjs --site https://defaketive.example     (the public address)
+//   node scripts/build-extension.mjs --site https://defaketive.duckdns.org (the live site; deploy/setup-server.sh
+//                                                                           runs it with --download)
 //
-// Writes dist-extension/ (load it in Chrome: chrome://extensions, Developer mode, "Load unpacked") and, on Windows,
-// dist-extension.zip (what the Chrome Web Store takes). extension/ itself is left as it is.
+// Writes dist-extension/ (load it in Chrome: chrome://extensions, Developer mode, "Load unpacked") and
+// dist-extension.zip (what the Chrome Web Store takes; made with Windows' tar, or `zip` on Linux). extension/ itself is left as it is.
 // --out <folder> writes the copy somewhere else, with no .zip (the browser tests use this).
 // --download also puts the .zip in static/downloads/, so the site's "Get the extension" page offers it for download
 // (after the next build of the app).
