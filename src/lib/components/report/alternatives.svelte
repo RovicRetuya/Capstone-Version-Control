@@ -13,10 +13,10 @@
 	const shown = $derived(recommendations.slice(0, 3));
 </script>
 
-<Card>
+<Card class="min-w-0 [overflow-wrap:anywhere] [&_a]:h-auto [&_a]:min-h-11 [&_a]:whitespace-normal [&_a]:py-2">
 	<CardHeader>
 		<p class="text-muted-foreground text-xs font-medium tracking-wide uppercase">Other options</p>
-		<CardTitle class="text-xl">Similar products with no warnings</CardTitle>
+		<CardTitle><h2 class="text-xl font-semibold">Similar products with no warnings</h2></CardTitle>
 		<CardDescription>Enough reviews, and not a single safety report.</CardDescription>
 	</CardHeader>
 	<CardContent>
@@ -27,10 +27,10 @@
 					{@const link = safeLink(item.link)}
 					{@const found = counts(item)}
 					{@const positive = sentimentPercentages(item).find((entry) => entry.label === 'Positive')?.percent ?? 0}
-					<article class="reveal grid content-start gap-3 rounded-lg border p-4" style="--i:{index}">
+					<article class="reveal grid min-w-0 content-start gap-3 rounded-lg border p-4" style="--i:{index}">
 						<header class="flex gap-3">
 							<ProductImage src={image} name={item.name} compact class="size-20 shrink-0 rounded-lg" />
-							<h3 class="line-clamp-3 text-sm leading-snug font-medium">{item.name || 'Unnamed product'}</h3>
+							<h3 class="min-w-0 text-sm leading-snug font-medium">{item.name || 'Unnamed product'}</h3>
 						</header>
 						<b>{money(item.price)}</b>
 						<dl class="grid grid-cols-3 gap-2 text-xs">
@@ -49,7 +49,8 @@
 				{/each}
 			</div>
 		{:else}
-			<p class="text-muted-foreground text-sm">No similar product with enough reviews and no warnings has been checked yet.</p>
+			<p class="text-muted-foreground text-sm">No similar product with enough reviews and no warnings is available in this report. Check another listing to compare its reviews and warnings.</p>
+			<Button variant="outline" class="mt-3" href={guest ? '/scan' : '/app/analyze'}>Check another product</Button>
 		{/if}
 	</CardContent>
 </Card>

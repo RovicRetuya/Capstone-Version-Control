@@ -22,7 +22,7 @@
 
 <div class="flex min-h-svh flex-col">
 	<SiteHeader />
-	<main class="page-view mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6 px-4 py-8 md:px-6 md:py-10">
+	<main id="main-content" tabindex="-1" class="page-view mx-auto flex w-full min-w-0 max-w-5xl flex-1 flex-col gap-6 px-4 py-8 sm:gap-8 md:px-6 md:py-12">
 		{@render children()}
 	</main>
 	<SiteFooter />
