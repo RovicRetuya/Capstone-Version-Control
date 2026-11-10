@@ -29,6 +29,69 @@ NOT_FAULTS = [
 ]
 
 
+NEGATED_DAMAGE = [
+    "Yung Hindi agad mag crack pag nhulog",
+    "doesn't easily crack",
+    "di basta basta mag crack",
+    "hindi madaling mabasag",
+    "never scratches or dents",
+    "won't break even when dropped",
+    "hindi agad masira, matibay",
+    "walang gasgas",
+    "zero damage",
+    "scratch resistant",
+    "crack-proof, anti-scratch",
+    "protects against cracks",
+    "para di mag crack",
+]
+NEGATED_DRAIN = [
+    "battery doesn't drain quickly",
+    "hindi ito mabilis malowbat",
+    "hindi mabilis mag drain",
+]
+TRUE_DRAIN = [
+    "battery drains fast",
+    "mabilis malowbat",
+    "does not last and drains quickly",
+]
+REAL_DAMAGE = [
+    "may crack na ang screen",
+    "arrived cracked",
+    "dumating na basag",
+    "nasira agad pagdating",
+]
+
+
+class NegatedDamage(unittest.TestCase):
+    def test_negated_damage_is_not_flagged(self) -> None:
+        from defaketive_sentiment.extra_labels import quality_spans
+        from defaketive_sentiment.risk_heads import HybridRiskCategoryClassifier as H
+
+        for text in NEGATED_DAMAGE:
+            with self.subTest(text=text):
+                self.assertLess(H.damage_probability(text), 0.1)
+                self.assertEqual(quality_spans(text.lower()), [])
+
+    def test_real_damage_is_still_flagged(self) -> None:
+        from defaketive_sentiment.risk_heads import HybridRiskCategoryClassifier as H
+
+        for text in REAL_DAMAGE[:3]:
+            with self.subTest(text=text):
+                self.assertGreater(H.damage_probability(text), 0.5)
+
+
+class DrainNegation(unittest.TestCase):
+    def test_negated_drain_is_not_flagged(self) -> None:
+        for text in NEGATED_DRAIN:
+            with self.subTest(text=text):
+                self.assertIsNone(f11_match(text))
+
+    def test_real_drain_is_flagged(self) -> None:
+        for text in TRUE_DRAIN:
+            with self.subTest(text=text):
+                self.assertIsNotNone(f11_match(text))
+
+
 class FaultRules(unittest.TestCase):
     def test_faults_are_flagged(self) -> None:
         for text in FAULTS:
