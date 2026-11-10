@@ -36,7 +36,7 @@
 		['Read the result', 'A plain result on safety, fakes and defects, with the exact reviews behind it.'],
 		['Shop smarter', 'If reviewers report problems, compare similar products with no warnings.']
 	];
-	const platforms = ['Lazada PH'];
+	const platforms = ['Lazada PH', 'Shopee PH'];
 </script>
 
 <svelte:head><title>DeFaketive · See what buyers report before you buy</title></svelte:head>
@@ -63,7 +63,7 @@
 			<div class="flex items-center justify-between">
 				<h2 class="text-sm font-semibold tracking-wide uppercase">Check a product</h2>
 			</div>
-			<ScanStartForm placeholder="Paste a product link..." target={auth.user ? '/app/analyze' : '/scan'} />
+			<ScanStartForm placeholder="Paste a Lazada PH link..." target={auth.user ? '/app/analyze' : '/scan'} />
 		</Card>
 	</section>
 
@@ -73,7 +73,7 @@
 			{#if catalog.stats}
 				<div class="min-w-0"><dd class="text-2xl font-semibold tabular-nums sm:text-3xl"><CountUp value={catalog.stats.products} /></dd><dt class="text-muted-foreground text-xs sm:text-sm">Products checked</dt></div>
 				<div class="min-w-0"><dd class="text-2xl font-semibold tabular-nums sm:text-3xl"><CountUp value={catalog.stats.reviews} /></dd><dt class="text-muted-foreground text-xs sm:text-sm">Reviews analyzed</dt></div>
-				<div class="min-w-0"><dd class="text-2xl font-semibold break-words sm:text-3xl">{platforms.join(', ')}</dd><dt class="text-muted-foreground text-xs sm:text-sm">The marketplace we check</dt></div>
+				<div class="min-w-0"><dd class="text-2xl font-semibold break-words sm:text-3xl">{platforms.join(', ')}</dd><dt class="text-muted-foreground text-xs sm:text-sm">The marketplaces we check</dt></div>
 			{:else}
 				{#each [1, 2, 3] as n (n)}<Skeleton class="mx-auto h-14 w-32" />{/each}
 			{/if}

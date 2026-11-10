@@ -133,7 +133,7 @@ check(pool.products.every((p) => p.updated_at || p.analysis_date || p.analyzed_a
 	// ---- D. Signed in, the landing page still stops on the check page (it also offers to check again) ----
 	await page.goto(base + '/', { waitUntil: 'networkidle' });
 	await settle(page, 1200);
-	await page.getByPlaceholder('Paste a product link...').fill(CLEAN.link);
+	await page.getByPlaceholder('Paste a Lazada PH link...').fill(CLEAN.link);
 	await page.getByRole('button', { name: 'Check', exact: true }).click();
 	await page.waitForURL(/\/app\/analyze\?q=/, { timeout: 10000 });
 	await settle(page, 700);
