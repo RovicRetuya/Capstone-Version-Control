@@ -21,6 +21,7 @@
 	import { auth } from '#lib/stores/auth.svelte.js';
 	import { library } from '#lib/stores/library.svelte.js';
 	import { ui } from '#lib/stores/ui.svelte.js';
+	import ForgotPasswordDialog from './forgot-password-dialog.svelte';
 	import Logo from './logo.svelte';
 	import PasswordInput from './password-input.svelte';
 
@@ -86,6 +87,14 @@
 		}
 	}
 
+	let forgot = $state(false);
+
+	// Forgot password opens in its own dialog, so this one closes first.
+	function forgotPassword() {
+		ui.authOpen = false;
+		forgot = true;
+	}
+
 	function continueAsGuest() {
 		ui.authOpen = false;
 		goto('/scan');
@@ -98,7 +107,7 @@
 			<Logo href="#" class="mb-2 w-fit" />
 			<DialogTitle class="text-xl">{signup ? 'Create account' : 'Sign in'}</DialogTitle>
 			<DialogDescription>
-				{signup ? 'Free account: unlimited scans, saved history, a wishlist.' : 'Welcome back. Detect the defect.'}
+				{signup ? 'Free account: unlimited scans, saved history, a wishlist, and the Shopee extension.' : 'Welcome back. Detect the defect.'}
 			</DialogDescription>
 		</DialogHeader>
 
@@ -124,6 +133,9 @@
 					<FieldLabel for="auth-password">Password</FieldLabel>
 					<PasswordInput id="auth-password" name="password" autocomplete={signup ? 'new-password' : 'current-password'} placeholder="At least 8 characters" bind:value={password} invalid={!!errors.password} />
 					{#if errors.password}<FieldError>{errors.password}</FieldError>{/if}
+					{#if !signup}
+						<button type="button" class="text-muted-foreground hover:text-foreground w-fit text-sm underline underline-offset-4" onclick={forgotPassword}>Forgot password?</button>
+					{/if}
 				</Field>
 				{#if signup}
 					<Field data-invalid={!!errors.confirm}>
@@ -176,3 +188,5 @@
 		</p>
 	</DialogContent>
 </Dialog>
+
+<ForgotPasswordDialog bind:open={forgot} {email} />

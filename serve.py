@@ -75,6 +75,9 @@ def create_public_app(https: bool = False) -> Any:
     def screens(path: str = "") -> Any:
         if path == "api" or path.startswith("api/"):
             return jsonify({"error": "Not found."}), 404
+        # The extension .zip is for people with an account: a guest (or a copied link) gets a 401, not the file.
+        if path.startswith("downloads/") and not server.webapp._current_user():
+            return jsonify({"error": "Sign in to download the extension."}), 401
         if path:
             candidate = (build / path).resolve()
             if candidate.is_relative_to(build) and candidate.is_file():

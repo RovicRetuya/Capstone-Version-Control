@@ -83,7 +83,7 @@
 		['We read the reviews', 'In English, Filipino and Taglish, looking for reports of fakes, defects and safety problems.'],
 		['Read the result', 'A plain result with the reviewers\' own words behind it. No score.']
 	];
-	const perks = ['Unlimited scans', 'Your scan history, on any device', 'Save products to a wishlist', 'Search every product already checked'];
+	const perks = ['Unlimited scans', 'Your scan history, on any device', 'Save products to a wishlist', 'Search every product already checked', 'The Shopee scraper extension (download is for account holders only)'];
 </script>
 
 <svelte:head><title>Check a product · DeFaketive</title></svelte:head>

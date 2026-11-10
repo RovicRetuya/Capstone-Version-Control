@@ -31,29 +31,29 @@
 
 {#snippet block(badge: Badge, index: number)}
 	{@const quote = badge.evidence?.[0]}
-	<div class="reveal grid content-start gap-2" style="--i:{index}">
-		<div class="flex items-baseline justify-between gap-3">
+	<div class="reveal bg-card flex h-full flex-col gap-2 rounded-xl border p-4" style="--i:{index}">
+		<div class="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
 			<span class="font-medium">{badge.label}</span>
-			<b class="text-sm tabular-nums"><CountUp value={badge.mentions} /> review{badge.mentions === 1 ? '' : 's'}</b>
+			<b class="text-muted-foreground text-xs font-medium tabular-nums"><CountUp value={badge.mentions} /> review{badge.mentions === 1 ? '' : 's'}</b>
 		</div>
 		<!-- What this label covers, in the server's own words. -->
-		{#if badge.helper}<p class="text-muted-foreground -mt-1 text-xs">{badge.helper}</p>{/if}
+		{#if badge.helper}<p class="text-muted-foreground -mt-1 text-xs max-sm:hidden">{badge.helper}</p>{/if}
 		<Progress
 			value={width(badge.mentions)}
 			aria-label="{badge.mentions} of {uniqueCount} reviews"
 			class={badge.category === 'safety' && badge.mentions ? safetyBar : plainBar}
 		/>
-		<p class="text-muted-foreground text-sm">{badge.summary}</p>
+		<p class="text-sm">{badge.summary}</p>
 		{#if quote}
 			<blockquote class="bg-muted/50 grid gap-1.5 rounded-lg border-s-0 p-3 text-sm">
-				<p><Highlighted pieces={segments(quote.text, quote.highlights)} /></p>
+				<p class="line-clamp-5 break-words"><Highlighted pieces={segments(quote.text, quote.highlights)} /></p>
 				{#if quote.hazard || quote.rating}
 					<small class="text-muted-foreground text-xs">
 						{[quote.hazard ? `Reports ${quote.hazard}` : '', quote.rating ? `${Number(quote.rating).toFixed(0)}-star review` : ''].filter(Boolean).join(' · ')}
 					</small>
 				{/if}
 			</blockquote>
-			<Button variant="link" size="sm" class="w-fit px-0" onclick={() => onread(badge.category)}>
+			<Button variant="link" size="sm" class="mt-auto w-fit px-0" onclick={() => onread(badge.category)}>
 				Read all {badge.mentions} <ArrowRightIcon />
 			</Button>
 		{/if}
@@ -66,12 +66,12 @@
 		<CardTitle class="text-xl">Each check, in their own words</CardTitle>
 		<CardDescription>The sentences the check flagged, with the words it matched highlighted.</CardDescription>
 	</CardHeader>
-	<CardContent class="grid gap-6">
+	<CardContent class="grid gap-6 max-sm:px-4">
 		{#if deciding.length}
 			<section class="grid gap-4" aria-labelledby="checks-deciding">
 				<h3 id="checks-deciding" class="text-sm font-semibold">Can change the result</h3>
 				<!-- Side by side on a wide screen, so the card is not one long strip. -->
-				<div class="grid grid-cols-1 content-start gap-x-10 gap-y-6 lg:grid-cols-2 xl:grid-cols-3">
+				<div class="grid grid-cols-1 items-stretch gap-3 md:grid-cols-2 xl:grid-cols-3">
 					{#each deciding as badge, index (badge.category)}{@render block(badge, index)}{/each}
 				</div>
 			</section>
@@ -83,7 +83,7 @@
 					<h3 id="checks-informing" class="text-sm font-semibold">Doesn't change the result</h3>
 					<p class="text-muted-foreground text-xs">Still worth knowing before you buy.</p>
 				</div>
-				<div class="grid grid-cols-1 content-start gap-x-10 gap-y-6 lg:grid-cols-2 xl:grid-cols-3">
+				<div class="grid grid-cols-1 items-stretch gap-3 md:grid-cols-2 xl:grid-cols-3">
 					{#each informing as badge, index (badge.category)}{@render block(badge, deciding.length + index)}{/each}
 				</div>
 			</section>

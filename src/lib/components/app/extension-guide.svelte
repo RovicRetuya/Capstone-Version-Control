@@ -15,6 +15,7 @@
 	import { EXTENSION_CONTACT, EXTENSION_DOWNLOAD, extensionFileAvailable } from '#lib/extension-download.js';
 	import { LAZADA_EXTENSION_REVIEWS_PER_STAR } from '#lib/product.js';
 	import { auth } from '#lib/stores/auth.svelte.js';
+	import { ui } from '#lib/stores/ui.svelte.js';
 
 	// What the browser extension is, how to put it in Chrome or Edge, and how to check a Lazada or a Shopee product with
 	// it, written for someone who has never added an extension. The same page sits on the public site (/extension) and
@@ -110,12 +111,19 @@
 </Alert>
 
 <div class="flex flex-wrap items-center gap-3" aria-live="polite">
-	{#if download}
+	{#if !auth.user}
+		<Button size="lg" onclick={() => ui.openAuth('signin')}><DownloadIcon /> Sign in to download the extension</Button>
+	{:else if download}
 		<Button size="lg" href={DOWNLOAD} download="defaketive-extension.zip"><DownloadIcon /> Download the extension (.zip)</Button>
 	{/if}
 	<Button size="lg" variant="outline" href={pasteHref}>Paste a link instead</Button>
 </div>
-{#if download === false}
+{#if !auth.user}
+	<p class="text-muted-foreground max-w-2xl text-sm">
+		The extension, including the Shopee scraper, is free with an account. Sign in or create one to download it.
+		<button type="button" class="tap text-primary font-medium underline underline-offset-4" onclick={() => ui.openAuth('signup')}>Create a free account</button>
+	</p>
+{:else if download === false}
 	<Alert>
 		<PuzzleIcon />
 		<AlertTitle>Not in the Chrome Web Store yet</AlertTitle>
@@ -154,7 +162,7 @@
 	<CardHeader><CardTitle>Part 1. Install it (2 minutes, once)</CardTitle></CardHeader>
 	<CardContent>
 		<ol class="grid gap-5">
-			{@render step(1, 'Download the extension', 'Press "Download the extension (.zip)" above. A file called defaketive-extension.zip lands in your Downloads folder.')}
+			{@render step(1, 'Download the extension', 'Sign in, then press "Download the extension (.zip)" above. A file called defaketive-extension.zip lands in your Downloads folder.')}
 			{@render step(2, 'Unzip it', 'Right-click the file and choose Extract All (on a Mac, double-click it). You get a folder with a file called manifest.json inside. Keep that folder somewhere you will not delete it: the browser reads the extension from it every time.')}
 			<li class="grid grid-cols-[1.75rem_1fr] gap-3">
 				<span class="bg-primary text-primary-foreground grid size-7 place-items-center rounded-full text-sm font-medium" aria-hidden="true">3</span>
