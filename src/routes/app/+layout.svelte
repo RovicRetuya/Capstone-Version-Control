@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
+	import EllipsisIcon from '@lucide/svelte/icons/ellipsis';
 	import ChevronDownIcon from '@lucide/svelte/icons/chevron-down';
 	import CircleHelpIcon from '@lucide/svelte/icons/circle-help';
 	import FlagIcon from '@lucide/svelte/icons/flag';
@@ -51,6 +52,8 @@
 		{ href: '/app/faq', label: 'FAQ', icon: CircleHelpIcon }
 	];
 	const active = (href: string) => page.url.pathname === href;
+	const mobileItems = items.filter(item => ['Home', 'Check', 'Products', 'Wishlist'].includes(item.label));
+	const moreItems = items.filter(item => ['History', 'About', 'FAQ'].includes(item.label));
 
 	// The app is for signed-in people. A guest who lands on one of its pages (a typed address, an old bookmark,
 	// a shared link) is sent to the public screen that does the same job, or asked to sign in when there is none.
@@ -133,29 +136,49 @@
 						<span class="group-focus-visible:ring-ring grid size-12 place-items-center rounded-full border shadow-sm transition group-hover:-translate-y-0.5 group-focus-visible:ring-2 {active(item.href) ? 'bg-foreground text-background border-foreground shadow-md' : 'bg-background text-foreground/80'}">
 							<item.icon class="size-5" />
 						</span>
-						<span class="font-mono text-[10px] tracking-widest uppercase {active(item.href) ? 'text-foreground' : 'text-muted-foreground'}">{item.label}</span>
+						<span class="px-1 text-center text-xs leading-snug {active(item.href) ? 'font-semibold text-foreground' : 'text-muted-foreground'}">{item.label}</span>
 					</a>
 				{/each}
 			</nav>
 
 			<div class="flex min-w-0 flex-1 flex-col">
-				<div class="page-view flex flex-1 flex-col gap-6 px-4 pt-6 pb-24 md:px-6 md:pb-8 lg:px-8">
+				<main id="main-content" tabindex="-1" class="page-view flex min-w-0 flex-1 flex-col gap-6 px-4 pt-6 pb-[calc(6rem+env(safe-area-inset-bottom))] md:px-6 md:pb-8 lg:px-8">
 					<div class="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6">
 						{@render children()}
 					</div>
-				</div>
+				</main>
 				<div data-print="hide"><SiteFooter compact /></div>
 			</div>
 		</div>
 
 		<!-- On a phone the icons run along the bottom. -->
-		<nav data-print="hide" aria-label="Main" class="bg-background/95 fixed inset-x-0 bottom-0 z-30 flex justify-start gap-0.5 overflow-x-auto border-t px-1 py-2 backdrop-blur min-[380px]:gap-1 min-[380px]:px-2 md:hidden">
-			{#each items as item (item.href)}
-				<a href={item.href} aria-current={active(item.href) ? 'page' : undefined} class="focus-visible:ring-ring flex min-w-0 flex-1 flex-col items-center gap-1 rounded-lg py-1 outline-none focus-visible:ring-2">
+		<nav data-print="hide" aria-label="Main" class="bg-background/95 fixed inset-x-0 bottom-0 z-30 flex justify-start gap-0.5 overflow-x-auto border-t px-1 pt-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] backdrop-blur min-[380px]:gap-1 min-[380px]:px-2 md:hidden">
+			{#each mobileItems as item (item.href)}
+				<a href={item.href} aria-current={active(item.href) ? 'page' : undefined} class="focus-visible:ring-ring flex min-w-fit flex-1 flex-col items-center gap-1 rounded-lg px-1 py-1 outline-none focus-visible:ring-2">
 					<span class="grid size-9 place-items-center rounded-full border {active(item.href) ? 'bg-foreground text-background border-foreground' : 'bg-background'}"><item.icon class="size-4" /></span>
-					<span class="font-mono text-[8px] tracking-tight uppercase min-[380px]:text-[9px] min-[380px]:tracking-wider {active(item.href) ? 'text-foreground' : 'text-muted-foreground'}">{item.label}</span>
+					<span class="text-center text-xs leading-snug {active(item.href) ? 'font-semibold text-foreground' : 'text-muted-foreground'}">{item.label === 'Wishlist' ? 'Saved' : item.label}</span>
 				</a>
 			{/each}
+			<DropdownMenu>
+				<DropdownMenuTrigger>
+					{#snippet child({ props })}
+						<button {...props} type="button" aria-label="More navigation" class="focus-visible:ring-ring flex min-w-0 flex-1 flex-col items-center gap-1 rounded-lg px-1 py-1 outline-none focus-visible:ring-2">
+							<span class="grid size-9 place-items-center rounded-full border {moreItems.some(item => active(item.href)) ? 'bg-foreground text-background border-foreground' : 'bg-background'}"><EllipsisIcon class="size-4" /></span>
+							<span class="text-center text-xs leading-snug {moreItems.some(item => active(item.href)) ? 'font-semibold text-foreground' : 'text-muted-foreground'}">More</span>
+						</button>
+					{/snippet}
+				</DropdownMenuTrigger>
+				<DropdownMenuContent side="top" align="end" class="min-w-44">
+					<DropdownMenuLabel>More pages</DropdownMenuLabel>
+					{#each moreItems as item (item.href)}
+						<DropdownMenuItem class="min-h-11">
+							{#snippet child({ props })}
+								<a {...props} href={item.href} aria-current={active(item.href) ? 'page' : undefined}><item.icon /> {item.label}</a>
+							{/snippet}
+						</DropdownMenuItem>
+					{/each}
+				</DropdownMenuContent>
+			</DropdownMenu>
 		</nav>
 	</div>
 {/if}

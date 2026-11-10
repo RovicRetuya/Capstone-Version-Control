@@ -23,6 +23,8 @@
 	}: { autofill?: boolean; size?: 'default' | 'lg'; placeholder?: string; target?: string } = $props();
 
 	let value = $state('');
+	const instanceId = $props.id();
+	const helpId = `${instanceId}-help`;
 	let lastClipboard = '';
 
 	const note = $derived(
@@ -60,9 +62,9 @@
 	}
 </script>
 
-<form onsubmit={submit} class="w-full">
-	<div class="flex flex-col gap-2 sm:flex-row">
-		<InputGroup class={size === 'lg' ? 'h-11' : 'h-9'}>
+<form onsubmit={submit} class="w-full min-w-0">
+	<div class="flex flex-col gap-3 sm:flex-row sm:items-center">
+		<InputGroup class="h-12 min-w-0 [&_button]:min-h-11 [&_button]:min-w-11">
 			<InputGroupAddon><LinkIcon /></InputGroupAddon>
 			<InputGroupInput
 				bind:value
@@ -71,11 +73,13 @@
 				{placeholder}
 				autocomplete="off"
 				aria-label="Product link"
+				aria-describedby={helpId}
+				class="min-w-0 text-base md:text-sm"
 			/>
 			<ClearLinkButton bind:value />
 			<InputGroupAddon align="inline-end" class="max-md:hidden"><Kbd title="Press / to jump here">/</Kbd></InputGroupAddon>
 		</InputGroup>
-		<Button type="submit" {size}>Check <ArrowRightIcon /></Button>
+		<Button type="submit" {size} class="min-h-12 w-full shrink-0 sm:w-auto">Check <ArrowRightIcon aria-hidden="true" /></Button>
 	</div>
-	<p class="text-muted-foreground mt-2 text-xs">{note}</p>
+	<p id={helpId} class="text-muted-foreground mt-3 text-sm leading-relaxed wrap-anywhere">{note}</p>
 </form>

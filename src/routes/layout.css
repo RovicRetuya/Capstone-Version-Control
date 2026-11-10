@@ -545,10 +545,10 @@ header.sticky::after {
 	--tone-soft: var(--unknown-soft);
 }
 
-/* Touch screens: every control is at least 40px wide and tall, so a finger can hit it.
+/* Touch screens: every control is at least 44px wide and tall, so a finger can hit it.
    A mouse keeps the compact shadcn sizes; nothing here applies to it. No component file is edited:
    the rules go by each component's data-slot. `tap` is for plain links and buttons of our own. */
-@media (pointer: coarse) {
+@media (any-pointer: coarse) {
 	[data-slot='button'],
 	[data-slot='toggle'],
 	[data-slot='toggle-group-item'],
@@ -571,8 +571,8 @@ header.sticky::after {
 	[data-slot='command-input'],
 	[data-sonner-toast] button,
 	.tap {
-		min-height: 2.5rem;
-		min-width: 2.5rem;
+		min-height: 2.75rem;
+		min-width: 2.75rem;
 	}
 	.tap {
 		display: inline-flex;
@@ -599,6 +599,39 @@ header.sticky::after {
 		content: '';
 		position: absolute;
 		inset: -0.75rem -0.25rem;
+	}
+}
+
+/* Keyboard navigation must remain visible on both themes and at high zoom. */
+.skip-link {
+	position: fixed;
+	top: 0.75rem;
+	left: 0.75rem;
+	z-index: 100;
+	transform: translateY(-200%);
+	padding: 0.75rem 1rem;
+	border-radius: 0.5rem;
+	background: var(--background);
+	color: var(--foreground);
+	border: 2px solid currentColor;
+}
+.skip-link:focus { transform: translateY(0); }
+:where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+	outline: 2px solid var(--foreground);
+	outline-offset: 3px;
+}
+main { min-width: 0; scroll-margin-top: 5rem; }
+main :where(p, h1, h2, h3, blockquote) { overflow-wrap: anywhere; }
+@media (any-pointer: coarse) {
+	input, textarea, select { font-size: max(1rem, 16px); }
+	summary { min-height: 2.75rem; padding-block: 0.625rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+	*, *::before, *::after {
+		animation-duration: 0.01ms !important;
+		animation-iteration-count: 1 !important;
+		transition-duration: 0.01ms !important;
+		scroll-behavior: auto !important;
 	}
 }
 

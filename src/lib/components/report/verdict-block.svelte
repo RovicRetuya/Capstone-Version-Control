@@ -17,7 +17,7 @@
 
 <!-- Keyed on the product, so opening another report plays the reveal again. -->
 {#key product.link}
-	<div class={cn('verdict-box tone-' + chip.kind, 'text-foreground grid gap-3 rounded-xl border-2 border-(--tone)/60 bg-(--tone-soft) p-5 md:p-6')} role="group" aria-label="Result">
+	<div class={cn('verdict-box tone-' + chip.kind, 'text-foreground grid min-w-0 gap-3 rounded-xl border-2 border-(--tone)/60 bg-(--tone-soft) p-4 [overflow-wrap:anywhere] sm:p-5 md:p-6')} role="group" aria-label="Result">
 		<div class="verdict-step flex flex-wrap items-center gap-2 text-sm font-medium" style="--d: 0.2s">
 			<span class="relative grid size-5 place-items-center">
 				{#if chip.kind === 'safety'}

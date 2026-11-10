@@ -79,6 +79,16 @@
 
 <Splash />
 <OfflineBanner />
+<a class="skip-link" href="#main-content" onclick={(event) => {
+	const main = document.querySelector<HTMLElement>('main');
+	if (main) {
+		event.preventDefault();
+		if (!main.id) main.id = 'main-content';
+		main.tabIndex = -1;
+		main.focus();
+		main.scrollIntoView({ block: 'start' });
+	}
+}}>Skip to main content</a>
 {@render children()}
 
 <AuthDialog />
