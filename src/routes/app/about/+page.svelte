@@ -6,7 +6,7 @@
 	const features = [
 		['Taglish-aware sentiment', 'A language model trained on Filipino and English reviews sorts each review as positive, negative, or mixed or unclear.'],
 		['Separate warnings', 'Safety, fake and defect reports are checked one by one, so good reviews never average away a fire report.'],
-		['Lazada PH and Shopee PH', 'Reads public reviews from Lazada PH product pages (up to 60 from each star level) and, with the extension, from Shopee PH product pages (every written review).'],
+		['Lazada PH and Shopee PH', 'Reads public reviews from Lazada PH product pages (up to 200 from each star level) and, with the extension, from Shopee PH product pages (every written review that has a comment).'],
 		['Similar products', 'When reviewers report problems, see similar products whose reviews raised no warnings.']
 	];
 </script>

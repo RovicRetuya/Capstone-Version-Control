@@ -36,7 +36,7 @@
 	import type { Marketplace } from '#lib/types.js';
 
 	let query = $state('');
-	// One product per check. Lazada reads up to 60 reviews from each star level; 100 is the server's general limit.
+	// One product per check. Lazada reads up to 200 reviews from each star level; 100 is the server's general limit.
 	const reviewCount = 100;
 
 	// A link pasted on Home or the landing page arrives in the address.
