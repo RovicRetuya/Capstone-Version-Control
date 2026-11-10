@@ -112,10 +112,11 @@ class LazadaScraper:
     # left without text are counted in the totals but not listed; the listed
     # reviews come in full pages followed by an empty one. The feed lists only
     # the first 300 entries of a list, whatever the page size, and answers
-    # with no `model` beyond them. A star level's quota of 60 is always within
-    # reach, except for 2 stars on a listing whose 1- and 2-star list is
-    # longer than that: there the 2-star reviews among its first 300 are all
-    # the feed gives (58 on the listing where this was found).
+    # with no `model` beyond them. A star level's quota (60 in the browser
+    # extension, up to 200 in a scan) is within reach, except for 2 stars on a
+    # listing whose 1- and 2-star list is longer than that: there the 2-star
+    # reviews among its first 300 are all the feed gives (58 on the listing
+    # where this was found, measured with the old quota of 60).
     FEED_DEPTH = 300
     REVIEW_SOURCES = ("page", "feed")
     FEED_SOURCE = "lazada_review_feed"

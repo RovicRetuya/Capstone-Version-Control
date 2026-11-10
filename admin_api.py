@@ -1,6 +1,6 @@
-"""The admin app's server side: accounts and daily check limits, for the DTI staff who run DeFaketive.
+"""The admin page's server side (/api/admin/*): accounts, daily check limits and more, for the DTI staff who run DeFaketive.
 
-The admin side (the /admin page of the app) is apart from the shopping side. It has its
+The admin side (the /admin page of this same app; there is no separate admin app) is apart from the shopping side. It has its
 own sign-in, kept in the session as `admin_id`, never as the shopping app's `user_id`, so signing in to one never
 signs in to the other.
 
@@ -117,7 +117,7 @@ LIMITS_MESSAGE = f"Each limit must be a whole number from 0 to {MAX_LIMIT:,}."
 
 @contextmanager
 def _connect(path: str | Path) -> Iterator[Any]:
-    import accounts  # the original app's; server.py puts it on the path
+    import accounts  # backend/accounts.py; server.py puts it on the path
 
     # The accounts module makes its own tables first and turns foreign keys on, so deleting an account removes its
     # admin row, History and Wishlist too.
@@ -454,7 +454,7 @@ def saved_products(path: str | Path | None, query: str = "", platform: str = "")
 
 
 def install(webapp: Any, app: Any = None, products_db: str | Path | None = None) -> None:
-    """Add the admin routes to the original app, keep admin accounts out of the shopping app, use the saved limits."""
+    """Add the admin routes to the Flask app (backend/webapp.py), keep admin accounts out of the shopping app, use the saved limits."""
     import accounts
 
     app = app or webapp.app

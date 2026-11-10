@@ -1,5 +1,5 @@
-// Says whether the built apps (the shopping app in build/, the admin app in admin/build/) are out of date, so
-// start.cmd and public.cmd only rebuild when something changed.
+// Says whether the built site (build/, the admin page included) is out of date, so start.cmd and public.cmd only
+// rebuild when something changed.
 // Exit code 1 means a build is needed; 0 means the build is current.
 import fs from 'node:fs';
 import path from 'node:path';
