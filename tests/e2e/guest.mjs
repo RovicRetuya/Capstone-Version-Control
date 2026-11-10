@@ -58,14 +58,14 @@ async function axe(page, label) {
 	const { context, page, errors } = await open();
 	await page.goto(base + '/', { waitUntil: 'networkidle' });
 	await page.waitForTimeout(1200);
-	await page.getByPlaceholder('Paste a product link...').fill(SAVED.link);
+	await page.getByPlaceholder('Paste a Lazada PH link...').fill(SAVED.link);
 	await page.getByRole('button', { name: 'Check', exact: true }).click();
 	await page.waitForURL(/\/scan\/report\?link=/);
 	check((await inApp(page)) === 0, 'landing page: a link that was already checked opens its report straight away, on the guest screen');
 	// A link nobody has checked yet stops on the guest screen, which asks before it uses a free scan.
 	await page.goto(base + '/', { waitUntil: 'networkidle' });
 	await page.waitForTimeout(1200);
-	await page.getByPlaceholder('Paste a product link...').fill(NEW_LINK);
+	await page.getByPlaceholder('Paste a Lazada PH link...').fill(NEW_LINK);
 	await page.getByRole('button', { name: 'Check', exact: true }).click();
 	await page.waitForURL(/\/scan\?q=/);
 	await page.waitForTimeout(800);

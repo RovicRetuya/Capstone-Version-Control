@@ -222,7 +222,7 @@ async function fresh(width, height, { fakeCatalog = false, empty = false } = {})
 	await page.goto(base + '/', { waitUntil: 'networkidle' });
 	await settle(page, 1200);
 	check((await page.getByText('Example report', { exact: true }).count()) === 0, 'landing shows no example report');
-	check(await page.getByPlaceholder('Paste a product link...').isVisible(), 'landing still has the scan box');
+	check(await page.getByPlaceholder('Paste a Lazada PH link...').isVisible(), 'landing still has the scan box');
 	const wide = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
 	check(wide <= 1, 'landing does not scroll sideways');
 	await page.screenshot({ path: `${out}/feat_landing.png` });

@@ -313,7 +313,7 @@ async function guestPage({ width = 1280, height = 900, scheme = 'light' } = {}) 
 	check(!text.includes('Try it free') && !text.includes('No sign up required'), 'no "Try it free" (the box beside it does that) and no "No sign up required"');
 	const strip = page.locator('section[aria-label="DeFaketive in numbers"]');
 	const numbers = await strip.locator('dt').allInnerTexts();
-	check(numbers.join(' | ') === 'Products checked | Reviews analyzed | The marketplace we check' && (await strip.innerText()).includes('Lazada PH'), `the numbers strip: two numbers and the marketplace by name (${numbers.join(' | ')})`);
+	check(numbers.join(' | ') === 'Products checked | Reviews analyzed | The marketplaces we check' && (await strip.innerText()).includes('Lazada PH'), `the numbers strip: two numbers and the marketplace by name (${numbers.join(' | ')})`);
 	check(!text.includes('Supported marketplace') && (await page.getByRole('heading', { level: 2, name: 'Check right on Lazada' }).isVisible()), 'the one-pill section is gone; an extension section instead');
 	await page.screenshot({ path: `${out}/uiux_landing.png` });
 	await page.getByRole('heading', { level: 2, name: 'Check right on Lazada' }).scrollIntoViewIfNeeded();
