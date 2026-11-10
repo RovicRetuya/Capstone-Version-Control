@@ -1,6 +1,7 @@
-# Replace the first line with your address, e.g. defaketive.ph. Caddy gets the https certificate by itself.
+# The live site's address (a free DuckDNS name pointing at the Azure VM's public IP). Change the first line for
+# another address. Caddy gets the https certificate by itself.
 # Copy to /etc/caddy/Caddyfile, then: sudo systemctl reload caddy
-defaketive.ph, www.defaketive.ph {
+defaketive.duckdns.org {
     encode gzip
     reverse_proxy 127.0.0.1:8080 {
         # serve.py (--proxy cloudflare) reads the visitor's address from this header, and only believes it on

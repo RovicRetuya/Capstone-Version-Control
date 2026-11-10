@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-# One-time setup of DeFaketive on a fresh Ubuntu 24.04 server (Oracle Cloud Always Free, or any VPS).
+# Setup and update of DeFaketive on an Ubuntu 24.04 server (the live site is an Azure VM; any VPS works).
 # Run from the repo folder as a normal user with sudo:   bash deploy/setup-server.sh
-# Safe to run again: it only does what is still missing, and never touches an existing database.
+# Safe to run again, and it is also how the live site is updated (git pull first): it only does what is still
+# missing, rebuilds the site, restarts the service, and never touches an existing database.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 REPO="$(pwd)"
