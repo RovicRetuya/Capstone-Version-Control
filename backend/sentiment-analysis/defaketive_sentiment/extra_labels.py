@@ -200,9 +200,10 @@ PACKAGING = frozenset(
 # The shared negation test does not see through "wala pong gasgas"; the two
 # new labels use this wider one.
 NEGATED_BEFORE = re.compile(
-    r"(?<!\w)(?:wala|walang|hindi|hinde|di|d|nd|ndi|no|not|without|zero|never)\s+"
+    r"(?<!\w)(?:wala|walang|hindi|hinde|di|d|nd|ndi|no|not|without|zero|never|doesn'?t|does\s+not|didn'?t|did\s+not|hasn'?t|won'?t|isn'?t)\s+"
     r"(?:(?:po|pong|naman|namn|nman|namang|ng|man|talaga|any|kahit|ka|ko|sya|siya|masyado|masyadong|ganun|gaano"
-    r"|gaanong|yung|ung|tipong|scratches|dents?|gasgas|or|o|at)\s+){0,3}$",
+    r"|gaanong|yung|ung|tipong|scratches|dents?|gasgas|or|o|at"
+    r"|agad|madali|madaling|basta|bastabasta|basta-basta|mag|nag|easily|ever|will|would|get|gets|so|that|very|really)\s+){0,4}$",
     re.IGNORECASE,
 )
 # "tunog h di basag": a negator inside the matched words.
@@ -211,6 +212,13 @@ NEGATED_INSIDE = re.compile(
     re.IGNORECASE,
 )
 # "may nababasa ako sa comments na mabilis nasira": someone else's report.
+# "scratch resistant", "anti-scratch", "protects against cracks": praise for protection, not damage.
+PROTECTIVE_BEFORE = re.compile(
+    r"(?<!\w)(?:anti[\s-]*|(?:protects?|prevents?|protection)\s+(?:you\s+)?(?:from|against)\s+(?:\w+\s+)?"
+    r"|para\s+(?:hindi|di|walang)\s+(?:\w+\s+){0,2}(?:mag\s*)?)$",
+    re.IGNORECASE,
+)
+PROTECTIVE_AFTER = re.compile(r"^[\s-]*(?:resistant|resistance|proof|free)(?!\w)", re.IGNORECASE)
 HEARSAY_BEFORE = re.compile(
     r"(?<!\w)(?:nababasa|nabasa|comments|reviews|sabi nila|sabi ng iba)\s+(?:[\w']+\s+){0,5}$", re.IGNORECASE
 )
@@ -758,5 +766,7 @@ def quality_spans(normalized: str, revision: str = EXTRA_RULES_REVISION) -> list
         for regex in cosmetic
         for found in regex.finditer(normalized)
         if not negated_before.search(normalized[: found.start()]) and not _on_the_box(normalized, found.span())
+        and not PROTECTIVE_BEFORE.search(normalized[: found.start()])
+        and not PROTECTIVE_AFTER.match(normalized[found.end():])
     ]
     return sorted(set(spans))

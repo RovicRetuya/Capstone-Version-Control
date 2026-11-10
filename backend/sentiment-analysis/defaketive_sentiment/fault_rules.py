@@ -218,6 +218,12 @@ F11_GUARD = re.compile(
     re.I,
 )
 MISTAKEN = re.compile(r"(?<!\w)(?:akala\s+ko|kala\s+ko|i\s+thought)\s+(?:[\w']+\s+){0,3}?(?:hindi|di|not|ayaw|sira)", re.I)
+# "doesn't drain quickly", "hindi ito mabilis malowbat": a negator a few words before the drain wording.
+NEG_BEFORE_DRAIN = re.compile(
+    r"(?<!\w)(?:not|hindi|hinde|di|hnd|no|never|doesn'?t|does\s+not|didn'?t|did\s+not|isn'?t|wala|walang)\s+"
+    r"(?:(?!(?:and|but|pero|at|tapos|then)\b)[\w']+\s+){0,3}$",
+    re.I,
+)
 STOCK = re.compile(r"(?<!\w)stocks?(?!\w)", re.I)
 
 GROUND_TERM = re.compile(r"^(?:grounded|ground|grounding)$", re.I)
@@ -255,6 +261,8 @@ def f11_match(raw: str) -> tuple[str, tuple[int, int]] | None:
                 break
             if part == "drain" and STOCK.search(text):
                 break
+            if part == "drain" and NEG_BEFORE_DRAIN.search(text[: found.start()]):
+                continue
             if part in F13_VETO and F13_VETO[part].search(text):
                 break
             if part == "slow_charge" and FAST_NOT_CHARGING.search(text[found.start(): found.end() + 20]):

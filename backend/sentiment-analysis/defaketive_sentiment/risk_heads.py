@@ -9,8 +9,19 @@ import numpy as np
 
 
 _DAMAGE_NEGATION_RE = re.compile(
-    r"\b(?:no|not|without|walang|wala(?:ng)?|hindi)\s+(?:physical\s+)?"
-    r"(?:damage(?:d)?|crack(?:ed)?|basag|dent(?:ed)?|yupi|scratch(?:ed|es)?)\b",
+    r"\b(?:no|not|never|zero|without|walang|wala(?:ng)?|hindi|hinde|di|hnd|doesn'?t|won'?t|wouldn'?t|isn'?t|"
+    r"hasn'?t|haven'?t|didn'?t|did\s+not|does\s+not)\s+"
+    r"(?:(?:physical|any|kahit|anong|yet|pa|agad|madali|madaling|basta|basta-basta|mag|nag|easily|ever|will|would|get|gets|po|naman|talaga)\s+){0,4}"
+    r"(?:damag(?:e|ed|es)|crack(?:ed|s)?|basag|mabasag|bitak|mabitak|lamat|dent(?:ed|s)?|yupi|nayupi|"
+    r"scratch(?:ed|es)?|gasgas|shatter(?:ed|s)?|broken|break|breaks|broke|sira|masira|nasira|sirain)\b",
+    re.IGNORECASE,
+)
+# "scratch resistant", "crack-proof", "protects against cracks": praise for protection, not a fault.
+_PROTECTIVE_RE = re.compile(
+    r"\b(?:(?:scratch|crack|shatter|dent|break|drop|damage)[\s-]*(?:resistant|resistance|proof|free)"
+    r"|anti[\s-]*(?:scratch|crack|shatter|break)\w*"
+    r"|(?:protects?|prevents?|protection)\s+(?:you\s+)?(?:from|against)?\s*(?:\w+\s+)?(?:cracks?|scratch\w*|dents?|damage)"
+    r"|para\s+(?:hindi|di|walang)\s+(?:\w+\s+){0,2}(?:mag\s*)?(?:crack|basag|masira|magasgas|mabasag))\b",
     re.IGNORECASE,
 )
 _PHYSICAL_DAMAGE_RE = re.compile(
@@ -51,7 +62,7 @@ class HybridRiskCategoryClassifier:
     @staticmethod
     def damage_probability(text: object) -> float:
         value = str(text or "")
-        if _DAMAGE_NEGATION_RE.search(value):
+        if _DAMAGE_NEGATION_RE.search(value) or _PROTECTIVE_RE.search(value):
             return 0.02
         has_physical_damage = bool(_PHYSICAL_DAMAGE_RE.search(value))
         has_general_damage = bool(_GENERAL_DAMAGE_RE.search(value))
